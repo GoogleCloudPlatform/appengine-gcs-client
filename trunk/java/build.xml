@@ -1,0 +1,148 @@
+<project name="AppEngineGcsJavaClient" default="dist" basedir=".">
+  <description>
+    A Google CloudStorage client library for Appengine.
+  </description>
+  <property name="src" location="src" />
+  <property name="build" location="build" />
+  <property name="lib" location="lib" />
+  <property name="dist" location="dist" />
+  <property name="static" location="static" />
+
+  <property name="testsrc" location="test" />
+  <property name="testbuild" location="test_build" />
+  <property name="testlib" location="test_lib" />
+
+  <property name="sdk" location="sdk" />
+  <property name="version" value="1.7.0" />
+  <property name="sdkdirname" value="appengine-java-sdk-${version}" />
+  <property name="sdkfilename" value="${sdkdirname}.zip" />
+  <property name="sdklibdir" location="${sdk}/${sdkdirname}/lib" />
+
+  <path id="sdkjars">
+    <fileset dir="${sdklibdir}/user">
+      <include name="appengine-api-1.0-sdk-${version}.jar" />
+    </fileset>
+    <fileset dir="${sdklibdir}/shared">
+      <include name="geronimo-servlet_2.5_spec-1.2.jar" />
+      <include name="servlet-api.jar" />
+    </fileset>
+  </path>
+
+  <!-- We plan to move to downloading all of these on the fly, but for
+       now json is jar'ed up, and the other two are released
+       relatively infrequently. -->
+  <path id="thirdpartyjars">
+    <fileset dir="${lib}">
+      <include name="*.jar" />
+    </fileset>
+  </path>
+
+  <path id="testjars">
+    <pathelement path="${testlib}/easymock-3.0.jar" />
+    <pathelement path="${testlib}/junit-4.8.2.jar" />
+    <pathelement path="${testlib}/json.jar" />
+    <pathelement path="${sdklibdir}/testing/appengine-testing.jar" />
+    <pathelement path="${sdklibdir}/impl/appengine-api-stubs.jar" />
+  </path>
+
+  <target name="init">
+    <mkdir dir="${build}" />
+  </target>
+
+  <target name="compile" depends="init,download_sdk">
+    <javac srcdir="${src}" destdir="${build}" debug="on" debuglevel="lines,source">
+      <compilerarg value="-Xlint:all"/>
+      <compilerarg value="-Xlint:-sunapi"/>
+      <classpath>
+        <path refid="sdkjars" />
+        <path refid="thirdpartyjars" />
+      </classpath>
+    </javac>
+  </target>
+
+  <target name="test_init">
+    <mkdir dir="${testbuild}" />
+  </target>
+
+  <target name="test_compile" depends="test_init,dist,download_sdk">
+    <javac srcdir="${testsrc}" destdir="${testbuild}" debug="on" debuglevel="lines,source">
+      <classpath>
+        <path refid="sdkjars" />
+        <path refid="thirdpartyjars" />
+        <path refid="testjars" />
+        <pathelement location="${dist}/lib/appengine-gcs-client.jar" />
+      </classpath>
+    </javac>
+  </target>
+
+  <target name="test" depends="test_compile">
+    <junit filtertrace="off">
+      <test name="com.google.appengine.tools.cloudstorage.AllTests" />
+      <classpath>
+        <path refid="sdkjars" />
+        <path refid="thirdpartyjars" />
+        <path refid="testjars" />
+        <pathelement location="${dist}/lib/appengine-gcs-client.jar" />
+        <pathelement location="${testbuild}" />
+      </classpath>
+      <formatter type="brief" usefile="false" />
+    </junit>
+  </target>
+
+  <target name="dist" depends="compile">
+    <mkdir dir="${dist}/lib" />
+    <copy todir="${build}">
+      <fileset dir="${src}" />
+    </copy>
+    <jar jarfile="${dist}/lib/appengine-gcs-client.jar" basedir="${build}" />
+    <copy todir="${dist}/lib">
+      <path refid="thirdpartyjars" />
+    </copy>
+  </target>
+
+  <target name="clean">
+    <delete dir="${build}" />
+    <delete dir="${dist}" />
+    <delete dir="${testbuild}" />
+  </target>
+
+  <target name="check_sdk_extracted">
+    <available file="${sdk}/${sdkdirname}" property="sdkextracted" />
+  </target>
+
+  <target name="download_sdk" description="Gets the AppEngine SDK" depends="check_sdk_extracted" unless="sdkextracted">
+    <mkdir dir="${sdk}" />
+    <get src="http://googleappengine.googlecode.com/files/${sdkfilename}" dest="${sdk}/${sdkfilename}" />
+    <unzip src="${sdk}/${sdkfilename}" dest="${sdk}" />
+  </target>
+
+  <!-- Separate target because downloading the SDK can be expensive and
+       usually only needs to be done once. -->
+  <target name="clean_sdk">
+    <delete dir="${sdk}" />
+  </target>
+
+  <target name="copy_libs_to_example" depends="dist">
+    <copy todir="example/war/WEB-INF/lib">
+      <fileset dir="${dist}/lib" />
+      <path refid="sdkjars" />
+    </copy>
+  </target>
+
+  <target name="compile_example" depends="copy_libs_to_example">
+    <mkdir dir="example/war/WEB-INF/classes" />
+    <javac srcdir="example" destdir="example/war/WEB-INF/classes">
+      <compilerarg value="-Xlint:all"/>
+      <compilerarg value="-Xlint:-sunapi"/>
+      <classpath>
+        <fileset dir="example/war/WEB-INF/lib" />
+        <path refid="sdkjars" />
+      </classpath>
+    </javac>
+  </target>
+
+  <target name="clean_example">
+    <delete dir="example/war/WEB-INF/lib" />
+    <delete dir="example/war/WEB-INF/classes" />
+  </target>
+</project>
