@@ -18,6 +18,7 @@ import com.google.appengine.api.files.FileStat;
 import com.google.appengine.api.files.FileWriteChannel;
 import com.google.appengine.api.files.GSFileOptions;
 import com.google.appengine.api.files.GSFileOptions.GSFileOptionsBuilder;
+import com.google.appengine.tools.cloudstorage.BadRangeException;
 import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
@@ -202,12 +203,17 @@ final class LocalRawGcsService implements RawGcsService {
   @Override
   public Future<GcsFileMetadata> readObjectAsync(
       ByteBuffer dst, GcsFilename filename, long offset, long timeoutMillis) {
+    Preconditions.checkArgument(offset >= 0, "%s: offset must be non-negative: %s", this, offset);
     try {
       GcsFileMetadata meta = getObjectMetadata(filename, timeoutMillis);
-      AppEngineFile file = nameToAppEngineFile(filename);
-      if (file == null) {
+      if (meta == null) {
         throw new FileNotFoundException(this + ": No such file: " + filename);
       }
+      if (offset >= meta.getLength()) {
+        throw new BadRangeException("The requested range cannot be satisfied. bytes="
+            + Long.toString(offset) + "-" + Long.toString(offset + dst.remaining()));
+      }
+      AppEngineFile file = nameToAppEngineFile(filename);
       FileReadChannel readChannel = FILES.openReadChannel(file, false);
       readChannel.position(offset);
       readChannel.read(dst);

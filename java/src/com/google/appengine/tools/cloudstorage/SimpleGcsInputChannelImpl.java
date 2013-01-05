@@ -20,6 +20,7 @@ final class SimpleGcsInputChannelImpl implements ReadableByteChannel {
   private final GcsFilename filename;
   private long position;
   private boolean closed = false;
+  private boolean eofHit = false;
   private final RetryParams retryParams;
 
   SimpleGcsInputChannelImpl(
@@ -46,23 +47,29 @@ final class SimpleGcsInputChannelImpl implements ReadableByteChannel {
       if (closed) {
         throw new ClosedChannelException();
       }
+      if (eofHit) {
+        return -1;
+      }
       int n = dst.remaining();
       Preconditions.checkArgument(n > 0, "Requested to read data into a full buffer");
-      readWithRetry(dst);
+      GcsFileMetadata gcsFileMetadata = readWithRetry(dst);
       int r = n - dst.remaining();
       position += r;
+      if (position >= gcsFileMetadata.getLength()) {
+        eofHit = true;
+      }
       return r == 0 ? -1 : r;
     }
   }
 
-  private void readWithRetry(final ByteBuffer dst) throws IOException {
+  private GcsFileMetadata readWithRetry(final ByteBuffer dst) throws IOException {
     try {
-      RetryHelper.runWithRetries(new Body<Void>() {
+      return RetryHelper.runWithRetries(new Body<GcsFileMetadata>() {
         @Override
-        public Void run() throws IOException {
+        public GcsFileMetadata run() throws IOException {
           try {
-            raw.readObjectAsync(dst, filename, position, retryParams.getRequestTimeoutMillis())
-                .get();
+            return raw.readObjectAsync(
+                dst, filename, position, retryParams.getRequestTimeoutMillis()).get();
           } catch (ExecutionException e) {
             if (e.getCause() instanceof IOException) {
               throw (IOException) e.getCause();
@@ -74,7 +81,6 @@ final class SimpleGcsInputChannelImpl implements ReadableByteChannel {
             closed = true;
             throw new ClosedByInterruptException();
           }
-          return null;
         }
       }, retryParams);
     } catch (RetryInteruptedException e) {
