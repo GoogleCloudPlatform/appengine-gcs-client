@@ -319,6 +319,8 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public Future<GcsFileMetadata> readObjectAsync(
       final ByteBuffer dst, final GcsFilename filename, long startOffsetBytes, long timeoutMillis) {
+    Preconditions.checkArgument(startOffsetBytes >= 0, "%s: offset must be non-negative: %s",
+        this, startOffsetBytes);
     final int n = dst.remaining();
     Preconditions.checkArgument(n > 0, "%s: dst full: %s", this, dst);
     final int want = Math.min(READ_LIMIT_BYTES, n);
@@ -354,10 +356,10 @@ final class OauthRawGcsService implements RawGcsService {
       @Override
       protected Throwable convertException(Throwable e) {
         if (e instanceof IOException) {
+          return e;
+        } else {
           return new IOException(
               "URLFetch threw IOException; request: " + URLFetchUtils.describeRequest(req), e);
-        } else {
-          return e;
         }
       }
     };

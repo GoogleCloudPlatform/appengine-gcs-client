@@ -97,13 +97,13 @@ final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel {
     Preconditions.checkState(!current.hasRemaining(), "%s: current has remaining", this);
     try {
       GcsFileMetadata gcsFileMetadata = pendingFetch.get();
-      long length = gcsFileMetadata.getLength();
-      if (length <= fetchPosition) {
-        eofHit = true;
-      }
+      flipToNextBlockAndPrefetch(gcsFileMetadata.getLength());
     } catch (ExecutionException e) {
       if (e.getCause() instanceof BadRangeException) {
         eofHit = true;
+        current = null;
+        next = null;
+        pendingFetch = null;
       } else if (e.getCause() instanceof FileNotFoundException) {
         FileNotFoundException toThrow = new FileNotFoundException(e.getMessage());
         toThrow.initCause(e);
@@ -122,23 +122,23 @@ final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel {
       closed = true;
       throw new ClosedByInterruptException();
     }
-    if (eofHit) {
-      current = null;
-      next = null;
-      pendingFetch = null;
-    } else {
-      Preconditions.checkState(next != null, "%s: no next: %s", this);
-      flipToNextBlockAndPrefetch();
-    }
   }
 
-  private void flipToNextBlockAndPrefetch() {
+  private void flipToNextBlockAndPrefetch(long contentLength) {
+    Preconditions.checkState(next != null, "%s: no next", this);
     current = next;
     current.flip();
     fetchPosition += blockSizeBytes;
-    next = ByteBuffer.allocate(blockSizeBytes);
-    pendingFetch =
-        raw.readObjectAsync(next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
+
+    if (fetchPosition >= contentLength) {
+      eofHit = true;
+      next = null;
+      pendingFetch = null;
+    } else {
+      next = ByteBuffer.allocate(blockSizeBytes);
+      pendingFetch =
+          raw.readObjectAsync(next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
+    }
   }
 
   @Override
@@ -147,15 +147,12 @@ final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel {
       if (closed) {
         throw new ClosedChannelException();
       }
-      if (eofHit) {
+      if (eofHit && !current.hasRemaining()) {
         return -1;
       }
       Preconditions.checkArgument(dst.remaining() > 0, "Requested to read data into a full buffer");
       if (!current.hasRemaining()) {
         waitForFetchWithRetry();
-        if (eofHit) {
-          return -1;
-        }
       }
       Preconditions.checkState(current.hasRemaining(), "%s: no remaining after wait", this);
       int toRead = dst.remaining();

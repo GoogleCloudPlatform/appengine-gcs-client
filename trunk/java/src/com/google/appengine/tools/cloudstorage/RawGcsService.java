@@ -102,7 +102,8 @@ public interface RawGcsService {
       throws IOException;
 
   /**
-   *
+   * Issues a request to the server to retrieve data to fill the provided buffer.
+   * The {@code offset} may not be negative.
    */
   Future<GcsFileMetadata> readObjectAsync(ByteBuffer dst, GcsFilename filename, long offset,
       long timeoutMillis);
