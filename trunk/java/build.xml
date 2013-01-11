@@ -39,7 +39,8 @@
 
   <path id="testjars">
     <pathelement path="${testlib}/easymock-3.0.jar" />
-    <pathelement path="${testlib}/junit-4.8.2.jar" />
+    <pathelement path="${testlib}/hamcrest-core-1.1.jar" />
+    <pathelement path="${testlib}/junit-4.10.jar" />
     <pathelement path="${testlib}/json.jar" />
     <pathelement path="${sdklibdir}/testing/appengine-testing.jar" />
     <pathelement path="${sdklibdir}/impl/appengine-api-stubs.jar" />

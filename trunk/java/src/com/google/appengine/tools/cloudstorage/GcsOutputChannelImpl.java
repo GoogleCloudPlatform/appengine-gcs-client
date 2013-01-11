@@ -19,8 +19,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
 
   private final Object lock = new Object();
   private final ByteBuffer buf;
-  private final RawGcsService raw;
-  private RawGcsCreationToken token;
+  private final RawGcsService raw;private RawGcsCreationToken token;
   private final GcsFilename filename;
   private RetryParams retryParams;
 

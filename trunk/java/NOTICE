@@ -9,5 +9,6 @@ licenses, but are only used for testing, and do not need to be uploaded
 with your code:
 
 easymock and classextension (Apache) - http://easymock.org/
+hamcrest (New BSD) - http://code.google.com/p/hamcrest/
 junit (CPL) - http://junit.org/
 json (MIT + good/evil clause) - http://www.json.org/license.html

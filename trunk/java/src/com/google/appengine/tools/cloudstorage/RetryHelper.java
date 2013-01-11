@@ -1,6 +1,8 @@
 // Copyright 2012 Google Inc. All Rights Reserved.
 package com.google.appengine.tools.cloudstorage;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+
 import com.google.apphosting.api.ApiProxy.ApiProxyException;
 import com.google.common.base.Stopwatch;
 
@@ -94,7 +96,7 @@ public class RetryHelper<V> {
 
       if (attemptsSoFar >= retryParams.getRetryMaxAttempts() || (
           attemptsSoFar >= retryParams.getRetryMinAttempts()
-          && stopwatch.elapsedMillis() >= retryParams.getRetryPeriodMillis())) {
+          && stopwatch.elapsed(MILLISECONDS) >= retryParams.getRetryPeriodMillis())) {
         throw new RetriesExhaustedException(this + ": Too many failures, giving up", exception);
       }
       try {
