@@ -378,6 +378,9 @@ final class OauthRawGcsService implements RawGcsService {
           "URLFetch threw IOException; request: " + URLFetchUtils.describeRequest(req), e);
     }
     int responseCode = resp.getResponseCode();
+    if (responseCode == 404) {
+      return null;
+    }
     if (responseCode != 200) {
       throw handleError(req, resp);
     }

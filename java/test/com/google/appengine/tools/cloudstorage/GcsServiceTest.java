@@ -1,6 +1,8 @@
 package com.google.appengine.tools.cloudstorage;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -160,6 +162,36 @@ public class GcsServiceTest {
     verifyContent(content, readChannel, 13);
     gsService.delete(filename);
   }
+
+  @Test
+  public void testReadMetadata() throws IOException {
+    byte[] content = new byte[1 * 1024 * 1024 + 1];
+    Random r = new Random();
+    r.nextBytes(content);
+    GcsFilename filename = new GcsFilename("testReadMetadataBucket", "testReadMetadataFile");
+
+    GcsService gsService = GcsServiceFactory.createGcsService();
+    GcsFileOptions options = GcsFileOptions.builder().withDefaults();
+    GcsOutputChannel outputChannel = gsService.createOrReplace(filename, options);
+
+    outputChannel.write(ByteBuffer.wrap(content));
+    outputChannel.close();
+
+    GcsFileMetadata metadata = gsService.getMetadata(filename);
+    assertNotNull(metadata);
+    assertEquals(filename, metadata.getFilename());
+    assertEquals(content.length, metadata.getLength());
+    assertEquals(options, metadata.getOptions());
+  }
+
+  @Test
+  public void testEmptyMetadata() throws IOException {
+    GcsFilename filename = new GcsFilename("testEmptyMetadataBucket", "testEmptyMetadataFile");
+    GcsService gsService = GcsServiceFactory.createGcsService();
+    GcsFileMetadata metadata = gsService.getMetadata(filename);
+    assertNull(metadata);
+  }
+
 
   private void verifyContent(byte[] content, ReadableByteChannel readChannel, int readSize)
       throws IOException {
