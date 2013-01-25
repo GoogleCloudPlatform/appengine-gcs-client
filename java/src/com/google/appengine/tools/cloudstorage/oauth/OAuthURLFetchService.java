@@ -4,7 +4,6 @@ import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.concurrent.Future;
 
 /**
@@ -13,7 +12,7 @@ import java.util.concurrent.Future;
  *
  * <p>It is unspecified what happens if OAuth headers are already present.
  */
-interface OAuthURLFetchService extends Serializable {
+interface OAuthURLFetchService {
 
   HTTPResponse fetch(HTTPRequest req) throws IOException;
   Future<HTTPResponse> fetchAsync(HTTPRequest request);

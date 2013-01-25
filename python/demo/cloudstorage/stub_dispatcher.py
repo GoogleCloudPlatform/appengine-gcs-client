@@ -11,9 +11,15 @@ import urllib
 import urlparse
 import xml.etree.ElementTree as ET
 
-from google.appengine.api import apiproxy_stub_map
-from cloudstorage import cloudstorage_stub
-from cloudstorage import common
+from . import cloudstorage_stub
+from . import common
+
+
+try:
+  from google.appengine.api import apiproxy_stub_map
+except ImportError:
+  from google.appengine.api import apiproxy_stub_map
+
 
 _MAX_GET_BUCKET_RESULT = 1000
 

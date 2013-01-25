@@ -36,7 +36,7 @@
       <include name="*.jar" />
     </fileset>
   </path>
-
+  
   <path id="testjars">
     <pathelement path="${testlib}/easymock-3.0.jar" />
     <pathelement path="${testlib}/hamcrest-core-1.1.jar" />
@@ -131,6 +131,12 @@
     <copy todir="example/war/WEB-INF/lib">
       <fileset dir="${dist}/lib" />
       <path refid="sdkjars" />
+      <fileset dir="${sdklibdir}/testing">
+        <include name="appengine-testing.jar" />
+      </fileset>
+      <fileset dir="${sdklibdir}/impl">
+        <include name="appengine-api-stubs.jar" />
+      </fileset>
     </copy>
   </target>
 
@@ -142,6 +148,7 @@
       <classpath>
         <fileset dir="example/war/WEB-INF/lib" />
         <path refid="sdkjars" />
+        <path refid="testjars" />
       </classpath>
     </javac>
   </target>

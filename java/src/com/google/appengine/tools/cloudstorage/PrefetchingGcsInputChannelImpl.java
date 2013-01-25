@@ -9,6 +9,8 @@ import com.google.common.base.Preconditions;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
@@ -23,25 +25,37 @@ import java.util.logging.Logger;
  * before it is actually needed to avoid blocking the calling thread.
  *
  */
-final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel {
+final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel, Serializable {
+
+  private static final long serialVersionUID = 5119437751884637172L;
 
   private static final Logger log =
       Logger.getLogger(PrefetchingGcsInputChannelImpl.class.getName());
 
-  private final Object lock = new Object();
-  private final RawGcsService raw;
+  private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0);
+
+  private transient Object lock = new Object();
+  private transient RawGcsService raw;
   private final GcsFilename filename;
   private final int blockSizeBytes;
 
   private boolean closed = false;
-  private boolean eofHit = false;
+  private transient boolean eofHit = false;
 
-  private long fetchPosition;
-  private Future<GcsFileMetadata> pendingFetch = null;
-  private ByteBuffer current = ByteBuffer.allocate(0);
-  private ByteBuffer next;
+  /**
+   * If the user only reads part of the contents of the buffer and then they serialize the reader,
+   * the buffer is discarded and the next request will be issued from pos. (the offset in the file
+   * actually read to.)
+   */
+  private long readPosition;
+  private long length = -1;
+  private transient long fetchPosition;
+  private transient Future<GcsFileMetadata> pendingFetch = null;
+  private transient ByteBuffer current = EMPTY_BUFFER;
+  private transient ByteBuffer next;
 
   private final RetryParams retryParams;
+
 
   PrefetchingGcsInputChannelImpl(RawGcsService raw, GcsFilename filename, int blockSizeBytes,
       long startPosition, RetryParams retryParams) {
@@ -50,7 +64,21 @@ final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel {
     checkState(blockSizeBytes >= 1024, "Block size must be at least 1kb. Was: " + blockSizeBytes);
     this.blockSizeBytes = blockSizeBytes;
     this.retryParams = retryParams;
+    this.readPosition = startPosition;
     this.fetchPosition = startPosition;
+    this.next = ByteBuffer.allocate(blockSizeBytes);
+    this.pendingFetch =
+        raw.readObjectAsync(next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
+  }
+
+  private void readObject(ObjectInputStream aInputStream)
+      throws ClassNotFoundException, IOException {
+    aInputStream.defaultReadObject();
+    this.lock = new Object();
+    this.raw = GcsServiceFactory.createRawGcsService();
+    this.fetchPosition = readPosition;
+    this.current = EMPTY_BUFFER;
+    this.eofHit = length != -1 && readPosition >= length;
     this.next = ByteBuffer.allocate(blockSizeBytes);
     this.pendingFetch =
         raw.readObjectAsync(next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
@@ -101,7 +129,7 @@ final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel {
     } catch (ExecutionException e) {
       if (e.getCause() instanceof BadRangeException) {
         eofHit = true;
-        current = null;
+        current = EMPTY_BUFFER;
         next = null;
         pendingFetch = null;
       } else if (e.getCause() instanceof FileNotFoundException) {
@@ -129,7 +157,16 @@ final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel {
     current = next;
     current.flip();
     fetchPosition += blockSizeBytes;
-
+    if (length == -1) {
+      length = contentLength;
+    } else {
+      if (contentLength != length) {
+        eofHit = true;
+        next = null;
+        pendingFetch = null;
+        throw new RuntimeException("Contents of file: "+filename+" changed while being read.");
+      }
+    }
     if (fetchPosition >= contentLength) {
       eofHit = true;
       next = null;
@@ -161,12 +198,14 @@ final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel {
         if (pendingFetch != null && pendingFetch.isDone()) {
           waitForFetchWithRetry();
         }
+        readPosition += toRead - dst.remaining();
         return toRead - dst.remaining();
       } else {
         int oldLimit = current.limit();
         current.limit(current.position() + toRead);
         dst.put(current);
         current.limit(oldLimit);
+        readPosition += toRead;
         return toRead;
       }
     }

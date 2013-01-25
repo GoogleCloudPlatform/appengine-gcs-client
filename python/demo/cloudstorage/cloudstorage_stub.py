@@ -8,11 +8,20 @@
 import hashlib
 import StringIO
 import time
-from google.appengine.api import blobstore
-from google.appengine.api import datastore
-from google.appengine.api import datastore_types
-from google.appengine.ext import db
-from cloudstorage import common
+
+from . import common
+
+
+try:
+  from google.appengine.api import blobstore
+  from google.appengine.api import datastore
+  from google.appengine.api import datastore_types
+  from google.appengine.ext import db
+except ImportError:
+  from google.appengine.api import blobstore
+  from google.appengine.api import datastore
+  from google.appengine.api import datastore_types
+  from google.appengine.ext import db
 
 
 class _AE_GCSFileInfo_(db.Model):

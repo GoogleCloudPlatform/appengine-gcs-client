@@ -16,7 +16,6 @@ import java.util.List;
  * my experiments.
  */
 final class AppIdentityOAuthURLFetchService extends AbstractOAuthURLFetchService {
-  private static final long serialVersionUID = 704628714388855416L;
 
   private final List<String> oauthScopes;
 

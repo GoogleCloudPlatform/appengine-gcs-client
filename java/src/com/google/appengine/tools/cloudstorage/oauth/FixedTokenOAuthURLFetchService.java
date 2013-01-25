@@ -10,7 +10,6 @@ import com.google.appengine.api.urlfetch.URLFetchServiceFactory;
  * to talk to real Google Cloud Storage.
  */
 final class FixedTokenOAuthURLFetchService extends AbstractOAuthURLFetchService {
-  private static final long serialVersionUID = 970797899525778376L;
 
   private static final URLFetchService URLFETCH = URLFetchServiceFactory.getURLFetchService();
 

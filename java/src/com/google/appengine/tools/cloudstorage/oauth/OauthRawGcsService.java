@@ -64,7 +64,7 @@ final class OauthRawGcsService implements RawGcsService {
     private final String uploadId;
     private final long offset;
 
-    private GcsRestCreationToken(GcsFilename filename,
+    GcsRestCreationToken(GcsFilename filename,
         String uploadId, long offset) {
       this.filename = checkNotNull(filename, "Null filename");
       this.uploadId = checkNotNull(uploadId, "Null uploadId");

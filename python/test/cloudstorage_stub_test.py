@@ -6,7 +6,7 @@
 
 import unittest
 from google.appengine.ext import testbed
-from cloudstorage import cloudstorage_stub
+from . import cloudstorage_stub
 
 
 class CloudStorageTest(unittest.TestCase):
