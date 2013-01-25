@@ -23,13 +23,18 @@ public final class GcsServiceFactory {
   }
   
   public static GcsService createGcsService(RetryParams params) {
+    RawGcsService rawGcsService = createRawGcsService();
+    return new GcsServiceImpl(rawGcsService, params);
+  }
+
+  static RawGcsService createRawGcsService() {
     RawGcsService rawGcsService;
     if (SystemProperty.environment.value() == SystemProperty.Environment.Value.Production) {
       rawGcsService = OauthRawGcsServiceFactory.createOauthRawGcsService();
     } else {
       rawGcsService = LocalRawGcsServiceFactory.createLocalRawGcsService();
     }
-    return new GcsServiceImpl(rawGcsService, params);
+    return rawGcsService;
   }
   
   public static GcsService createGcsService() {

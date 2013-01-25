@@ -51,7 +51,7 @@ final class LocalRawGcsService implements RawGcsService {
   private static final String ENTITY_KIND_PREFIX = "_ah_FakeCloudStorage__";
   private static final String OPTIONS_PROP = "options";
 
-  private static final class Token implements RawGcsCreationToken {
+  static final class Token implements RawGcsCreationToken {
     private static final long serialVersionUID = 954846981243798905L;
 
     private final GcsFilename filename;

@@ -33,10 +33,10 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
   }
 
   private int getBufferSize(int chunkSize) {
-    if (chunkSize <= 256*1024) {
-      return 8*chunkSize;
-    } else if (chunkSize <= 1024*1024) {
-      return 2*chunkSize;
+    if (chunkSize <= 256 * 1024) {
+      return 8 * chunkSize;
+    } else if (chunkSize <= 1024 * 1024) {
+      return 2 * chunkSize;
     } else {
       return chunkSize;
     }
@@ -92,7 +92,10 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
     }
   }
 
-  private void flush() throws IOException {
+  private void flushIfNeeded() throws IOException {
+    if (buf.hasRemaining()) {
+      return;
+    }
     Preconditions.checkState(!buf.hasRemaining(), "%s: %s", this, buf);
     final ByteBuffer out = getSliceForWrite();
     try {
@@ -116,9 +119,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
       }
       int inBufferSize = in.remaining();
       while (in.hasRemaining()) {
-        if (!buf.hasRemaining()) {
-          flush();
-        }
+        flushIfNeeded();
         Preconditions.checkState(buf.hasRemaining(), "%s: %s", this, buf);
         int numBytesToCopyToBuffer = Math.min(buf.remaining(), in.remaining());
 
@@ -127,6 +128,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
         buf.put(in);
         in.limit(oldLimit);
       }
+      flushIfNeeded();
       return inBufferSize;
     }
   }

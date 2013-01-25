@@ -13,9 +13,15 @@ __all__ = ['ReadBuffer',
 import collections
 import os
 import urlparse
-from google.appengine.ext import ndb
-from cloudstorage import errors
-from cloudstorage import rest_api
+
+from . import errors
+from . import rest_api
+
+
+try:
+  from google.appengine.ext import ndb
+except ImportError:
+  from google.appengine.ext import ndb
 
 
 class _StorageApi(rest_api._RestApi):

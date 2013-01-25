@@ -1,6 +1,8 @@
 // Copyright 2012 Google Inc. All Rights Reserved.
 package com.google.appengine.tools.cloudstorage;
 
+import java.io.Serializable;
+
 /**
  * Parameters for configuring exponential backoff. See {@link RetryHelper}. The initial request is
  * executed immediately. It is given {@link #requestTimeoutMillis} to complete or it is regarded as
@@ -15,7 +17,9 @@ package com.google.appengine.tools.cloudstorage;
  * {@link #retryMinAttempts} are made and {@link #retryPeriodMillis} have elapsed.
  *
  */
-class RetryParams {
+class RetryParams implements Serializable {
+  private static final long serialVersionUID = -8492751576749007700L;
+
   private static final long DEFAULT_REQUEST_TIMEOUT_MILLIS = 5000;
   private static final int DEFAULT_RETRY_MIN_ATTEMPTS = 5;
   private static final int DEFAULT_RETRY_MAX_ATTEMPTS = 10;

@@ -13,7 +13,6 @@ import java.util.concurrent.Future;
  * An OAuthURLFetchService decorator that adds the authorization header to the http request.
  */
 abstract class AbstractOAuthURLFetchService implements OAuthURLFetchService {
-  private static final long serialVersionUID = 839709682488277548L;
 
   private static final URLFetchService URLFETCH = URLFetchServiceFactory.getURLFetchService();
 

@@ -14,13 +14,12 @@ __all__ = ['delete',
            'stat',
           ]
 
-import copy
 import os
 import urllib
 import xml.etree.ElementTree as ET
-from cloudstorage import common
-from cloudstorage import errors
-from cloudstorage import storage_api
+from . import common
+from . import errors
+from . import storage_api
 
 
 def open(filename,

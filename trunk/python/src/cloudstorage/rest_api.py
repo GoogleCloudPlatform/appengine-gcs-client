@@ -10,11 +10,16 @@ __all__ = ['add_sync_methods']
 
 import logging
 
-from google.appengine.ext import ndb
+from . import common
+from . import stub_dispatcher
 
-from google.appengine.api import app_identity
-from cloudstorage import common
-from cloudstorage import stub_dispatcher
+
+try:
+  from google.appengine.api import app_identity
+  from google.appengine.ext import ndb
+except ImportError:
+  from google.appengine.api import app_identity
+  from google.appengine.ext import ndb
 
 
 def _make_sync_method(name):
