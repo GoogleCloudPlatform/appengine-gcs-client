@@ -2,6 +2,8 @@
 
 """Tests for cloudstorage_api.py."""
 
+from __future__ import with_statement
+
 
 
 import hashlib
@@ -12,7 +14,6 @@ import unittest
 
 from  import 
 from google.appengine.ext import testbed
-from . import cloudstorage_api
 from . import errors
 from . import stub_dispatcher
 
@@ -73,6 +74,19 @@ class CloudStorageTest(unittest.TestCase):
     self.assertEqual('abcde', f.read(8))
     f.close()
 
+  def testReadNonexistFile(self):
+    self.assertRaises(errors.NotFoundError, cloudstorage.open, TESTFILE)
+
+  def testReadEmptyFile(self):
+    f = cloudstorage.open(TESTFILE, 'w')
+    f.write('')
+    f.close()
+
+    f = cloudstorage.open(TESTFILE)
+    self.assertEqual('', f.read())
+    self.assertEqual('', f.read())
+    f.close()
+
   def testReadSmall(self):
     f = cloudstorage.open(TESTFILE, 'w')
     f.write('abcdefghij')
@@ -102,6 +116,36 @@ class CloudStorageTest(unittest.TestCase):
     self.assertEqual('e'*1024*1024*10, f.read())
     self.assertEqual('', f.read())
     self.assertEqual('', f.readline())
+
+  def WriteInBlockSizeTest(self):
+    f = cloudstorage.open(TESTFILE, 'w')
+    f.write('a'*256*1024)
+    f.write('b'*256*1024)
+    f.close()
+
+    f = cloudstorage.open(TESTFILE)
+    self.assertEqual('a'*256*1024 + 'b'*256*1024, f.read())
+    self.assertEqual('', f.read())
+    self.assertEqual('', f.readline())
+    f.close()
+
+  def testWriteReadWithContextManager(self):
+    with cloudstorage.open(TESTFILE, 'w') as f:
+      f.write('a')
+      f.write('b'*1024)
+      f.write('c'*1024 + '\n')
+      f.write('d'*1024*1024)
+      f.write('e'*1024*1024*10)
+    self.assertTrue(f._closed)
+
+    with cloudstorage.open(TESTFILE) as f:
+      self.assertEqual('a' + 'b'*1024, f.read(1025))
+      self.assertEqual('c'*1024 + '\n', f.readline())
+      self.assertEqual('d'*1024*1024, f.read(1024*1024))
+      self.assertEqual('e'*1024*1024*10, f.read())
+      self.assertEqual('', f.read())
+      self.assertEqual('', f.readline())
+    self.assertTrue(f._closed)
 
   def testSeekAndTell(self):
     f = cloudstorage.open(TESTFILE, 'w')

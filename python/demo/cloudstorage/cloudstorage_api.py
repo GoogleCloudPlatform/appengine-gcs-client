@@ -184,19 +184,22 @@ class _Bucket(object):
       CSFileStat: a CSFileStat for an object in the bucket.
         They are ordered by CSFileStat.filename.
     """
+    total = 0
     while self._get_bucket_fut:
       status, _, content = self._get_bucket_fut.get_result()
       errors.check_status(status, [200])
-
       root = ET.fromstring(content)
       for contents in root.getiterator(self._add_ns('Contents')):
         yield common.CSFileStat(
             self._path + '/' + contents.find(self._add_ns('Key')).text,
             long(contents.find(self._add_ns('Size')).text),
             contents.find(self._add_ns('ETag')).text)
+        total += 1
 
+      max_keys = root.find(self._add_ns('MaxKeys'))
       next_marker = root.find(self._add_ns('NextMarker'))
-      if next_marker is not None:
+      if (max_keys is None or total < int(max_keys.text)) and (
+          next_marker is not None):
         self._options['marker'] = next_marker.text
         self._get_bucket_fut = self._api.get_bucket_async(
             self._path + '?' + urllib.urlencode(self._options))

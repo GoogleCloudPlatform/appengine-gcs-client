@@ -4,22 +4,28 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken;
 import com.google.appengine.tools.cloudstorage.RetryHelper.Body;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
 import java.util.logging.Logger;
 
-final class GcsOutputChannelImpl implements GcsOutputChannel {
+final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
+
+  private static final long serialVersionUID = 3011935384698648440L;
 
   @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(GcsOutputChannelImpl.class.getName());
 
-  private final Object lock = new Object();
-  private final ByteBuffer buf;
-  private final RawGcsService raw;private RawGcsCreationToken token;
+  private transient Object lock = new Object();
+  private transient ByteBuffer buf;
+  private transient RawGcsService raw;private RawGcsCreationToken token;
   private final GcsFilename filename;
   private RetryParams retryParams;
 
@@ -32,7 +38,40 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
     this.filename = nextToken.getFilename();
   }
 
-  private int getBufferSize(int chunkSize) {
+  private void readObject(ObjectInputStream aInputStream)
+      throws ClassNotFoundException, IOException {
+    aInputStream.defaultReadObject();
+    lock = new Object();
+    raw = GcsServiceFactory.createRawGcsService();
+    buf = ByteBuffer.allocate(getBufferSize(raw.getChunkSizeBytes()));
+    int length = aInputStream.readInt();
+    if (length > buf.capacity()) {
+      throw new IllegalArgumentException(
+          "Size of buffer is smaller than initial contents: " + length);
+    }
+    if (length > 0) {
+      byte[] initialBuffer = new byte[length];
+      for (int pos = 0; pos < length;) {
+        pos += aInputStream.read(initialBuffer, pos, length - pos);
+      }
+      buf.put(initialBuffer);
+    }
+  }
+
+  private void writeObject(ObjectOutputStream aOutputStream) throws IOException {
+    aOutputStream.defaultWriteObject();
+    int length = buf.position();
+    aOutputStream.writeInt(length);
+    if (length > 0) {
+      buf.rewind();
+      byte[] toWrite = new byte[length];
+      buf.get(toWrite);
+      aOutputStream.write(toWrite);
+    }
+  }
+
+  @VisibleForTesting
+  static int getBufferSize(int chunkSize) {
     if (chunkSize <= 256 * 1024) {
       return 8 * chunkSize;
     } else if (chunkSize <= 1024 * 1024) {

@@ -207,16 +207,21 @@ final class LocalRawGcsService implements RawGcsService {
     try {
       GcsFileMetadata meta = getObjectMetadata(filename, timeoutMillis);
       if (meta == null) {
-        throw new FileNotFoundException(this + ": No such file: " + filename);
+        return Futures.immediateFailedFuture(
+            new FileNotFoundException(this + ": No such file: " + filename));
       }
       if (offset >= meta.getLength()) {
-        throw new BadRangeException("The requested range cannot be satisfied. bytes="
-            + Long.toString(offset) + "-" + Long.toString(offset + dst.remaining()));
+        return Futures.immediateFailedFuture(new BadRangeException(
+            "The requested range cannot be satisfied. bytes=" + Long.toString(offset) + "-"
+            + Long.toString(offset + dst.remaining()) + " the file is only " + meta.getLength()));
       }
       AppEngineFile file = nameToAppEngineFile(filename);
       FileReadChannel readChannel = FILES.openReadChannel(file, false);
       readChannel.position(offset);
-      readChannel.read(dst);
+      int read = 0;
+      while (read != -1 && dst.hasRemaining()) {
+        read = readChannel.read(dst);
+      }
       return Futures.immediateFuture(meta);
     } catch (IOException e) {
       return Futures.immediateFailedFuture(e);

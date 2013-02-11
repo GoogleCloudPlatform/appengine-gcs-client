@@ -1,7 +1,7 @@
 package com.google.appengine.tools.cloudstorage;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Preconditions.checkState;
 
 import com.google.appengine.tools.cloudstorage.RetryHelper.Body;
 import com.google.appengine.tools.cloudstorage.RetryHelper.RetryInteruptedException;
@@ -61,9 +61,11 @@ final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel, Seria
       long startPosition, RetryParams retryParams) {
     this.raw = checkNotNull(raw, "Null raw");
     this.filename = checkNotNull(filename, "Null filename");
-    checkState(blockSizeBytes >= 1024, "Block size must be at least 1kb. Was: " + blockSizeBytes);
+    checkArgument(
+        blockSizeBytes >= 1024, "Block size must be at least 1kb. Was: " + blockSizeBytes);
     this.blockSizeBytes = blockSizeBytes;
     this.retryParams = retryParams;
+    checkArgument(startPosition >= 0, "Start position cannot be negitive");
     this.readPosition = startPosition;
     this.fetchPosition = startPosition;
     this.next = ByteBuffer.allocate(blockSizeBytes);
@@ -164,7 +166,7 @@ final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel, Seria
         eofHit = true;
         next = null;
         pendingFetch = null;
-        throw new RuntimeException("Contents of file: "+filename+" changed while being read.");
+        throw new RuntimeException("Contents of file: " + filename + " changed while being read.");
       }
     }
     if (fetchPosition >= contentLength) {
@@ -190,6 +192,9 @@ final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel, Seria
       Preconditions.checkArgument(dst.remaining() > 0, "Requested to read data into a full buffer");
       if (!current.hasRemaining()) {
         waitForFetchWithRetry();
+        if (eofHit && !current.hasRemaining()) {
+          return -1;
+        }
       }
       Preconditions.checkState(current.hasRemaining(), "%s: no remaining after wait", this);
       int toRead = dst.remaining();

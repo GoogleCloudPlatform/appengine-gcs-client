@@ -21,7 +21,7 @@ public final class GcsServiceFactory {
     result.setRetryPeriodMillis(10000);
     return result;
   }
-  
+
   public static GcsService createGcsService(RetryParams params) {
     RawGcsService rawGcsService = createRawGcsService();
     return new GcsServiceImpl(rawGcsService, params);
@@ -36,9 +36,9 @@ public final class GcsServiceFactory {
     }
     return rawGcsService;
   }
-  
+
   public static GcsService createGcsService() {
     return createGcsService(DEFAULT_RETRY_PARAMS);
   }
-  
+
 }

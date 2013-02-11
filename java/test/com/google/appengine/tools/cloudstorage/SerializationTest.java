@@ -42,7 +42,7 @@ public class SerializationTest {
 
   private enum TestFile {
     SMALL(new GcsFilename("unit-tests", "smallFile"), 100), MEDIUM(new GcsFilename(
-        "unit-tests", "mediumFile"), 2000);
+        "unit-tests", "mediumFile"), 4000);
 
     public final GcsFilename filename;
     public final int contentSize;
@@ -67,11 +67,8 @@ public class SerializationTest {
       }
       GcsOutputChannel outputChannel =
           gcsService.createOrReplace(file.filename, GcsFileOptions.builder().withDefaults());
-      try{
-        outputChannel.write(utf8.encode(CharBuffer.wrap(contents.toString())));
-      } finally {
-        outputChannel.close();
-      }
+      outputChannel.write(utf8.encode(CharBuffer.wrap(contents.toString())));
+      outputChannel.close();
     }
   }
 
@@ -138,6 +135,29 @@ public class SerializationTest {
     assertEquals(-1, read);
     assertTrue(Arrays.equals(new byte[] {'5', '6', '7', '8', '9'}, buffer.array()));
     assertEquals(TestFile.MEDIUM.contentSize / 10, count);
+    readChannel.close();
+  }
+
+  @Test
+  public void testPrefetchingExactRead() throws IOException, ClassNotFoundException {
+    GcsService gcsService = GcsServiceFactory.createGcsService();
+    createFiles(gcsService);
+    @SuppressWarnings("resource")
+    ReadableByteChannel readChannel = gcsService.openPrefetchingReadChannel(
+        TestFile.MEDIUM.filename, 0, TestFile.MEDIUM.contentSize / 2);
+    ByteBuffer buffer = ByteBuffer.allocate(10);
+    int read = 0;
+    for (int i = 0; i < TestFile.MEDIUM.contentSize / 10; i++) {
+      readChannel = reconstruct(readChannel);
+      read = readChannel.read(buffer);
+      buffer.rewind();
+      assertTrue(Arrays.equals(
+          new byte[] {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'}, buffer.array()));
+      buffer.rewind();
+    }
+    readChannel = reconstruct(readChannel);
+    read = readChannel.read(buffer);
+    assertEquals(-1, read);
     readChannel.close();
   }
 

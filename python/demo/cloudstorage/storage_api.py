@@ -92,7 +92,10 @@ _StorageApi = rest_api.add_sync_methods(_StorageApi)
 
 
 class ReadBuffer(object):
-  """A class for reading Google storage files."""
+  """A class for reading Google storage files.
+
+  To achieve max prefetching benefit, always read by your buffer size.
+  """
 
   DEFAULT_BUFFER_SIZE = 1024 * 1024
   MAX_REQUEST_SIZE = 30 * DEFAULT_BUFFER_SIZE
@@ -119,8 +122,13 @@ class ReadBuffer(object):
     self._buffer_offset = 0
     self._closed = False
     self._buffer_future = self._get_segment(0, self._max_buffer_size)
-    self._file_size = None
-    self._etag = None
+
+    status, headers, _ = self._api.head_object(path)
+    errors.check_status(status, [200])
+    self._file_size = long(headers['content-length'])
+    self._etag = headers.get('etag')
+    if self._file_size == 0:
+      self._buffer_future = None
 
   def readline(self, size=-1):
     """Read one line delimited by '\n' from the file.
@@ -142,8 +150,6 @@ class ReadBuffer(object):
       IOError: When this buffer is closed.
     """
     self._check_open()
-    if self._file_size is None:
-      self._buffer_future.get_result()
     self._buffer_future = None
 
     data_list = []
@@ -185,6 +191,9 @@ class ReadBuffer(object):
       IOError: When this buffer is closed.
     """
     self._check_open()
+    if self._file_size == 0:
+      return ''
+
     if size >= 0 and size <= len(self._buffer) - self._buffer_offset:
       result = self._read_buffer(size)
     else:
@@ -292,17 +301,20 @@ class ReadBuffer(object):
     status, headers, content = yield self._api.get_object_async(self._path,
                                                                 headers=headers)
     errors.check_status(status, [200, 206], headers)
-    if self._file_size is None:
-      self._file_size = self._get_file_size(headers.get('content-range'))
-      self._etag = headers.get('etag')
-    else:
-      if self._etag != headers.get('etag'):
-        raise ValueError('File on GCS has changed while reading.')
+    if self._etag != headers.get('etag'):
+      raise ValueError('File on GCS has changed while reading.')
     raise ndb.Return(content)
 
   def close(self):
     self._closed = True
     self._reset_buffer()
+
+  def __enter__(self):
+    return self
+
+  def __exit__(self, atype, value, traceback):
+    self.close()
+    return False
 
   def seek(self, offset, whence=os.SEEK_SET):
     """Set the file's current offset.
@@ -322,8 +334,6 @@ class ReadBuffer(object):
     self._check_open()
 
     self._reset_buffer()
-    if self._file_size is None:
-      self._buffer_future.get_result()
     self._buffer_future = None
 
     if whence == os.SEEK_SET:
@@ -360,25 +370,6 @@ class ReadBuffer(object):
   def _reset_buffer(self, new_buffer='', buffer_offset=0):
     self._buffer = new_buffer
     self._buffer_offset = buffer_offset
-
-  def _get_file_size(self, content_range):
-    """Get total file size from content-range header.
-
-    Args:
-      content_range: of format 'content-range': 'bytes 0-10/55'
-    """
-    return long(content_range.rsplit('/', 1)[-1])
-
-  def _is_eof(self, content_range):
-    """Test if a urlfetch request has reached the end of this file.
-
-    Args:
-      content_range: of format 'content-range': 'bytes 0-54/55'
-    """
-    end_offset = long(content_range[content_range.rfind('-') + 1,
-                                    content_range.rfind('/')])
-    file_size = self._get_file_size(content_range)
-    return end_offset == file_size - 1
 
 
 class StreamingBuffer(object):
@@ -473,6 +464,13 @@ class StreamingBuffer(object):
     """
     self._closed = True
     self._flush(finish=True)
+
+  def __enter__(self):
+    return self
+
+  def __exit__(self, atype, value, traceback):
+    self.close()
+    return False
 
   def _flush(self, finish=False):
     """Internal API to flush.
