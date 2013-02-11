@@ -121,11 +121,18 @@ def _handle_put(gs_stub, filename, param_dict, headers, payload):
                                   (content_range.start, content_range.end))
     response_headers = {}
     response_status = 308
-  elif content_range.value or not payload:
+  elif content_range.value and content_range.finished:
     gs_stub.put_continue_creation(token,
                                   payload,
                                   (content_range.start, content_range.end),
-                                  True)
+                                  last=True)
+    filestat = gs_stub.head_object(filename)
+    response_headers = {
+        'content-length': filestat.st_size,
+    }
+    response_status = 200
+  elif not payload:
+    gs_stub.put_continue_creation(token, '', None, True)
     filestat = gs_stub.head_object(filename)
     response_headers = {
         'content-length': filestat.st_size,
@@ -142,6 +149,8 @@ def _handle_get(gs_stub, filename, param_dict, headers):
     return _handle_get_bucket(gs_stub, filename, param_dict)
   else:
     result = _handle_head(gs_stub, filename)
+    if result.status_code == 404:
+      return result
     start, end = _Range(headers).value
     st_size = result.headers['content-length']
     end = min(st_size - 1, end)
@@ -187,10 +196,18 @@ def _handle_get_bucket(gs_stub, bucketpath, param_dict):
     builder.end('Size')
 
     builder.end('Contents')
-  if len(stats) == _MAX_GET_BUCKET_RESULT:
+
+  if last_object_name:
     builder.start('NextMarker', {})
     builder.data(last_object_name)
     builder.end('NextMarker')
+
+  max_keys = _get_param('max-keys', param_dict)
+  if max_keys is not None:
+    builder.start('MaxKeys', {})
+    builder.data(str(max_keys))
+    builder.end('MaxKeys')
+
   builder.end('ListBucketResult')
   root = builder.close()
 

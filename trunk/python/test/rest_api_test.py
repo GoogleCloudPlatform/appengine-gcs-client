@@ -87,6 +87,19 @@ class RestApiTest(unittest.TestCase):
     api = rest_api._RestApi(['scope1', 'scope2'])
     self.assertEqual(api.scopes, ['scope1', 'scope2'])
 
+  def testNegativeTimeout(self):
+    api = rest_api._RestApi('scope')
+    fut1 = ndb.Future()
+    fut1.set_result(('token1', 0))
+    fut2 = ndb.Future()
+    fut2.set_result(('token2', 0))
+    api.make_token_async = mock.create_autospec(
+        api.make_token_async, side_effect=[fut1, fut2])
+    token1 = api.get_token()
+    api.token = None
+    token2 = api.get_token()
+    self.assertNotEqual(token1, token2)
+
   def testTokenMemoized(self):
     api = rest_api._RestApi('scope')
     self.assertEqual(api.token, None)

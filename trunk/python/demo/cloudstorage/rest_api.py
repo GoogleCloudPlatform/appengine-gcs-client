@@ -9,6 +9,7 @@
 __all__ = ['add_sync_methods']
 
 import logging
+import time
 
 from . import common
 from . import stub_dispatcher
@@ -71,6 +72,24 @@ class _AE_TokenStorage_(ndb.Model):
   token = ndb.StringProperty()
 
 
+@ndb.tasklet
+def _make_token_async(scopes, service_account_id):
+  """Get a fresh authentication token.
+
+  Args:
+    scopes: A list of scopes.
+    service_account_id: A Gaia ID.
+
+  Returns:
+    An tuple (token, expiration_time) where expiration_time is
+    seconds since the epoch.
+  """
+  rpc = app_identity.create_rpc()
+  app_identity.make_get_access_token_call(rpc, scopes, service_account_id)
+  token, expires_at = yield rpc
+  raise ndb.Return((token, expires_at))
+
+
 class _RestApi(object):
   """Base class for REST-based API wrapper classes.
 
@@ -83,17 +102,20 @@ class _RestApi(object):
   and is subject to change at any release.
   """
 
-  def __init__(self, scopes, service_account_id=None):
+  def __init__(self, scopes, service_account_id=None, token_maker=None):
     """Constructor.
 
     Args:
       scopes: A scope or a list of scopes.
+      token_maker: A function from
+        (scopes, service_account_id) -> (token, expires).
     """
 
     if isinstance(scopes, basestring):
       scopes = [scopes]
     self.scopes = scopes
     self.service_account_id = service_account_id
+    self.make_token_async = token_maker or _make_token_async
     self.token = None
 
   @ndb.tasklet
@@ -146,12 +168,12 @@ class _RestApi(object):
     if not refresh:
       ts = yield _AE_TokenStorage_.get_by_id_async(key, use_datastore=False)
     if ts is None:
-      rpc = app_identity.create_rpc()
-      app_identity.make_get_access_token_call(rpc, self.scopes,
-                                              self.service_account_id)
-      token, expires_at = yield rpc
+      token, expires_at = yield self.make_token_async(
+          self.scopes, self.service_account_id)
+      timeout = int(expires_at - time.time())
       ts = _AE_TokenStorage_(id=key, token=token)
-      yield ts.put_async(memcache_timeout=expires_at - 300, use_datastore=False)
+      if timeout > 0:
+        yield ts.put_async(memcache_timeout=timeout, use_datastore=False)
     self.token = ts.token
     raise ndb.Return(self.token)
 

@@ -53,7 +53,7 @@ public class RetryHelper<V> {
   private final RetryParams retryParams;
 
   private RetryHelper(Body<V> body, RetryParams parms) {
-    this(body,parms,new Stopwatch());
+    this(body, parms, new Stopwatch());
   }
 
   private RetryHelper(Body<V> body, RetryParams parms, Stopwatch stopwatch) {
@@ -81,8 +81,8 @@ public class RetryHelper<V> {
         }
         return value;
       } catch (IOException e) {
-        if (e instanceof BadRangeException || e instanceof FileNotFoundException
-            || e instanceof MalformedURLException ||  e instanceof ClosedByInterruptException) {
+        if (e instanceof FileNotFoundException || e instanceof MalformedURLException
+            || e instanceof ClosedByInterruptException) {
           throw e;
         }
         exception = e;

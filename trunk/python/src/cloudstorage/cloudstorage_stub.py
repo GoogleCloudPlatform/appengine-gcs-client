@@ -35,14 +35,14 @@ class _AE_GCSFileInfo_(db.Model):
   raw_options = db.StringListProperty()
   size = db.IntegerProperty(required=True)
 
-  @property
-  def options(self):
+  def get_options(self):
     return dict(o.split(':', 1) for o in self.raw_options)
 
-  @options.setter
-  def options(self, options_dict):
+  def set_options(self, options_dict):
     self.raw_options = [
         '%s:%s' % (k.lower(), v) for k, v in options_dict.iteritems()]
+
+  options = property(get_options, set_options)
 
 
 class _AE_GCSPartialFile_(db.Model):
@@ -147,16 +147,17 @@ class CloudStorageStub(object):
     gcs_file = _AE_GCSFileInfo_.get_by_key_name(token)
     if not gcs_file:
       raise ValueError('Invalid token')
-    start, end = content_range
-    if len(content) != (end - start + 1):
-      raise ValueError('Invalid content range %d-%d' % content_range)
-    blobkey = '%s-%d-%d' % (token, content_range[0], content_range[1])
-    self.blob_storage.StoreBlob(blobkey, StringIO.StringIO(content))
-    new_content = _AE_GCSPartialFile_(parent=gcs_file,
-                                      partial_content=blobkey,
-                                      start=start,
-                                      end=end + 1)
-    new_content.put()
+    if content:
+      start, end = content_range
+      if len(content) != (end - start + 1):
+        raise ValueError('Invalid content range %d-%d' % content_range)
+      blobkey = '%s-%d-%d' % (token, content_range[0], content_range[1])
+      self.blob_storage.StoreBlob(blobkey, StringIO.StringIO(content))
+      new_content = _AE_GCSPartialFile_(parent=gcs_file,
+                                        partial_content=blobkey,
+                                        start=start,
+                                        end=end + 1)
+      new_content.put()
     if last:
       self._end_creation(token)
 

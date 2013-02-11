@@ -1,5 +1,7 @@
 package com.google.appengine.tools.cloudstorage;
 
+import static org.junit.Assert.*;
+
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
@@ -74,6 +76,15 @@ public class GcsInputChannelTest {
     helper.tearDown();
   }
 
+  @Test
+  public void readAfterEndOfFile() throws IOException {
+    GcsService gcsService = GcsServiceFactory.createGcsService();
+    ReadableByteChannel readChannel = gcsService.openPrefetchingReadChannel(
+        TestFile.SMALL.filename, TestFile.SMALL.contentSize, 1024);
+    int result = readChannel.read(ByteBuffer.allocate(100));
+    assertEquals(result, -1);
+  }
+
   private ReadableByteChannel createChannel(
       ChannelType type, GcsFilename filename, int offset, int fetchSize) throws IOException {
     final GcsService gcsService = GcsServiceFactory.createGcsService();
@@ -142,12 +153,14 @@ public class GcsInputChannelTest {
 
               ReadableByteChannel channel = null;
               boolean shouldCreate =
-                  ((type != ChannelType.PREFETCHING_GCS_INPUT) || (fetchSize >= 1024));
+                  (type != ChannelType.PREFETCHING_GCS_INPUT || (fetchSize >= 1024))
+                  && finalOffset >= 0;
               try {
                 channel = createChannel(type, file.filename, finalOffset, fetchSize);
-                collector.checkThat("Should have failed due to bad fetch size on " + testName,
+                collector.checkThat(
+                    "Should have failed due to bad fetch size  or illegal offset on " + testName,
                     shouldCreate, CoreMatchers.is(true));
-              } catch (IllegalStateException exception) {
+              } catch (IllegalArgumentException exception) {
                 collector.checkThat("Should not have failed due to bad fetch size on " + testName
                     + " w/" + exception.getClass().getName() + " " + exception.getMessage(),
                     !shouldCreate, CoreMatchers.is(true));
@@ -155,8 +168,7 @@ public class GcsInputChannelTest {
               }
 
               String contents = null;
-              boolean shouldRun =
-                  ((finalOffset < file.contentSize) && (finalOffset >= 0) && (readSize > 0));
+              boolean shouldRun = (readSize > 0);
               try {
                 contents = runTest(channel, readSize);
                 collector.checkThat("Should have failed due to bad offset/read size " + testName,
@@ -169,7 +181,7 @@ public class GcsInputChannelTest {
               }
 
               collector.checkThat("Sizes should have matched " + testName, contents.length(),
-                  CoreMatchers.is(file.contentSize - finalOffset));
+                  CoreMatchers.is(Math.max(0, file.contentSize - finalOffset)));
             }
           }
         }
