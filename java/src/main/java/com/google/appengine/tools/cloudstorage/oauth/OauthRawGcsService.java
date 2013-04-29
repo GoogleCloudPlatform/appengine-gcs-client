@@ -104,8 +104,8 @@ final class OauthRawGcsService implements RawGcsService {
     } catch (UnsupportedEncodingException e) {
       throw new RuntimeException(e);
     }
-    String s = "https://" + filename.getBucketName() + ".storage.googleapis.com/"
-        + encodedFileName + (uploadId == null ? "" : ("?upload_id=" + uploadId));
+    String s = "https://storage.googleapis.com/" + filename.getBucketName() + "/" + encodedFileName
+        + (uploadId == null ? "" : ("?upload_id=" + uploadId));
     try {
       return new URL(s);
     } catch (MalformedURLException e) {
