@@ -153,7 +153,8 @@ def _handle_get(gs_stub, filename, param_dict, headers):
       return result
     start, end = _Range(headers).value
     st_size = result.headers['content-length']
-    end = min(st_size - 1, end)
+    if end is None:
+      end = st_size - 1
     result.headers['content-range'] = 'bytes: %d-%d/%d' % (start,
                                                            end,
                                                            st_size)

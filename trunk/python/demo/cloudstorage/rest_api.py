@@ -8,7 +8,6 @@
 
 __all__ = ['add_sync_methods']
 
-import logging
 import time
 
 from . import common
@@ -144,9 +143,6 @@ class _RestApi(object):
                                          headers=headers,
                                          follow_redirects=False,
                                          deadline=deadline, callback=callback)
-    if resp.status_code >= 400:
-      logging.debug('rest call error: status=%r\nheaders=%r\nbody=%.1000s',
-                    resp.status_code, resp.headers, resp.content)
     raise ndb.Return((resp.status_code, resp.headers, resp.content))
 
   @ndb.tasklet
