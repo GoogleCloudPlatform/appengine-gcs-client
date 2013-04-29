@@ -53,7 +53,7 @@ public class RetryHelper<V> {
   private final RetryParams retryParams;
 
   private RetryHelper(Body<V> body, RetryParams parms) {
-    this(body, parms, Stopwatch.createUnstarted());
+    this(body, parms, new Stopwatch());
   }
 
   private RetryHelper(Body<V> body, RetryParams parms, Stopwatch stopwatch) {
