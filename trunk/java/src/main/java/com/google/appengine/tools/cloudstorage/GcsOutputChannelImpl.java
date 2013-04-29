@@ -167,7 +167,6 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
         buf.put(in);
         in.limit(oldLimit);
       }
-      flushIfNeeded();
       return inBufferSize;
     }
   }
