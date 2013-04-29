@@ -110,6 +110,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
     ByteBuffer out = buf.slice();
     buf.limit(buf.capacity());
     buf.position(oldPos);
+
     return out;
   }
 
@@ -132,18 +133,19 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
   }
 
   private void flushIfNeeded() throws IOException {
-    if (buf.hasRemaining()) {
-      return;
+    if (!buf.hasRemaining()) {
+      writeOut(getSliceForWrite());
+      buf.clear();
     }
-    Preconditions.checkState(!buf.hasRemaining(), "%s: %s", this, buf);
-    final ByteBuffer out = getSliceForWrite();
+  }
+
+  void writeOut(final ByteBuffer toWrite) throws IOException, ClosedByInterruptException {
     try {
       token = RetryHelper.runWithRetries(new Body<RawGcsCreationToken>() {
         @Override
         public RawGcsCreationToken run() throws IOException {
-          return raw.continueObjectCreation(token, out, retryParams.getRequestTimeoutMillis());
+          return raw.continueObjectCreation(token, toWrite, retryParams.getRequestTimeoutMillis());
         }}, retryParams);
-      buf.clear();
     } catch (ClosedByInterruptException e) {
       token = null;
       throw new ClosedByInterruptException();
@@ -167,7 +169,27 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
         buf.put(in);
         in.limit(oldLimit);
       }
+      flushIfNeeded();
       return inBufferSize;
+    }
+  }
+
+  @Override
+  public void waitForOutstandingWrites() throws ClosedByInterruptException, IOException {
+    synchronized (lock) {
+      int chunkSize = raw.getChunkSizeBytes();
+      int position = buf.position();
+      int bytesToWrite = (position / chunkSize) * chunkSize;
+      if (bytesToWrite > 0) {
+        ByteBuffer outputBuffer = getSliceForWrite();
+        outputBuffer.limit(bytesToWrite);
+        writeOut(outputBuffer);
+        buf.position(bytesToWrite);
+        buf.limit(position);
+        ByteBuffer remaining = buf.slice();
+        buf.clear();
+        buf.put(remaining);
+      }
     }
   }
 
