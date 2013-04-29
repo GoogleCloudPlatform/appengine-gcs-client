@@ -1,77 +1,132 @@
-<project name="AppEngineGcsJavaClient" default="dist" basedir=".">
+<project name="AppEngineGcsJavaClient" default="dist" basedir="."
+         xmlns:ivy="antlib:org.apache.ivy.ant">
+
   <description>
-    A Google CloudStorage client library for Appengine.
+    A Google Cloud Storage client library for App Engine.
   </description>
-  <property name="src" location="src" />
-  <property name="build" location="build" />
-  <property name="lib" location="lib" />
-  <property name="dist" location="dist" />
-  <property name="static" location="static" />
 
-  <property name="testsrc" location="test" />
-  <property name="testbuild" location="test_build" />
-  <property name="testlib" location="test_lib" />
+  <!-- Ivy Configurations -->
+  <property name="thirdparty" value="thirdparty"/>
+  <property name="sdk" value="sdk"/>
+  <property name="test" value="test"/>
+  <property name="war" value="war"/>
+  <property name="sdk_version" value="1.7.4"/>
 
-  <property name="sdk" location="sdk" />
-  <property name="version" value="1.7.5" />
-  <property name="sdkdirname" value="appengine-java-sdk-${version}" />
-  <property name="sdkfilename" value="${sdkdirname}.zip" />
-  <property name="sdklibdir" location="${sdk}/${sdkdirname}/lib" />
+  <!-- Paths -->
+  <property name="src" location="src"/>
+  <property name="test_src" location="test"/>
+  <property name="build" location="build"/>
+  <property name="test_build" location="test_build"/>
+  <property name="lib" location="lib"/>
+  <property name="lib_thirdparty" location="${lib}/${thirdparty}"/>
+  <property name="lib_sdk" location="${lib}/${sdk}"/>
+  <property name="lib_test" location="${lib}/${test}"/>
+  <property name="lib_war" location="${lib}/${war}"/>
+  <property name="dist" location="dist"/>
+  <property name="example_src" location="example"/>
+  <property name="example_war" location="example/war"/>
 
-  <path id="sdkjars">
-    <fileset dir="${sdklibdir}/user">
-      <include name="appengine-api-1.0-sdk-${version}.jar" />
-    </fileset>
-    <fileset dir="${sdklibdir}/shared">
-      <include name="geronimo-servlet_2.5_spec-1.2.jar" />
-      <include name="servlet-api.jar" />
-    </fileset>
-  </path>
+  <!-- Ivy Bootstrap Properties -->
+  <property name="ivy_version" value="2.3.0"/>
+  <property name="mvn_repo" value="http://repo2.maven.org/maven2"/>
+  <property name="ivy_jar" value="ivy-${ivy_version}.jar"/>
+  <property name="ivy_url" value="${mvn_repo}/org/apache/ivy/ivy/${ivy_version}/${ivy_jar}"/>
+  <property name="ivy_dir" value="${lib}/ivy"/>
 
-  <!-- We plan to move to downloading all of these on the fly, but for
-       now json is jar'ed up, and the other two are released
-       relatively infrequently. -->
-  <path id="thirdpartyjars">
-    <fileset dir="${lib}">
-      <include name="*.jar" />
-    </fileset>
-  </path>
-  
-  <path id="testjars">
-    <pathelement path="${testlib}/easymock-3.0.jar" />
-    <pathelement path="${testlib}/hamcrest-core-1.1.jar" />
-    <pathelement path="${testlib}/junit-4.10.jar" />
-    <pathelement path="${testlib}/json.jar" />
-    <pathelement path="${sdklibdir}/testing/appengine-testing.jar" />
-    <pathelement path="${sdklibdir}/impl/appengine-api-stubs.jar" />
-  </path>
 
+  <!-- Targets for the GCS library -->
   <target name="init">
-    <mkdir dir="${build}" />
+    <mkdir dir="${build}"/>
   </target>
 
-  <target name="compile" depends="init,download_sdk">
-    <javac srcdir="${src}" destdir="${build}" debug="on" debuglevel="lines,source">
-      <compilerarg value="-Xlint:all"/>
-      <compilerarg value="-Xlint:-sunapi"/>
+  <target name="ivy_probe" description="Check if Ivy is already loaded">
+    <condition property="ivy_found">
+      <typefound uri="antlib:org.apache.ivy.ant" name="retrieve"/>
+    </condition>
+  </target>
+
+  <target name="ivy_download" depends="ivy_probe,init" unless="ivy_found">
+    <mkdir dir="${ivy_dir}"/>
+    <get src="${ivy_url}" dest="${ivy_dir}/${ivy_jar}" usetimestamp="true"/>
+  </target>
+
+  <target name="ivy_init" depends="ivy_probe,ivy_download" unless="ivy_found">
+    <typedef uri="antlib:org.apache.ivy.ant" onerror="fail" loaderRef="ivyLoader">
       <classpath>
-        <path refid="sdkjars" />
-        <path refid="thirdpartyjars" />
+        <pathelement location="${ivy_dir}/${ivy_jar}"/>
+      </classpath>
+    </typedef>
+    <fail>
+      <condition>
+        <not>
+          <typefound uri="antlib:org.apache.ivy.ant" name="cleancache"/>
+        </not>
+      </condition>
+      You need Apache Ivy 2.0 or later from http://ant.apache.org/
+      It could not be loaded from ${ivy_url}
+    </fail>
+  </target>
+
+  <target name="dependencies_thirdparty" depends="ivy_init">
+    <ivy:retrieve conf="thirdparty" pattern="${lib_thirdparty}/[artifact]-[revision].[ext]"
+                  sync="true"/>
+  </target>
+
+  <target name="dependencies_sdk" depends="ivy_init">
+    <ivy:retrieve conf="sdk" pattern="${lib_sdk}/[artifact]-[revision].[ext]" sync="true"/>
+  </target>
+
+  <target name="dependencies_test" depends="ivy_init">
+    <ivy:retrieve conf="test" pattern="${lib_test}/[artifact]-[revision].[ext]" sync="true"/>
+  </target>
+
+  <target name="dependencies_war" depends="ivy_init">
+    <ivy:retrieve conf="war" pattern="${lib_war}/[artifact]-[revision].[ext]" sync="true"/>
+  </target>
+
+  <target name="compile" depends="init,dependencies_thirdparty,dependencies_sdk">
+    <javac srcdir="${src}" destdir="${build}" debug="on" debuglevel="lines,source"
+           includeantruntime="false">
+      <compilerarg value="-Xlint:all"/>
+      <classpath>
+        <fileset dir="${lib_thirdparty}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_sdk}">
+          <include name="*.jar"/>
+        </fileset>
       </classpath>
     </javac>
   </target>
 
-  <target name="test_init">
-    <mkdir dir="${testbuild}" />
+  <target name="dist" depends="compile">
+    <mkdir dir="${dist}"/>
+    <copy todir="${build}">
+      <fileset dir="${src}"/>
+    </copy>
+    <jar jarfile="${dist}/appengine-gcs-client.jar" basedir="${build}"/>
+    <copy todir="${dist}">
+      <fileset dir="${lib_thirdparty}"/>
+    </copy>
   </target>
 
-  <target name="test_compile" depends="test_init,dist,download_sdk">
-    <javac srcdir="${testsrc}" destdir="${testbuild}" debug="on" debuglevel="lines,source">
+  <target name="test_init">
+    <mkdir dir="${test_build}"/>
+  </target>
+
+  <target name="test_compile" depends="test_init,dependencies_test,dist">
+    <javac srcdir="${test_src}" destdir="${test_build}" debug="on" debuglevel="lines,source"
+           includeantruntime="false">
       <classpath>
-        <path refid="sdkjars" />
-        <path refid="thirdpartyjars" />
-        <path refid="testjars" />
-        <pathelement location="${dist}/lib/appengine-gcs-client.jar" />
+        <fileset dir="${dist}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_test}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_sdk}">
+          <include name="*.jar"/>
+        </fileset>
       </classpath>
     </javac>
   </target>
@@ -79,82 +134,62 @@
   <target name="test" depends="test_compile">
     <junit filtertrace="off">
       <batchtest>
-        <fileset dir="${testsrc}">
-          <include name="**/*Test*.java" />
+        <fileset dir="${test_src}">
+          <include name="**/*Test*.java"/>
         </fileset>
       </batchtest>
       <classpath>
-        <path refid="sdkjars" />
-        <path refid="thirdpartyjars" />
-        <path refid="testjars" />
-        <pathelement location="${dist}/lib/appengine-gcs-client.jar" />
-        <pathelement location="${testbuild}" />
+        <pathelement location="${test_build}"/>
+        <fileset dir="${dist}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_test}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_sdk}">
+          <include name="*.jar"/>
+        </fileset>
       </classpath>
-      <formatter type="brief" usefile="false" />
+      <formatter type="brief" usefile="false"/>
     </junit>
   </target>
 
-  <target name="dist" depends="compile">
-    <mkdir dir="${dist}/lib" />
-    <copy todir="${build}">
-      <fileset dir="${src}" />
-    </copy>
-    <jar jarfile="${dist}/lib/appengine-gcs-client.jar" basedir="${build}" />
-    <copy todir="${dist}/lib">
-      <path refid="thirdpartyjars" />
-    </copy>
-  </target>
-
   <target name="clean">
-    <delete dir="${build}" />
-    <delete dir="${dist}" />
-    <delete dir="${testbuild}" />
+    <delete dir="${build}"/>
+    <delete dir="${dist}"/>
+    <delete dir="${test_build}"/>
+    <delete dir="${lib}"/>
   </target>
 
-  <target name="check_sdk_extracted">
-    <available file="${sdk}/${sdkdirname}" property="sdkextracted" />
-  </target>
-
-  <target name="download_sdk" description="Gets the AppEngine SDK" depends="check_sdk_extracted" unless="sdkextracted">
-    <mkdir dir="${sdk}" />
-    <get src="http://googleappengine.googlecode.com/files/${sdkfilename}" dest="${sdk}/${sdkfilename}" />
-    <unzip src="${sdk}/${sdkfilename}" dest="${sdk}" />
-  </target>
-
-  <!-- Separate target because downloading the SDK can be expensive and
-       usually only needs to be done once. -->
-  <target name="clean_sdk">
-    <delete dir="${sdk}" />
-  </target>
-
+  <!-- Targets for GCS example -->
   <target name="copy_libs_to_example" depends="dist">
-    <copy todir="example/war/WEB-INF/lib">
-      <fileset dir="${dist}/lib" />
-      <path refid="sdkjars" />
-      <fileset dir="${sdklibdir}/testing">
-        <include name="appengine-testing.jar" />
-      </fileset>
-      <fileset dir="${sdklibdir}/impl">
-        <include name="appengine-api-stubs.jar" />
-      </fileset>
+    <copy todir="${example_war}/WEB-INF/lib">
+      <fileset dir="${dist}"/>
     </copy>
   </target>
 
-  <target name="compile_example" depends="copy_libs_to_example">
-    <mkdir dir="example/war/WEB-INF/classes" />
-    <javac srcdir="example" destdir="example/war/WEB-INF/classes">
+  <target name="compile_example" depends="copy_libs_to_example,dependencies_test,dependencies_war">
+    <mkdir dir="${example_war}/WEB-INF/classes"/>
+    <javac srcdir="${example_src}" destdir="${example_war}/WEB-INF/classes"
+           debug="on" debuglevel="lines,source" includeantruntime="false">
       <compilerarg value="-Xlint:all"/>
-      <compilerarg value="-Xlint:-sunapi"/>
       <classpath>
-        <fileset dir="example/war/WEB-INF/lib" />
-        <path refid="sdkjars" />
-        <path refid="testjars" />
+        <fileset dir="${example_war}/WEB-INF/lib"/>
+        <fileset dir="${lib_sdk}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_test}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_war}">
+          <include name="*.jar"/>
+        </fileset>
       </classpath>
     </javac>
   </target>
 
   <target name="clean_example">
-    <delete dir="example/war/WEB-INF/lib" />
-    <delete dir="example/war/WEB-INF/classes" />
+    <delete dir="${example_war}/WEB-INF/lib"/>
+    <delete dir="${example_war}/WEB-INF/classes"/>
   </target>
 </project>
