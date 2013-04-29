@@ -121,7 +121,6 @@ class ReadBuffer(object):
     self._buffer = ''
     self._buffer_offset = 0
     self._closed = False
-    self._buffer_future = self._get_segment(0, self._max_buffer_size)
 
     status, headers, _ = self._api.head_object(path)
     errors.check_status(status, [200])
@@ -129,6 +128,9 @@ class ReadBuffer(object):
     self._etag = headers.get('etag')
     if self._file_size == 0:
       self._buffer_future = None
+    else:
+
+      self._buffer_future = self._get_segment(0, self._max_buffer_size)
 
   def readline(self, size=-1):
     """Read one line delimited by '\n' from the file.
