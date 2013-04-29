@@ -3,6 +3,7 @@ package com.google.appengine.tools.cloudstorage;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.WritableByteChannel;
 
 /**
@@ -51,6 +52,18 @@ public interface GcsOutputChannel extends WritableByteChannel, Serializable {
    */
   @Override
   public int write(ByteBuffer src) throws IOException;
+  
+  
+  /**
+   * Blocks until all data that can be written has been written.
+   *
+   * It is possible that not all data can be written as GCS requires non-final writes to be fixed
+   * sizes.
+   *
+   * This method is most useful to call before serialization, as it will minimize the size of the
+   * serialized object.
+   */
+  void waitForOutstandingWrites() throws ClosedByInterruptException, IOException;
 
   /**
    * Flushes any buffers and writes all data to durable storage. Once {@link #close()} is called

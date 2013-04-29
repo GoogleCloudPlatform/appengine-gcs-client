@@ -64,6 +64,7 @@ public class GcsOutputChannelTest {
     for (int written = 0; written < size; written += pattern.length) {
       int toWrite = Math.min(pattern.length, size - written);
       outputChannel.write(ByteBuffer.wrap(pattern, 0, toWrite));
+      outputChannel.waitForOutstandingWrites();
       outputChannel = reconstruct(outputChannel);
     }
     outputChannel.close();
@@ -75,11 +76,12 @@ public class GcsOutputChannelTest {
   private void verifyContent(String name, byte[] content, int expectedSize) throws IOException {
     GcsService gsService = GcsServiceFactory.createGcsService();
     GcsFilename filename = new GcsFilename("GcsOutputChannelTestBucket", name);
-    ReadableByteChannel readChannel = gsService.openReadChannel(filename, 0);
+    ReadableByteChannel readChannel =
+        gsService.openPrefetchingReadChannel(filename, 0, BUFFER_SIZE);
     ByteBuffer result = ByteBuffer.allocate(content.length);
     ByteBuffer wrapped = ByteBuffer.wrap(content);
     int size = 0;
-    int read = readChannel.read(result);
+    int read = readFully(readChannel, result);
     while (read != -1) {
       assertTrue(read > 0);
       size += read;
@@ -89,9 +91,25 @@ public class GcsOutputChannelTest {
       if (!wrapped.equals(result)) {
         assertEquals(wrapped, result);
       }
-      read = readChannel.read(result);
+      read = readFully(readChannel, result);
     }
     assertEquals(expectedSize, size);
+  }
+
+  private int readFully(ReadableByteChannel readChannel, ByteBuffer result) throws IOException {
+    int totalRead = 0;
+    while (result.hasRemaining()) {
+      int read = readChannel.read(result);
+      if (read == -1) {
+        if (totalRead == 0) {
+          totalRead = -1;
+        }
+        break;
+      } else {
+        totalRead += read;
+      }
+    }
+    return totalRead;
   }
 
   /**
@@ -100,16 +118,22 @@ public class GcsOutputChannelTest {
    */
   private GcsOutputChannel reconstruct(GcsOutputChannel writeChannel)
       throws IOException, ClassNotFoundException {
-    ByteArrayOutputStream bout = new ByteArrayOutputStream();
-    ObjectOutputStream oout = new ObjectOutputStream(bout);
-    try {
-      oout.writeObject(writeChannel);
-    } finally {
-      oout.close();
-    }
+    ByteArrayOutputStream bout = writeChannelToStream(writeChannel);
     ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bout.toByteArray()));
     return (GcsOutputChannel) in.readObject();
   }
+
+  ByteArrayOutputStream writeChannelToStream(GcsOutputChannel outputChannel) throws IOException {
+    ByteArrayOutputStream bout = new ByteArrayOutputStream();
+    ObjectOutputStream oout = new ObjectOutputStream(bout);
+    try {
+      oout.writeObject(outputChannel);
+    } finally {
+      oout.close();
+    }
+    return bout;
+  }
+
 
   @Test
   public void testSingleLargeWrite() throws IOException, ClassNotFoundException {
@@ -165,6 +189,34 @@ public class GcsOutputChannelTest {
     writeFile("testUnalignedWrites", 5 * BUFFER_SIZE, content);
     verifyContent("testUnalignedWrites", content, 5 * BUFFER_SIZE);
   }
+
+  @Test
+  public void testPartialFlush() throws IOException {
+    byte[] content = new byte[BUFFER_SIZE - 1];
+    Random r = new Random();
+    r.nextBytes(content);
+
+    GcsService gsService = GcsServiceFactory.createGcsService();
+    GcsFilename filename = new GcsFilename("GcsOutputChannelTestBucket", "testPartialFlush");
+    GcsOutputChannel outputChannel =
+        gsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
+
+    outputChannel.write(ByteBuffer.wrap(content, 0, content.length));
+
+    ByteArrayOutputStream bout = writeChannelToStream(outputChannel);
+    assertTrue(bout.size() >= BUFFER_SIZE);
+
+    outputChannel.waitForOutstandingWrites();
+
+    bout = writeChannelToStream(outputChannel);
+    assertTrue(bout.size() < BUFFER_SIZE);
+    assertTrue(bout.size() > 0);
+
+    outputChannel.close();
+
+    verifyContent("testPartialFlush", content, BUFFER_SIZE - 1);
+  }
+
 
   /**
    * The other tests in this file assume a buffer size of 2mb. If this is changed this test will
