@@ -9,6 +9,7 @@
 __all__ = ['AuthorizationError',
            'check_status',
            'FatalError',
+           'ForbiddenError',
            'GSError',
            'NotFoundError',
            'ServerError',
@@ -39,8 +40,12 @@ class NotFoundError(FatalError):
   """Http 404 resource not found."""
 
 
+class ForbiddenError(FatalError):
+  """Http 403 Forbidden."""
+
+
 class AuthorizationError(FatalError):
-  """Http 401 authorization failed."""
+  """Http 401 authentication required."""
 
 
 class InvalidRange(FatalError):
@@ -75,6 +80,8 @@ def check_status(status, expected, headers=None):
 
   if status == httplib.UNAUTHORIZED:
     raise AuthorizationError(msg)
+  elif status == httplib.FORBIDDEN:
+    raise ForbiddenError(msg)
   elif status == httplib.NOT_FOUND:
     raise NotFoundError(msg)
   elif status == httplib.REQUEST_TIMEOUT:
