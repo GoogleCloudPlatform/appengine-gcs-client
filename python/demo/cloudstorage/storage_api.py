@@ -221,6 +221,7 @@ class ReadBuffer(object):
         data_list.extend(self._get_segments(self._offset, needs))
         self._offset += needs
       result = ''.join(data_list)
+      data_list = None
 
     assert self._buffer_future is None
     if self._offset != self._file_size and not self._buffer:
@@ -310,6 +311,7 @@ class ReadBuffer(object):
   def close(self):
     self._closed = True
     self._reset_buffer()
+    self._buffer_future = None
 
   def __enter__(self):
     return self
@@ -466,6 +468,7 @@ class StreamingBuffer(object):
     """
     self._closed = True
     self._flush(finish=True)
+    self._buffer = None
 
   def __enter__(self):
     return self

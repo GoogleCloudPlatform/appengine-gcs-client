@@ -13,6 +13,7 @@ __all__ = ['CS_XML_NS',
            'get_access_token',
            'get_metadata',
            'http_time_to_posix',
+           'memory_usage',
            'posix_time_to_http',
            'set_access_token',
            'validate_options',
@@ -20,9 +21,17 @@ __all__ = ['CS_XML_NS',
            'validate_file_path',
           ]
 
+
 from email import utils as email_utils
+import logging
 import os
 import re
+
+try:
+  from google.appengine.api import runtime
+except ImportError:
+  from google.appengine.api import runtime
+
 
 _CS_BUCKET_REGEX = re.compile(r'/[a-z0-9\.\-_]{3,}$')
 _CS_FULLPATH_REGEX = re.compile(r'/[a-z0-9\.\-_]{3,}/.*')
@@ -204,3 +213,15 @@ def local_run():
   """Whether running in dev appserver."""
   return ('SERVER_SOFTWARE' not in os.environ or
           os.environ['SERVER_SOFTWARE'].startswith('Development'))
+
+
+def memory_usage(method):
+  """Log memory usage before and after a method."""
+  def wrapper(*args, **kwargs):
+    logging.info('Memory before method %s is %s.',
+                 method.__name__, runtime.memory_usage().current())
+    result = method(*args, **kwargs)
+    logging.info('Memory after method %s is %s',
+                 method.__name__, runtime.memory_usage().current())
+    return result
+  return wrapper
