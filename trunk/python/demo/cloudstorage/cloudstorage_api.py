@@ -25,7 +25,8 @@ def open(filename,
          mode='r',
          content_type=None,
          options=None,
-         read_buffer_size=storage_api.ReadBuffer.DEFAULT_BUFFER_SIZE):
+         read_buffer_size=storage_api.ReadBuffer.DEFAULT_BUFFER_SIZE,
+         _account_id=None):
   """Opens a Google Cloud Storage file and returns it as a File-like object.
 
   Args:
@@ -45,6 +46,8 @@ def open(filename,
       To minimize blocking for large files, always read in buffer size.
       To minimize number of requests for small files, set a larger
       buffer size.
+    _account_id: Internal-use only.
+
 
   Returns:
     A reading or writing buffer that supports File-like interface. Buffer
@@ -57,7 +60,7 @@ def open(filename,
       in reading mode.
   """
   common.validate_file_path(filename)
-  api = _get_storage_api()
+  api = _get_storage_api(account_id=_account_id)
 
   if mode == 'w':
     common.validate_options(options)
@@ -73,26 +76,28 @@ def open(filename,
     raise ValueError('Invalid mode %s.' % mode)
 
 
-def delete(filename):
+def delete(filename, _account_id=None):
   """Delete a cloud storage file.
 
   Args:
     filename: a cloud storage filename of form '/bucket/filename'.
+    _account_id: Internal-use only.
 
   Raises:
     errors.NotFoundError: if the file doesn't exist prior to deletion.
   """
-  api = _get_storage_api()
+  api = _get_storage_api(account_id=_account_id)
   common.validate_file_path(filename)
   status, _, _ = api.delete_object(filename)
   errors.check_status(status, [204])
 
 
-def stat(filename):
+def stat(filename, _account_id=None):
   """Get CSFileStat of a cloud storage file.
 
   Args:
     filename: a cloud storage filename of form '/bucket/filename'.
+    _account_id: Internal-use only.
 
   Returns:
     a CSFileStat object containing info about this file.
@@ -102,7 +107,7 @@ def stat(filename):
     errors.NotFoundError: if an object that's expected to exist doesn't.
   """
   common.validate_file_path(filename)
-  api = _get_storage_api()
+  api = _get_storage_api(account_id=_account_id)
   status, headers, _ = api.head_object(filename)
   errors.check_status(status, [200])
   file_stat = common.CSFileStat(
@@ -116,7 +121,8 @@ def stat(filename):
   return file_stat
 
 
-def listbucket(bucket, marker=None, prefix=None, max_keys=None):
+def listbucket(bucket, marker=None, prefix=None, max_keys=None,
+               _account_id=None):
   """Return an CSFileStat iterator over files in the given bucket.
 
   Optional arguments are to limit the result to a subset of files under bucket.
@@ -129,6 +135,7 @@ def listbucket(bucket, marker=None, prefix=None, max_keys=None):
     marker: a string after which (exclusive) to start listing.
     prefix: limits the returned filenames to those with this prefix. no regex.
     max_keys: the maximum number of filenames to match. int.
+    _account_id: Internal-use only.
 
   Example:
     For files "/bucket/foo1", "/bucket/foo2", "/bucket/foo3", "/bucket/www",
@@ -143,7 +150,7 @@ def listbucket(bucket, marker=None, prefix=None, max_keys=None):
     Only filename, etag, and st_size are set in these GSFileStat objects.
   """
   common.validate_bucket_path(bucket)
-  api = _get_storage_api()
+  api = _get_storage_api(account_id=_account_id)
   options = {}
   if marker:
     options['marker'] = marker
@@ -206,8 +213,11 @@ class _Bucket(object):
         self._get_bucket_fut = None
 
 
-def _get_storage_api():
+def _get_storage_api(account_id=None):
   """Returns storage_api instance for API methods.
+
+  Args:
+    account_id: Internal-use only.
 
   Returns:
     A storage_api instance to handle urlfetch work to GCS.
@@ -215,7 +225,10 @@ def _get_storage_api():
     unless common.ACCESS_TOKEN is set. That token will be used to talk
     to the real GCS.
   """
-  api = storage_api._StorageApi(storage_api._StorageApi.full_control_scope)
+
+
+  api = storage_api._StorageApi(storage_api._StorageApi.full_control_scope,
+                                service_account_id=account_id)
   if common.local_run() and not common.get_access_token():
     api.api_url = common.LOCAL_API_URL
   if common.get_access_token():
