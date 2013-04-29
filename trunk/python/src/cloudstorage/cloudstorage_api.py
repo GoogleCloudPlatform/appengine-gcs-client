@@ -14,7 +14,6 @@ __all__ = ['delete',
            'stat',
           ]
 
-import os
 import urllib
 import xml.etree.ElementTree as ET
 from . import common
@@ -217,7 +216,7 @@ def _get_storage_api():
     to the real GCS.
   """
   api = storage_api._StorageApi(storage_api._StorageApi.full_control_scope)
-  if not os.environ.get('DATACENTER') and not common.get_access_token():
+  if common.local_run() and not common.get_access_token():
     api.api_url = common.LOCAL_API_URL
   if common.get_access_token():
     api.token = common.get_access_token()

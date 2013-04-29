@@ -9,6 +9,7 @@
 __all__ = ['CS_XML_NS',
            'CSFileStat',
            'LOCAL_API_URL',
+           'local_run',
            'get_access_token',
            'get_metadata',
            'http_time_to_posix',
@@ -20,6 +21,7 @@ __all__ = ['CS_XML_NS',
           ]
 
 from email import utils as email_utils
+import os
 import re
 
 _CS_BUCKET_REGEX = re.compile(r'/[a-z0-9\.\-_]{3,}$')
@@ -196,3 +198,9 @@ def posix_time_to_http(posix_time):
   """Convert posix time to HTML header time format."""
   if posix_time:
     return email_utils.formatdate(posix_time, usegmt=True)
+
+
+def local_run():
+  """Whether running in dev appserver."""
+  return ('SERVER_SOFTWARE' not in os.environ or
+          os.environ['SERVER_SOFTWARE'].startswith('Development'))
