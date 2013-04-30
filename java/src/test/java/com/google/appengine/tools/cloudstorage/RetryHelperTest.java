@@ -71,7 +71,7 @@ public class RetryHelperTest {
   @Test
   public void testTriesNoMoreThanMaxTimes() throws IOException {
     final FakeTicker ticker = new FakeTicker();
-    Stopwatch stopwatch = Stopwatch.createUnstarted(ticker);
+    Stopwatch stopwatch = new Stopwatch(ticker);
     RetryParams parms = new RetryParams();
     parms.setInitialRetryDelayMillis(0);
     parms.setRetryPeriodMillis(500);
