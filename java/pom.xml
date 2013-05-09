@@ -3,11 +3,18 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.google.appengine.tools</groupId>
   <artifactId>appengine-gcs-client</artifactId>
-  <name>App Engine Clients for Google Cloud Storage</name>
-  <version>1.0-SNAPSHOT</version>
+  <name>App Engine Client for Google Cloud Storage</name>
+  <url>http://code.google.com/p/appengine-gcs-client/</url>
+  <version>0.1</version>
   <packaging>jar</packaging>
+  <licenses>
+    <license>
+      <name>The Apache Software License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0</url>
+    </license>
+  </licenses>
   <properties>
-    <appengine.target.version>1.7.4</appengine.target.version>
+    <appengine.target.version>1.7.7.1</appengine.target.version>
   </properties>
   <build>
     <plugins>

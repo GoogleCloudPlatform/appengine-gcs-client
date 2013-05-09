@@ -49,6 +49,24 @@ class _StorageApi(rest_api._RestApi):
   read_write_scope = 'https://www.googleapis.com/auth/devstorage.read_write'
   full_control_scope = 'https://www.googleapis.com/auth/devstorage.full_control'
 
+  def __getstate__(self):
+    """Store state as part of serialization/pickling.
+
+    Returns:
+      A tuple (of dictionaries) with the state of this object
+    """
+    return (super(_StorageApi, self).__getstate__(), {'api_url': self.api_url})
+
+  def __setstate__(self, state):
+    """Restore state as part of deserialization/unpickling.
+
+    Args:
+      state: the tuple from a __getstate__ call
+    """
+    superstate, localstate = state
+    super(_StorageApi, self).__setstate__(superstate)
+    self.api_url = localstate['api_url']
+
 
   def post_object_async(self, path, **kwds):
     """POST to an object."""
@@ -118,8 +136,7 @@ class ReadBuffer(object):
     self._max_buffer_size = max_buffer_size
     self._max_request_size = max_request_size
     self._offset = 0
-    self._buffer = ''
-    self._buffer_offset = 0
+    self._reset_buffer()
     self._closed = False
 
     status, headers, _ = self._api.head_object(path)
@@ -131,6 +148,49 @@ class ReadBuffer(object):
     else:
 
       self._buffer_future = self._get_segment(0, self._max_buffer_size)
+
+  def __getstate__(self):
+    """Store state as part of serialization/pickling.
+
+    The contents of the read buffer are not stored, only the current offset for
+    data read by the client. A new read buffer is established at unpickling.
+    The head information for the object (file size and etag) are stored to
+    reduce startup and ensure the file has not changed.
+
+    Returns:
+      A dictionary with the state of this object
+    """
+    return {'api': self._api,
+            'path': self._path,
+            'buffer_size': self._max_buffer_size,
+            'request_size': self._max_request_size,
+            'etag': self._etag,
+            'size': self._file_size,
+            'offset': self._offset,
+            'closed': self._closed}
+
+  def __setstate__(self, state):
+    """Restore state as part of deserialization/unpickling.
+
+    Args:
+      state: the dictionary from a __getstate__ call
+
+    Along with restoring the state, pre-fetch the next read buffer.
+    """
+    self._api = state['api']
+    self._path = state['path']
+    self._max_buffer_size = state['buffer_size']
+    self._max_request_size = state['request_size']
+    self._etag = state['etag']
+    self._file_size = state['size']
+    self._offset = state['offset']
+    self._reset_buffer()
+    self._closed = state['closed']
+    if self._offset < self._file_size and not self._closed:
+      self._buffer_future = self._get_segment(self._offset,
+                                              self._max_buffer_size)
+    else:
+      self._buffer_future = None
 
   def readline(self, size=-1):
     """Read one line delimited by '\n' from the file.
@@ -430,6 +490,40 @@ class StreamingBuffer(object):
       raise IOError('No location header found in 201 response')
     parsed = urlparse.urlparse(loc)
     self._path_with_token = '%s?%s' % (self._path, parsed.query)
+
+  def __getstate__(self):
+    """Store state as part of serialization/pickling.
+
+    The contents of the write buffer are stored. Writes to the underlying
+    storage are required to be on block boundaries (_blocksize) except for the
+    last write. In the worst case the pickled version of this object may be
+    slightly larger than the blocksize.
+
+    Returns:
+      A dictionary with the state of this object
+
+    """
+    return {'api': self._api,
+            'path_token': self._path_with_token,
+            'buffer': self._buffer,
+            'buffered': self._buffered,
+            'written': self._written,
+            'offset': self._offset,
+            'closed': self._closed}
+
+  def __setstate__(self, state):
+    """Restore state as part of deserialization/unpickling.
+
+    Args:
+      state: the dictionary from a __getstate__ call
+    """
+    self._api = state['api']
+    self._path_with_token = state['path_token']
+    self._buffer = state['buffer']
+    self._buffered = state['buffered']
+    self._written = state['written']
+    self._offset = state['offset']
+    self._closed = state['closed']
 
   def write(self, data):
     """Write some bytes."""

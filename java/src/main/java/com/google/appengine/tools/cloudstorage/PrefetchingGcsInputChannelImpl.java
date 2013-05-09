@@ -89,10 +89,10 @@ final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel, Seria
   @Override
   public String toString() {
     return "PrefetchingGcsInputChannelImpl [filename=" + filename + ", blockSizeBytes="
-        + blockSizeBytes + ", closed=" + closed + ", eofHit=" + eofHit + ", fetchPosition="
-        + fetchPosition + ", pendingFetch=" + pendingFetch + ", retryParams=" + retryParams + "]";
+        + blockSizeBytes + ", closed=" + closed + ", eofHit=" + eofHit + ", length=" + length
+        + ", fetchPosition=" + fetchPosition + ", pendingFetch=" + pendingFetch + ", retryParams="
+        + retryParams + "]";
   }
-
 
   @Override
   public boolean isOpen() {

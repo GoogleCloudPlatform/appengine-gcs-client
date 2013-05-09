@@ -16,9 +16,13 @@ __all__ = ['delete',
 
 import urllib
 import xml.etree.ElementTree as ET
-from . import common
 from . import errors
 from . import storage_api
+
+try:
+  from google.appengine.ext.cloudstorage import common
+except ImportError:
+  from . import common
 
 
 def open(filename,
@@ -112,7 +116,7 @@ def stat(filename, _account_id=None):
   errors.check_status(status, [200])
   file_stat = common.CSFileStat(
       filename=filename,
-      st_size=long(headers.get('content-length')),
+      st_size=headers.get('content-length'),
       st_ctime=common.http_time_to_posix(headers.get('last-modified')),
       etag=headers.get('etag'),
       content_type=headers.get('content-type'),
@@ -196,10 +200,13 @@ class _Bucket(object):
       errors.check_status(status, [200])
       root = ET.fromstring(content)
       for contents in root.getiterator(self._add_ns('Contents')):
+        last_modified = contents.find(self._add_ns('LastModified')).text
+        st_ctime = common.dt_str_to_posix(last_modified)
         yield common.CSFileStat(
             self._path + '/' + contents.find(self._add_ns('Key')).text,
-            long(contents.find(self._add_ns('Size')).text),
-            contents.find(self._add_ns('ETag')).text)
+            contents.find(self._add_ns('Size')).text,
+            contents.find(self._add_ns('ETag')).text,
+            st_ctime)
         total += 1
 
       max_keys = root.find(self._add_ns('MaxKeys'))
@@ -230,7 +237,7 @@ def _get_storage_api(account_id=None):
   api = storage_api._StorageApi(storage_api._StorageApi.full_control_scope,
                                 service_account_id=account_id)
   if common.local_run() and not common.get_access_token():
-    api.api_url = common.LOCAL_API_URL
+    api.api_url = 'http://' + common.LOCAL_API_HOST
   if common.get_access_token():
     api.token = common.get_access_token()
   return api

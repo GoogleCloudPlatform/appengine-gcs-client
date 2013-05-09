@@ -85,6 +85,21 @@ public class GcsInputChannelTest {
     assertEquals(result, -1);
   }
 
+  @Test
+  public void readOneByteAtATime() throws IOException {
+    GcsService gcsService = GcsServiceFactory.createGcsService();
+    ReadableByteChannel readChannel =
+        gcsService.openPrefetchingReadChannel(TestFile.LARGE.filename, 0, 1024);
+    ByteBuffer buff = ByteBuffer.allocate(1);
+    for (int i = 0; i < TestFile.LARGE.contentSize; i++) {
+      int result = readChannel.read(buff);
+      assertEquals(result, 1);
+      buff.clear();
+    }
+    int result = readChannel.read(buff);
+    assertEquals(result, -1);
+  }
+
   private ReadableByteChannel createChannel(
       ChannelType type, GcsFilename filename, int offset, int fetchSize) throws IOException {
     final GcsService gcsService = GcsServiceFactory.createGcsService();
