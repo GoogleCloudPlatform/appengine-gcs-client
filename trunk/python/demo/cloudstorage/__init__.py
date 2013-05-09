@@ -4,6 +4,11 @@
 
 
 from cloudstorage_api import *
-from common import CSFileStat
 from errors import *
 from storage_api import *
+
+
+try:
+  from google.appengine.ext.cloudstorage.common import CSFileStat
+except ImportError:
+  from ..common import CSFileStat

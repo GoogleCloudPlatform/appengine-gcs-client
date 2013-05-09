@@ -10,10 +10,6 @@ __all__ = ['add_sync_methods']
 
 import time
 
-from . import common
-from . import stub_dispatcher
-
-
 try:
   from google.appengine.api import app_identity
   from google.appengine.ext import ndb
@@ -77,7 +73,7 @@ def _make_token_async(scopes, service_account_id):
 
   Args:
     scopes: A list of scopes.
-    service_account_id: A Gaia ID.
+    service_account_id: Internal-use only.
 
   Returns:
     An tuple (token, expiration_time) where expiration_time is
@@ -106,7 +102,7 @@ class _RestApi(object):
 
     Args:
       scopes: A scope or a list of scopes.
-      token_maker: A function from
+      token_maker: An asynchronous function of the form
         (scopes, service_account_id) -> (token, expires).
     """
 
@@ -116,6 +112,21 @@ class _RestApi(object):
     self.service_account_id = service_account_id
     self.make_token_async = token_maker or _make_token_async
     self.token = None
+
+  def __getstate__(self):
+    """Store state as part of serialization/pickling."""
+    return {'token': self.token,
+            'scopes': self.scopes,
+            'id': self.service_account_id,
+            'a_maker': None if self.make_token_async == _make_token_async
+            else self.make_token_async}
+
+  def __setstate__(self, state):
+    """Restore state as part of deserialization/unpickling."""
+    self.__init__(state['scopes'],
+                  service_account_id=state['id'],
+                  token_maker=state['a_maker'])
+    self.token = state['token']
 
   @ndb.tasklet
   def do_request_async(self, url, method='GET', headers=None, payload=None,
@@ -129,20 +140,17 @@ class _RestApi(object):
     headers = {} if headers is None else dict(headers)
     token = yield self.get_token_async()
     headers['authorization'] = 'OAuth ' + token
-    if url.startswith(common.LOCAL_API_URL):
-      resp = stub_dispatcher.dispatch(method, headers, url, payload)
-    else:
-      resp = yield self.urlfetch_async(url, payload=payload, method=method,
-                                       headers=headers, follow_redirects=False,
-                                       deadline=deadline, callback=callback)
+    resp = yield self.urlfetch_async(url, payload=payload, method=method,
+                                     headers=headers, follow_redirects=False,
+                                     deadline=deadline, callback=callback)
 
-      if resp.status_code == 401:
-        token = yield self.get_token_async(refresh=True)
-        headers['authorization'] = 'OAuth ' + token
-        resp = yield self.urlfetch_async(url, payload=payload, method=method,
-                                         headers=headers,
-                                         follow_redirects=False,
-                                         deadline=deadline, callback=callback)
+    if resp.status_code == 401:
+      token = yield self.get_token_async(refresh=True)
+      headers['authorization'] = 'OAuth ' + token
+      resp = yield self.urlfetch_async(url, payload=payload, method=method,
+                                       headers=headers,
+                                       follow_redirects=False,
+                                       deadline=deadline, callback=callback)
     raise ndb.Return((resp.status_code, resp.headers, resp.content))
 
   @ndb.tasklet

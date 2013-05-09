@@ -41,8 +41,9 @@ public class SerializationTest {
 
 
   private enum TestFile {
-    SMALL(new GcsFilename("unit-tests", "smallFile"), 100), MEDIUM(new GcsFilename(
-        "unit-tests", "mediumFile"), 4000);
+    SMALL(new GcsFilename("unit-tests", "smallFile"), 100),
+    MEDIUM(new GcsFilename("unit-tests", "mediumFile"), 4000),
+    LARGE(new GcsFilename("unit-tests", "largeFile"), 1024 * 1024 * 2);
 
     public final GcsFilename filename;
     public final int contentSize;
@@ -155,6 +156,26 @@ public class SerializationTest {
           new byte[] {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'}, buffer.array()));
       buffer.rewind();
     }
+    readChannel = reconstruct(readChannel);
+    read = readChannel.read(buffer);
+    assertEquals(-1, read);
+    readChannel.close();
+  }
+
+  @Test
+  public void testSerializingPrefetchOfLargeFileAtEof() throws IOException, ClassNotFoundException {
+    GcsService gcsService = GcsServiceFactory.createGcsService();
+    createFiles(gcsService);
+    @SuppressWarnings("resource")
+    ReadableByteChannel readChannel = gcsService.openPrefetchingReadChannel(
+        TestFile.LARGE.filename, 0, TestFile.LARGE.contentSize / 2);
+    ByteBuffer buffer = ByteBuffer.allocate(TestFile.LARGE.contentSize * 2);
+    int read = readChannel.read(buffer);
+    assertEquals(read, TestFile.LARGE.contentSize / 2);
+    assertEquals(buffer.position(), TestFile.LARGE.contentSize / 2);
+    read = readChannel.read(buffer);
+    assertEquals(read, TestFile.LARGE.contentSize / 2);
+    assertEquals(buffer.position(), TestFile.LARGE.contentSize);
     readChannel = reconstruct(readChannel);
     read = readChannel.read(buffer);
     assertEquals(-1, read);

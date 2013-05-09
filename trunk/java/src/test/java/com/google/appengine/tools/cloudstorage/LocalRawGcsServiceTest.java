@@ -1,5 +1,11 @@
 package com.google.appengine.tools.cloudstorage;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import com.google.appengine.tools.cloudstorage.dev.LocalRawGcsServiceFactory;
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
@@ -15,6 +21,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -66,6 +73,30 @@ public class LocalRawGcsServiceTest {
   @After
   public void tearDown() throws Exception {
     helper.tearDown();
+  }
+
+  @Test
+  public void testDeleteExistingFile() throws IOException, InterruptedException {
+    GcsFilename filename = new GcsFilename("unit-tests", "testDelete");
+    GcsService gcsService = new GcsServiceImpl(rawGcsService, new RetryParams());
+    GcsOutputChannel outputChannel =
+        gcsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
+    outputChannel.write(ByteBuffer.wrap(new byte[] {0, 1, 2, 3, 4}));
+    outputChannel.close();
+    GcsFileMetadata metadata = rawGcsService.getObjectMetadata(filename, 1000);
+    assertNotNull(metadata);
+    assertEquals(5, metadata.getLength());
+    boolean deleted = rawGcsService.deleteObject(filename, 1000);
+    assertTrue(deleted);
+    metadata = rawGcsService.getObjectMetadata(filename, 1000);
+    assertNull(metadata);
+    ByteBuffer dst = ByteBuffer.allocate(200);
+    try {
+      rawGcsService.readObjectAsync(dst, filename, 0, 1000).get();
+      fail();
+    } catch (ExecutionException e) {
+      assertEquals(FileNotFoundException.class, e.getCause().getClass());
+    }
   }
 
   @Test(expected = IllegalArgumentException.class)

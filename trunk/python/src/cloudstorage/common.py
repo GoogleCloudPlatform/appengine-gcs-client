@@ -8,13 +8,15 @@
 
 __all__ = ['CS_XML_NS',
            'CSFileStat',
-           'LOCAL_API_URL',
+           'dt_str_to_posix',
+           'LOCAL_API_HOST',
            'local_run',
            'get_access_token',
            'get_metadata',
            'http_time_to_posix',
            'memory_usage',
            'posix_time_to_http',
+           'posix_to_dt_str',
            'set_access_token',
            'validate_options',
            'validate_bucket_path',
@@ -22,6 +24,8 @@ __all__ = ['CS_XML_NS',
           ]
 
 
+import calendar
+import datetime
 from email import utils as email_utils
 import logging
 import os
@@ -38,7 +42,7 @@ _CS_FULLPATH_REGEX = re.compile(r'/[a-z0-9\.\-_]{3,}/.*')
 _CS_OPTIONS = ('x-goog-acl',
                'x-goog-meta-')
 CS_XML_NS = 'http://doc.s3.amazonaws.com/2006-03-01'
-LOCAL_API_URL = 'http://gcs-magicstring.appspot.com'
+LOCAL_API_HOST = 'gcs-magicstring.appspot.com'
 _access_token = ''
 
 
@@ -73,23 +77,23 @@ class CSFileStat(object):
                filename,
                st_size,
                etag,
-               st_ctime=None,
+               st_ctime,
                content_type=None,
                metadata=None):
     """Initialize.
 
     Args:
       filename: a Google Storage filename of form '/bucket/filename'.
-      st_size: file size in bytes. long.
+      st_size: file size in bytes. long compatible.
       etag: hex digest of the md5 hash of the file's content. str.
-      st_ctime: posix file creation time. float.
+      st_ctime: posix file creation time. float compatible.
       content_type: content type. str.
       metadata: a str->str dict of user specified metadata from the
         x-goog-meta header, e.g. {'x-goog-meta-foo': 'foo'}.
     """
     self.filename = filename
-    self.st_size = st_size
-    self.st_ctime = st_ctime
+    self.st_size = long(st_size)
+    self.st_ctime = float(st_ctime)
     if etag[0] == '"' and etag[-1] == '"':
       etag = etag[1:-1]
     self.etag = etag
@@ -192,21 +196,74 @@ def validate_options(options):
 def http_time_to_posix(http_time):
   """Convert HTTP time format to posix time.
 
+  See http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.3.1
+  for http time format.
+
   Args:
-    http_time: time in RFC 2822 format. e.g.
+    http_time: time in RFC 2616 format. e.g.
       "Mon, 20 Nov 1995 19:12:08 GMT".
 
   Returns:
     A float of secs from unix epoch.
   """
-  if http_time:
+  if http_time is not None:
     return email_utils.mktime_tz(email_utils.parsedate_tz(http_time))
 
 
 def posix_time_to_http(posix_time):
-  """Convert posix time to HTML header time format."""
+  """Convert posix time to HTML header time format.
+
+  Args:
+    posix_time: unix time.
+
+  Returns:
+    A datatime str in RFC 2616 format.
+  """
   if posix_time:
     return email_utils.formatdate(posix_time, usegmt=True)
+
+
+_DT_FORMAT = '%Y-%m-%dT%H:%M:%S'
+
+
+def dt_str_to_posix(dt_str):
+  """format str to posix.
+
+  datetime str is of format %Y-%m-%dT%H:%M:%S.%fZ,
+  e.g. 2013-04-12T00:22:27.978Z. According to ISO 8601, T is a separator
+  between date and time when they are on the same line.
+  Z indicates UTC (zero meridian).
+
+  A pointer: http://www.cl.cam.ac.uk/~mgk25/iso-time.html
+
+  This is used to parse LastModified node from GCS's GET bucket XML response.
+
+  Args:
+    dt_str: A datetime str.
+
+  Returns:
+    A float of secs from unix epoch. By posix definition, epoch is midnight
+    1970/1/1 UTC.
+  """
+  parsable, _ = dt_str.split('.')
+  dt = datetime.datetime.strptime(parsable, _DT_FORMAT)
+  return calendar.timegm(dt.utctimetuple())
+
+
+def posix_to_dt_str(posix):
+  """Reverse of str_to_datetime.
+
+  This is used by GCS stub to generate GET bucket XML response.
+
+  Args:
+    posix: A float of secs from unix epoch.
+
+  Returns:
+    A datetime str.
+  """
+  dt = datetime.datetime.utcfromtimestamp(posix)
+  dt_str = dt.strftime(_DT_FORMAT)
+  return dt_str + '.000Z'
 
 
 def local_run():

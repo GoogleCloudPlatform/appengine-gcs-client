@@ -3,6 +3,7 @@
 
 
 
+import pickle
 import unittest
 import mock
 
@@ -183,6 +184,26 @@ class RestApiTest(unittest.TestCase):
     self.assertEqual(res.status_code, 200)
     self.assertEqual(res.content, 'response')
 
+  def testPickling(self):
+    api = rest_api._RestApi('scope', service_account_id=1)
+    self.assertNotEqual(None, api.get_token())
+
+    pickled_api = pickle.loads(pickle.dumps(api))
+    self.assertEqual(0, len(set(api.__dict__.keys()) ^
+                            set(pickled_api.__dict__.keys())))
+    for k, v in api.__dict__.iteritems():
+      if not hasattr(v, '__call__'):
+        self.assertEqual(v, pickled_api.__dict__[k])
+
+    pickled_api.token = None
+
+    fut_urlfetch = ndb.Future()
+    fut_urlfetch.set_result(MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
+    pickled_api.urlfetch_async = mock.create_autospec(
+        pickled_api.urlfetch_async, return_value=fut_urlfetch)
+
+    res = pickled_api.do_request('http://example.com')
+    self.assertEqual(res, (200, {'foo': 'bar'}, 'yoohoo'))
 
 if __name__ == '__main__':
   unittest.main()
