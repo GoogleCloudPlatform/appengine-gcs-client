@@ -14,9 +14,8 @@ import collections
 import os
 import urlparse
 
-from cloudstorage import errors
-from cloudstorage import rest_api
-
+from . import errors
+from . import rest_api
 
 try:
   from google.appengine.ext import ndb
