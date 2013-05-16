@@ -16,13 +16,9 @@ __all__ = ['delete',
 
 import urllib
 import xml.etree.ElementTree as ET
-from cloudstorage import errors
-from cloudstorage import storage_api
-
-try:
-  from google.appengine.ext.cloudstorage import common
-except ImportError:
-  from cloudstorage import common
+from . import common
+from . import errors
+from . import storage_api
 
 
 def open(filename,
