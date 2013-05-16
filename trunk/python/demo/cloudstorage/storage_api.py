@@ -454,7 +454,7 @@ class StreamingBuffer(object):
                api,
                path,
                content_type=None,
-               gs_headers=None):
+               gcs_headers=None):
     """Constructor.
 
     Args:
@@ -462,7 +462,7 @@ class StreamingBuffer(object):
       path: Path to the object, e.g. '/mybucket/myfile'.
       content_type: Optional content-type; Default value is
         delegate to Google Cloud Storage.
-      gs_headers: additional gs headers as a str->str dict, e.g
+      gcs_headers: additional gs headers as a str->str dict, e.g
         {'x-goog-acl': 'private', 'x-goog-meta-foo': 'foo'}.
     """
     assert self._maxrequestsize > self._blocksize
@@ -481,8 +481,8 @@ class StreamingBuffer(object):
     headers = {'x-goog-resumable': 'start'}
     if content_type:
       headers['content-type'] = content_type
-    if gs_headers:
-      headers.update(gs_headers)
+    if gcs_headers:
+      headers.update(gcs_headers)
     status, headers, _ = self._api.post_object(path, headers=headers)
     errors.check_status(status, [201], headers)
     loc = headers.get('location')
