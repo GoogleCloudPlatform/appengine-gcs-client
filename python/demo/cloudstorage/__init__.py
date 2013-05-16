@@ -1,4 +1,4 @@
-"""Client Library for Cloud Storage."""
+"""Client Library for Google Cloud Storage."""
 
 
 
@@ -10,5 +10,7 @@ from storage_api import *
 
 try:
   from google.appengine.ext.cloudstorage.common import CSFileStat
+  from google.appengine.ext.cloudstorage.common import GCSFileStat
 except ImportError:
   from ..common import CSFileStat
+  from ..common import GCSFileStat

@@ -21,7 +21,7 @@ import httplib
 
 
 class GSError(Exception):
-  """Base error for all gs operations."""
+  """Base error for all gcs operations."""
 
 
 class TransientError(GSError):

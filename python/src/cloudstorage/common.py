@@ -13,6 +13,7 @@ __all__ = ['CS_XML_NS',
            'local_run',
            'get_access_token',
            'get_metadata',
+           'GCSFileStat',
            'http_time_to_posix',
            'memory_usage',
            'posix_time_to_http',
@@ -37,24 +38,24 @@ except ImportError:
   from google.appengine.api import runtime
 
 
-_CS_BUCKET_REGEX = re.compile(r'/[a-z0-9\.\-_]{3,}$')
-_CS_FULLPATH_REGEX = re.compile(r'/[a-z0-9\.\-_]{3,}/.*')
-_CS_OPTIONS = ('x-goog-acl',
-               'x-goog-meta-')
+_GCS_BUCKET_REGEX = re.compile(r'/[a-z0-9\.\-_]{3,}$')
+_GCS_FULLPATH_REGEX = re.compile(r'/[a-z0-9\.\-_]{3,}/.*')
+_GCS_OPTIONS = ('x-goog-acl',
+                'x-goog-meta-')
 CS_XML_NS = 'http://doc.s3.amazonaws.com/2006-03-01'
 LOCAL_API_HOST = 'gcs-magicstring.appspot.com'
 _access_token = ''
 
 
 def set_access_token(access_token):
-  """Set the shared access token to authenticate with Cloud Storage.
+  """Set the shared access token to authenticate with Google Cloud Storage.
 
   When set, the library will always attempt to communicate with the
-  real Cloud Storage with this token even when running on dev appserver.
+  real Google Cloud Storage with this token even when running on dev appserver.
   Note the token could expire so it's up to you to renew it.
 
   When absent, the library will automatically request and refresh a token
-  on appserver, or when on dev appserver, talk to a Cloud Storage
+  on appserver, or when on dev appserver, talk to a Google Cloud Storage
   stub.
 
   Args:
@@ -70,8 +71,8 @@ def get_access_token():
   return _access_token
 
 
-class CSFileStat(object):
-  """Container for CS file stat."""
+class GCSFileStat(object):
+  """Container for GCS file stat."""
 
   def __init__(self,
                filename,
@@ -83,7 +84,7 @@ class CSFileStat(object):
     """Initialize.
 
     Args:
-      filename: a Google Storage filename of form '/bucket/filename'.
+      filename: a Google Cloud Storage filename of form '/bucket/filename'.
       st_size: file size in bytes. long compatible.
       etag: hex digest of the md5 hash of the file's content. str.
       st_ctime: posix file creation time. float compatible.
@@ -114,6 +115,9 @@ class CSFileStat(object):
              metadata=self.metadata))
 
 
+CSFileStat = GCSFileStat
+
+
 def get_metadata(headers):
   """Get user defined metadata from HTTP response headers."""
   return dict((k, v) for k, v in headers.iteritems()
@@ -121,23 +125,22 @@ def get_metadata(headers):
 
 
 def validate_bucket_path(path):
-  """Validate a Google Storage bucket path.
+  """Validate a Google Cloud Storage bucket path.
 
   Args:
     path: a Google Storage bucket path. It should have form '/bucket'.
-    is_bucket: whether this is a bucket path or file path.
 
   Raises:
     ValueError: if path is invalid.
   """
   _validate_path(path)
-  if not _CS_BUCKET_REGEX.match(path):
+  if not _GCS_BUCKET_REGEX.match(path):
     raise ValueError('Bucket should have format /bucket '
                      'but got %s' % path)
 
 
 def validate_file_path(path):
-  """Validate a Google Storage file path.
+  """Validate a Google Cloud Storage file path.
 
   Args:
     path: a Google Storage file path. It should have form '/bucket/filename'.
@@ -146,7 +149,7 @@ def validate_file_path(path):
     ValueError: if path is invalid.
   """
   _validate_path(path)
-  if not _CS_FULLPATH_REGEX.match(path):
+  if not _GCS_FULLPATH_REGEX.match(path):
     raise ValueError('Path should have format /bucket/filename '
                      'but got %s' % path)
 
@@ -170,10 +173,10 @@ def _validate_path(path):
 
 
 def validate_options(options):
-  """Validate Cloud Storage options.
+  """Validate Google Cloud Storage options.
 
   Args:
-    options: a str->basestring dict of options to pass to Cloud Storage.
+    options: a str->basestring dict of options to pass to Google Cloud Storage.
 
   Raises:
     ValueError: if option is not supported.
@@ -186,7 +189,7 @@ def validate_options(options):
   for k, v in options.iteritems():
     if not isinstance(k, str):
       raise TypeError('option %r should be a str.' % k)
-    if not any(k.startswith(valid) for valid in _CS_OPTIONS):
+    if not any(k.startswith(valid) for valid in _GCS_OPTIONS):
       raise ValueError('option %s is not supported.' % k)
     if not isinstance(v, basestring):
       raise TypeError('value %r for option %s should be of type basestring.' %

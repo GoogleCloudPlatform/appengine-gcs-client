@@ -34,12 +34,12 @@ def open(filename,
   """Opens a Google Cloud Storage file and returns it as a File-like object.
 
   Args:
-    filename: a cloud storage filename of form '/bucket/filename'.
+    filename: a Google Cloud Storage filename of form '/bucket/filename'.
     mode: 'r' for reading mode. 'w' for writing mode.
       In reading mode, the file must exist. In writing mode, a file will
       be created or be overrode.
     content_type: the MIME type of the file. str. Only valid in writing mode.
-    options: a str->basestring dict to specify additional cloud storage
+    options: a str->basestring dict to specify additional Google Cloud Storage
       options. e.g. {'x-goog-acl': 'private', 'x-goog-meta-foo': 'foo'}
       Currently supported options are x-goog-acl and x-goog-meta-.
       Only valid in writing mode.
@@ -81,10 +81,10 @@ def open(filename,
 
 
 def delete(filename, _account_id=None):
-  """Delete a cloud storage file.
+  """Delete a Google Cloud Storage file.
 
   Args:
-    filename: a cloud storage filename of form '/bucket/filename'.
+    filename: a Google Cloud Storage filename of form '/bucket/filename'.
     _account_id: Internal-use only.
 
   Raises:
@@ -97,14 +97,14 @@ def delete(filename, _account_id=None):
 
 
 def stat(filename, _account_id=None):
-  """Get CSFileStat of a cloud storage file.
+  """Get GCSFileStat of a Google Cloud storage file.
 
   Args:
-    filename: a cloud storage filename of form '/bucket/filename'.
+    filename: a Google Cloud Storage filename of form '/bucket/filename'.
     _account_id: Internal-use only.
 
   Returns:
-    a CSFileStat object containing info about this file.
+    a GCSFileStat object containing info about this file.
 
   Raises:
     errors.AuthorizationError: if authorization failed.
@@ -114,7 +114,7 @@ def stat(filename, _account_id=None):
   api = _get_storage_api(account_id=_account_id)
   status, headers, _ = api.head_object(filename)
   errors.check_status(status, [200])
-  file_stat = common.CSFileStat(
+  file_stat = common.GCSFileStat(
       filename=filename,
       st_size=headers.get('content-length'),
       st_ctime=common.http_time_to_posix(headers.get('last-modified')),
@@ -127,7 +127,7 @@ def stat(filename, _account_id=None):
 
 def listbucket(bucket, marker=None, prefix=None, max_keys=None,
                _account_id=None):
-  """Return an CSFileStat iterator over files in the given bucket.
+  """Return an GCSFileStat iterator over files in the given bucket.
 
   Optional arguments are to limit the result to a subset of files under bucket.
 
@@ -135,7 +135,7 @@ def listbucket(bucket, marker=None, prefix=None, max_keys=None,
   before the iterator gets result.
 
   Args:
-    bucket: a cloud storage bucket of form "/bucket".
+    bucket: a Google Cloud Storage bucket of form "/bucket".
     marker: a string after which (exclusive) to start listing.
     prefix: limits the returned filenames to those with this prefix. no regex.
     max_keys: the maximum number of filenames to match. int.
@@ -191,8 +191,8 @@ class _Bucket(object):
     """Iter over the bucket.
 
     Yields:
-      CSFileStat: a CSFileStat for an object in the bucket.
-        They are ordered by CSFileStat.filename.
+      GCSFileStat: a GCSFileStat for an object in the bucket.
+        They are ordered by GCSFileStat.filename.
     """
     total = 0
     while self._get_bucket_fut:
@@ -202,7 +202,7 @@ class _Bucket(object):
       for contents in root.getiterator(self._add_ns('Contents')):
         last_modified = contents.find(self._add_ns('LastModified')).text
         st_ctime = common.dt_str_to_posix(last_modified)
-        yield common.CSFileStat(
+        yield common.GCSFileStat(
             self._path + '/' + contents.find(self._add_ns('Key')).text,
             contents.find(self._add_ns('Size')).text,
             contents.find(self._add_ns('ETag')).text,
