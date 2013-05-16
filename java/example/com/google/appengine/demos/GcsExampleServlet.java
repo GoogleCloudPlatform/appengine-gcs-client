@@ -26,13 +26,13 @@ import javax.servlet.http.HttpServletResponse;
 
 
 /**
- * A simple servlet that proxies reads and writes to its cloud storage bucket.
+ * A simple servlet that proxies reads and writes to its Google Cloud Storage bucket.
  */
 public class GcsExampleServlet extends HttpServlet {
 
   private static final long serialVersionUID = -8289942698798877155L;
 
-  private final GcsService gsService = GcsServiceFactory.createGcsService();
+  private final GcsService gcsService = GcsServiceFactory.createGcsService();
 
   private static final int BUFFER_SIZE = 2 * 1024 * 1024;
 
@@ -46,7 +46,7 @@ public class GcsExampleServlet extends HttpServlet {
   void writeFileFromStream(String name, InputStream inputStream) throws IOException {
     GcsFilename fileName = new GcsFilename(bucket, name);
     GcsOutputChannel outputChannel =
-        gsService.createOrReplace(fileName, GcsFileOptions.builder().withDefaults());
+        gcsService.createOrReplace(fileName, GcsFileOptions.builder().withDefaults());
     try {
       copy(inputStream, Channels.newOutputStream(outputChannel));
     } finally {
@@ -63,7 +63,7 @@ public class GcsExampleServlet extends HttpServlet {
   void writeFileToStream(String name, OutputStream outputStream) throws IOException {
     GcsFilename fileName = new GcsFilename(bucket, name);
     ReadableByteChannel readChannel =
-        gsService.openPrefetchingReadChannel(fileName, 0, BUFFER_SIZE);
+        gcsService.openPrefetchingReadChannel(fileName, 0, BUFFER_SIZE);
     try {
       copy(Channels.newInputStream(readChannel), outputStream);
     } finally {

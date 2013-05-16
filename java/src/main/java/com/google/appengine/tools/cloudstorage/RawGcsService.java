@@ -7,7 +7,7 @@ import java.util.concurrent.Future;
 
 /**
  * Low-level ("raw") interface to Google Cloud Storage. This interface need not be used or seen by
- * users of cloud storage. Instead the higher level API {@link GcsService} should be used.
+ * users of Google Cloud Storage. Instead the higher level API {@link GcsService} should be used.
  *
  * <p>
  * Methods throw IOException for connection errors etc. that are retryable, and other exceptions for
