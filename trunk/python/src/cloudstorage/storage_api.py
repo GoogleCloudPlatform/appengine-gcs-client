@@ -14,8 +14,8 @@ import collections
 import os
 import urlparse
 
-from . import errors
-from . import rest_api
+from cloudstorage import errors
+from cloudstorage import rest_api
 
 
 try:

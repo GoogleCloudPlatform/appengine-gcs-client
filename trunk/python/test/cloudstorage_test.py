@@ -12,10 +12,10 @@ import os
 import time
 import unittest
 
-from  import 
+import cloudstorage
 from google.appengine.ext import testbed
-from . import errors
-from . import stub_dispatcher
+from cloudstorage import errors
+from cloudstorage import stub_dispatcher
 
 
 BUCKET = '/bucket'

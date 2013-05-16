@@ -9,7 +9,7 @@ import mock
 
 from google.appengine.ext import ndb
 from google.appengine.ext import testbed
-from . import rest_api
+from cloudstorage import rest_api
 
 
 class MockUrlFetchResult(object):
