@@ -560,9 +560,10 @@ class StreamingBuffer(object):
 
     When this returns the new file is available for reading.
     """
-    self._closed = True
-    self._flush(finish=True)
-    self._buffer = None
+    if not self._closed:
+      self._closed = True
+      self._flush(finish=True)
+      self._buffer = None
 
   def __enter__(self):
     return self
@@ -578,13 +579,10 @@ class StreamingBuffer(object):
     least self._blocksize, or to flush the final (incomplete) block of
     the file with finish=True.
     """
-    if finish:
-      level = 1
-    else:
-      level = self._blocksize
-
+    flush_len = 0 if finish else self._blocksize
     last = False
-    while self._buffered >= level:
+
+    while self._buffered >= flush_len:
       buffer = []
       buffered = 0
 
@@ -619,18 +617,21 @@ class StreamingBuffer(object):
       if finish:
         last = not self._buffered
       self._send_data(''.join(buffer), last)
-
-    if finish and not last:
-      self._send_data('', True)
+      if last:
+        break
 
   def _send_data(self, data, last):
     """Send the block to the storage service and update self._written."""
     headers = {}
+    length = self._written + len(data)
+
     if data:
-      length = self._written + len(data)
       headers['content-range'] = ('bytes %d-%d/%s' %
                                   (self._written, length-1,
                                    length if last else '*'))
+    else:
+      headers['content-range'] = ('bytes */%s' %
+                                  length if last else '*')
     status, _, _ = self._api.put_object(
         self._path_with_token, payload=data, headers=headers)
     if last:
