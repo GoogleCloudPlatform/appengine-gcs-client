@@ -8,9 +8,9 @@
 
 __all__ = ['AuthorizationError',
            'check_status',
+           'Error',
            'FatalError',
            'ForbiddenError',
-           'GSError',
            'NotFoundError',
            'ServerError',
            'TimeoutError',
@@ -20,11 +20,11 @@ __all__ = ['AuthorizationError',
 import httplib
 
 
-class GSError(Exception):
+class Error(Exception):
   """Base error for all gcs operations."""
 
 
-class TransientError(GSError):
+class TransientError(Error):
   """TransientError could be retried."""
 
 
@@ -32,7 +32,7 @@ class TimeoutError(TransientError):
   """Http 408 timeout."""
 
 
-class FatalError(GSError):
+class FatalError(Error):
   """FatalError shouldn't be retried."""
 
 
