@@ -10,10 +10,8 @@ import java.util.List;
 /**
  * {@link OAuthURLFetchService} based on {@link AppIdentityService}. This will work in production
  * without any need for credential passing (assuming the service account is given permission to the
- * Cloud Storage bucket), but it won't work locally running against real Google Cloud Storage. For
- * running locally, we should probably have a fake Google Storage (implementing RawGcsService backed
- * by files shouldn't be hard). For now, {@link FixedTokenOAuthURLFetchService} is good enough for
- * my experiments.
+ * Google Cloud Storage bucket), but it won't work locally running against real Google Cloud
+ * Storage.
  */
 final class AppIdentityOAuthURLFetchService extends AbstractOAuthURLFetchService {
 

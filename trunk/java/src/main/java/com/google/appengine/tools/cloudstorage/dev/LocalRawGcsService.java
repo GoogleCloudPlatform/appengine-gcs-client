@@ -104,10 +104,10 @@ final class LocalRawGcsService implements RawGcsService {
   public Token beginObjectCreation(GcsFilename filename, GcsFileOptions options, long timeoutMillis)
       throws IOException {
     return new Token(
-        filename, options, 0, FILES.createNewGSFile(csOptsToGsOpts(filename, options)));
+        filename, options, 0, FILES.createNewGSFile(gcsOptsToGsOpts(filename, options)));
   }
 
-  private GSFileOptions csOptsToGsOpts(GcsFilename filename, GcsFileOptions options) {
+  private GSFileOptions gcsOptsToGsOpts(GcsFilename filename, GcsFileOptions options) {
     GSFileOptionsBuilder builder = new GSFileOptionsBuilder();
     builder.setBucket(filename.getBucketName());
     builder.setKey(filename.getObjectName());

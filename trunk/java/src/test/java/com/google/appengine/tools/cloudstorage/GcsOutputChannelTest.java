@@ -56,10 +56,10 @@ public class GcsOutputChannelTest {
   @SuppressWarnings("resource")
   public void writeFile(String name, int size, byte[] pattern)
       throws IOException, ClassNotFoundException {
-    GcsService gsService = GcsServiceFactory.createGcsService();
+    GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsFilename filename = new GcsFilename("GcsOutputChannelTestBucket", name);
     GcsOutputChannel outputChannel =
-        gsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
+        gcsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
     outputChannel = reconstruct(outputChannel);
     for (int written = 0; written < size; written += pattern.length) {
       int toWrite = Math.min(pattern.length, size - written);
@@ -74,10 +74,10 @@ public class GcsOutputChannelTest {
    * Read the file and verify it contains the expected pattern the expected number of times.
    */
   private void verifyContent(String name, byte[] content, int expectedSize) throws IOException {
-    GcsService gsService = GcsServiceFactory.createGcsService();
+    GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsFilename filename = new GcsFilename("GcsOutputChannelTestBucket", name);
     ReadableByteChannel readChannel =
-        gsService.openPrefetchingReadChannel(filename, 0, BUFFER_SIZE);
+        gcsService.openPrefetchingReadChannel(filename, 0, BUFFER_SIZE);
     ByteBuffer result = ByteBuffer.allocate(content.length);
     ByteBuffer wrapped = ByteBuffer.wrap(content);
     int size = 0;
@@ -196,10 +196,10 @@ public class GcsOutputChannelTest {
     Random r = new Random();
     r.nextBytes(content);
 
-    GcsService gsService = GcsServiceFactory.createGcsService();
+    GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsFilename filename = new GcsFilename("GcsOutputChannelTestBucket", "testPartialFlush");
     GcsOutputChannel outputChannel =
-        gsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
+        gcsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
 
     outputChannel.write(ByteBuffer.wrap(content, 0, content.length));
 
