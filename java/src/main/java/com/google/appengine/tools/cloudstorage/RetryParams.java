@@ -21,7 +21,7 @@ class RetryParams implements Serializable {
   private static final long serialVersionUID = -8492751576749007700L;
 
   private static final long DEFAULT_REQUEST_TIMEOUT_MILLIS = 5000;
-  private static final int DEFAULT_RETRY_MIN_ATTEMPTS = 5;
+  private static final int DEFAULT_RETRY_MIN_ATTEMPTS = 3;
   private static final int DEFAULT_RETRY_MAX_ATTEMPTS = 10;
   private static final long DEFAULT_INITIAL_RETRY_DELAY_MILLIS = 10;
   private static final long DEFAULT_MAX_RETRY_DELAY_MILLIS = 10 * 1000;
