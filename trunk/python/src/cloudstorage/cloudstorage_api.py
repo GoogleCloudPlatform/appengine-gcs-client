@@ -26,28 +26,30 @@ def open(filename,
          content_type=None,
          options=None,
          read_buffer_size=storage_api.ReadBuffer.DEFAULT_BUFFER_SIZE,
+         retry_params=None,
          _account_id=None):
   """Opens a Google Cloud Storage file and returns it as a File-like object.
 
   Args:
-    filename: a Google Cloud Storage filename of form '/bucket/filename'.
+    filename: A Google Cloud Storage filename of form '/bucket/filename'.
     mode: 'r' for reading mode. 'w' for writing mode.
       In reading mode, the file must exist. In writing mode, a file will
       be created or be overrode.
-    content_type: the MIME type of the file. str. Only valid in writing mode.
-    options: a str->basestring dict to specify additional Google Cloud Storage
+    content_type: The MIME type of the file. str. Only valid in writing mode.
+    options: A str->basestring dict to specify additional Google Cloud Storage
       options. e.g. {'x-goog-acl': 'private', 'x-goog-meta-foo': 'foo'}
       Currently supported options are x-goog-acl and x-goog-meta-.
       Only valid in writing mode.
       See https://developers.google.com/storage/docs/reference-headers
       for details.
-    read_buffer_size: the buffer size for read. If buffer is empty, the read
+    read_buffer_size: The buffer size for read. If buffer is empty, the read
       stream will asynchronously prefetch a new buffer before the next read().
       To minimize blocking for large files, always read in buffer size.
       To minimize number of requests for small files, set a larger
       buffer size.
+    retry_params: An instance of api_utils.RetryParams for subsequent calls
+      to GCS from this file handle. If None, the default one is used.
     _account_id: Internal-use only.
-
 
   Returns:
     A reading or writing buffer that supports File-like interface. Buffer
@@ -60,7 +62,7 @@ def open(filename,
       in reading mode.
   """
   common.validate_file_path(filename)
-  api = _get_storage_api(account_id=_account_id)
+  api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
 
   if mode == 'w':
     common.validate_options(options)
@@ -76,27 +78,31 @@ def open(filename,
     raise ValueError('Invalid mode %s.' % mode)
 
 
-def delete(filename, _account_id=None):
+def delete(filename, retry_params=None, _account_id=None):
   """Delete a Google Cloud Storage file.
 
   Args:
-    filename: a Google Cloud Storage filename of form '/bucket/filename'.
+    filename: A Google Cloud Storage filename of form '/bucket/filename'.
+    retry_params: An api_utils.RetryParams for this call to GCS. If None,
+      the default one is used.
     _account_id: Internal-use only.
 
   Raises:
     errors.NotFoundError: if the file doesn't exist prior to deletion.
   """
-  api = _get_storage_api(account_id=_account_id)
+  api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
   common.validate_file_path(filename)
   status, _, _ = api.delete_object(filename)
   errors.check_status(status, [204])
 
 
-def stat(filename, _account_id=None):
+def stat(filename, retry_params=None, _account_id=None):
   """Get GCSFileStat of a Google Cloud storage file.
 
   Args:
-    filename: a Google Cloud Storage filename of form '/bucket/filename'.
+    filename: A Google Cloud Storage filename of form '/bucket/filename'.
+    retry_params: An api_utils.RetryParams for this call to GCS. If None,
+      the default one is used.
     _account_id: Internal-use only.
 
   Returns:
@@ -107,7 +113,7 @@ def stat(filename, _account_id=None):
     errors.NotFoundError: if an object that's expected to exist doesn't.
   """
   common.validate_file_path(filename)
-  api = _get_storage_api(account_id=_account_id)
+  api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
   status, headers, _ = api.head_object(filename)
   errors.check_status(status, [200])
   file_stat = common.GCSFileStat(
@@ -122,7 +128,7 @@ def stat(filename, _account_id=None):
 
 
 def listbucket(bucket, marker=None, prefix=None, max_keys=None,
-               _account_id=None):
+               retry_params=None, _account_id=None):
   """Return an GCSFileStat iterator over files in the given bucket.
 
   Optional arguments are to limit the result to a subset of files under bucket.
@@ -131,10 +137,12 @@ def listbucket(bucket, marker=None, prefix=None, max_keys=None,
   before the iterator gets result.
 
   Args:
-    bucket: a Google Cloud Storage bucket of form "/bucket".
-    marker: a string after which (exclusive) to start listing.
-    prefix: limits the returned filenames to those with this prefix. no regex.
-    max_keys: the maximum number of filenames to match. int.
+    bucket: A Google Cloud Storage bucket of form "/bucket".
+    marker: A string after which (exclusive) to start listing.
+    prefix: Limits the returned filenames to those with this prefix. no regex.
+    max_keys: The maximum number of filenames to match. int.
+    retry_params: An api_utils.RetryParams for this call to GCS. If None,
+      the default one is used.
     _account_id: Internal-use only.
 
   Example:
@@ -150,7 +158,7 @@ def listbucket(bucket, marker=None, prefix=None, max_keys=None,
     Only filename, etag, and st_size are set in these GSFileStat objects.
   """
   common.validate_bucket_path(bucket)
-  api = _get_storage_api(account_id=_account_id)
+  api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
   options = {}
   if marker:
     options['marker'] = marker
@@ -216,10 +224,11 @@ class _Bucket(object):
         self._get_bucket_fut = None
 
 
-def _get_storage_api(account_id=None):
+def _get_storage_api(retry_params, account_id=None):
   """Returns storage_api instance for API methods.
 
   Args:
+    retry_params: An instance of api_utils.RetryParams.
     account_id: Internal-use only.
 
   Returns:
@@ -231,7 +240,8 @@ def _get_storage_api(account_id=None):
 
 
   api = storage_api._StorageApi(storage_api._StorageApi.full_control_scope,
-                                service_account_id=account_id)
+                                service_account_id=account_id,
+                                retry_params=retry_params)
   if common.local_run() and not common.get_access_token():
     api.api_url = 'http://' + common.LOCAL_API_HOST
   if common.get_access_token():

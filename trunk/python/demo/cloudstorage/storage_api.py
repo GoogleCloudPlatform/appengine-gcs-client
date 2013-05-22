@@ -18,8 +18,10 @@ from . import errors
 from . import rest_api
 
 try:
+  from google.appengine.api import urlfetch
   from google.appengine.ext import ndb
 except ImportError:
+  from google.appengine.api import urlfetch
   from google.appengine.ext import ndb
 
 
@@ -66,6 +68,23 @@ class _StorageApi(rest_api._RestApi):
     super(_StorageApi, self).__setstate__(superstate)
     self.api_url = localstate['api_url']
 
+  @ndb.tasklet
+  def do_request_async(self, url, method='GET', headers=None, payload=None,
+                       deadline=None, callback=None):
+    """Inherit docs.
+
+    This method translates urlfetch exceptions to more service specific ones.
+    """
+    try:
+      resp_tuple = yield super(_StorageApi, self).do_request_async(
+          url, method=method, headers=headers, payload=payload,
+          deadline=deadline, callback=callback)
+    except urlfetch.DownloadError, e:
+      raise errors.TimeoutError(
+          'Request to Google Cloud Storage timed out.', e)
+
+    raise ndb.Return(resp_tuple)
+
 
   def post_object_async(self, path, **kwds):
     """POST to an object."""
@@ -102,7 +121,6 @@ class _StorageApi(rest_api._RestApi):
   def get_bucket_async(self, path, **kwds):
     """GET a bucket."""
     return self.do_request_async(self.api_url + path, 'GET', **kwds)
-
 
 
 _StorageApi = rest_api.add_sync_methods(_StorageApi)

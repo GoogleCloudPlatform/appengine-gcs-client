@@ -52,7 +52,7 @@ class InvalidRange(FatalError):
   """Http 416 RequestRangeNotSatifiable."""
 
 
-class ServerError(FatalError):
+class ServerError(TransientError):
   """Http >= 500 server side error."""
 
 
