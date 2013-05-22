@@ -16,6 +16,7 @@
   <property name="src" location="src/main/java"/>
   <property name="test_src" location="src/test/java"/>
   <property name="build" location="target/classes"/>
+  <property name="javadoc" location="javadoc"/>
   <property name="test_build" location="target/test-classes"/>
   <property name="lib" location="lib"/>
   <property name="lib_thirdparty" location="${lib}/${thirdparty}"/>
@@ -99,6 +100,10 @@
     </javac>
   </target>
 
+  <target name="javadoc">
+    <javadoc sourcepath="${src}" destdir="${javadoc}"/>
+  </target>
+
   <target name="dist" depends="compile">
     <mkdir dir="${dist}"/>
     <copy todir="${build}">
@@ -156,6 +161,7 @@
 
   <target name="clean">
     <delete dir="${build}"/>
+    <delete dir="${javadoc}"/>
     <delete dir="${dist}"/>
     <delete dir="${test_build}"/>
     <delete dir="${lib}"/>
