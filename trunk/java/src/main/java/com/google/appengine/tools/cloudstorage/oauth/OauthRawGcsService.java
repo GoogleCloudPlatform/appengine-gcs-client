@@ -121,23 +121,28 @@ final class OauthRawGcsService implements RawGcsService {
             .validateCertificate()
             .setDeadline(timeoutMillis / 1000.0));
   }
+
   private static Error handleError(HTTPRequest req, HTTPResponse resp) throws IOException {
-    switch (resp.getResponseCode()) {
+    int responseCode = resp.getResponseCode();
+    switch (responseCode) {
       case 400:
         throw new RuntimeException("Server replied with 400, probably bad request: "
             + URLFetchUtils.describeRequestAndResponse(req, resp, true));
       case 401:
         throw new RuntimeException("Server replied with 401, probably bad authentication: "
             + URLFetchUtils.describeRequestAndResponse(req, resp, true));
-      case 500:
-      case 502:
-      case 503:
-      case 504:
-        throw new IOException("Response code " + resp.getResponseCode() + ", retryable: "
+      case 403:
+        throw new RuntimeException(
+            "Server replied with 403, check that ACLs are set correctly on the object and bucket: "
             + URLFetchUtils.describeRequestAndResponse(req, resp, true));
       default:
-        throw new RuntimeException("Unexpected response code " + resp.getResponseCode()
-            + ": " + URLFetchUtils.describeRequestAndResponse(req, resp, true));
+        if (responseCode >= 500 && responseCode < 600) {
+          throw new IOException("Response code " + resp.getResponseCode() + ", retryable: "
+              + URLFetchUtils.describeRequestAndResponse(req, resp, true));
+        } else {
+          throw new RuntimeException("Unexpected response code " + resp.getResponseCode() + ": "
+              + URLFetchUtils.describeRequestAndResponse(req, resp, true));
+        }
     }
   }
 
@@ -355,7 +360,7 @@ final class OauthRawGcsService implements RawGcsService {
 
       @Override
       protected Throwable convertException(Throwable e) {
-        if (e instanceof IOException) {
+        if (e instanceof IOException || e instanceof BadRangeException) {
           return e;
         } else {
           return new IOException(
