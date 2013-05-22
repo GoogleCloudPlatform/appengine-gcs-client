@@ -44,6 +44,7 @@ class CloudStorageTest(unittest.TestCase):
     self._old_max_keys = stub_dispatcher._MAX_GET_BUCKET_RESULT
     stub_dispatcher._MAX_GET_BUCKET_RESULT = 2
     self.start_time = time.time()
+    cloudstorage.set_default_retry_params(None)
 
   def tearDown(self):
     stub_dispatcher._MAX_GET_BUCKET_RESULT = self._old_max_keys
@@ -81,6 +82,23 @@ class CloudStorageTest(unittest.TestCase):
 
   def testReadNonexistFile(self):
     self.assertRaises(errors.NotFoundError, cloudstorage.open, TESTFILE)
+
+  def testRetryParams(self):
+    retry_params = cloudstorage.RetryParams(max_retries=0)
+    cloudstorage.set_default_retry_params(retry_params)
+
+    retry_params.max_retries = 1000
+    with cloudstorage.open(TESTFILE, 'w') as f:
+      self.assertEqual(0, f._api.retry_params.max_retries)
+
+    with cloudstorage.open(TESTFILE, 'w') as f:
+      cloudstorage.set_default_retry_params(retry_params)
+      self.assertEqual(0, f._api.retry_params.max_retries)
+
+    per_call_retry_params = cloudstorage.RetryParams()
+    with cloudstorage.open(TESTFILE, 'w',
+                           retry_params=per_call_retry_params) as f:
+      self.assertEqual(per_call_retry_params, f._api.retry_params)
 
   def testReadEmptyFile(self):
     f = cloudstorage.open(TESTFILE, 'w')

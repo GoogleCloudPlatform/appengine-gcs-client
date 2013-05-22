@@ -3,27 +3,23 @@
 
 
 
+import httplib
 import pickle
 import unittest
 import mock
 
 from google.appengine.ext import ndb
+from google.appengine.api import urlfetch
 from google.appengine.ext import testbed
 
 try:
+  from cloudstorage import api_utils
   from cloudstorage import rest_api
+  from cloudstorage import test_utils
 except ImportError:
+  from google.appengine.ext.cloudstorage import api_utils
   from google.appengine.ext.cloudstorage import rest_api
-
-
-class MockUrlFetchResult(object):
-
-  def __init__(self, status, headers, body):
-    self.status_code = status
-    self.headers = headers
-    self.content = body
-    self.content_was_truncated = False
-    self.final_url = None
+  from google.appengine.ext.cloudstorage import test_utils
 
 
 class RestApiTest(unittest.TestCase):
@@ -36,6 +32,7 @@ class RestApiTest(unittest.TestCase):
     self.testbed.init_datastore_v3_stub()
     self.testbed.init_memcache_stub()
     self.testbed.init_urlfetch_stub()
+    api_utils._thread_local_settings.retry_params = None
 
   def tearDown(self):
     self.testbed.deactivate()
@@ -51,7 +48,8 @@ class RestApiTest(unittest.TestCase):
                                                return_value=fut_get_token)
 
     fut_urlfetch = ndb.Future()
-    fut_urlfetch.set_result(MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
+    fut_urlfetch.set_result(
+        test_utils.MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
     api.urlfetch_async = mock.create_autospec(api.urlfetch_async,
                                               return_value=fut_urlfetch)
 
@@ -71,7 +69,8 @@ class RestApiTest(unittest.TestCase):
     api = rest_api._RestApi('scope')
 
     fut_urlfetch = ndb.Future()
-    fut_urlfetch.set_result(MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
+    fut_urlfetch.set_result(
+        test_utils.MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
     api.urlfetch_async = mock.create_autospec(api.urlfetch_async,
                                               return_value=fut_urlfetch)
 
@@ -146,9 +145,10 @@ class RestApiTest(unittest.TestCase):
         side_effect=[fut_get_token1, fut_get_token2])
 
     fut_urlfetch1 = ndb.Future()
-    fut_urlfetch1.set_result(MockUrlFetchResult(401, {}, ''))
+    fut_urlfetch1.set_result(test_utils.MockUrlFetchResult(401, {}, ''))
     fut_urlfetch2 = ndb.Future()
-    fut_urlfetch2.set_result(MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
+    fut_urlfetch2.set_result(
+        test_utils.MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
 
     api.urlfetch_async = mock.create_autospec(
         api.urlfetch_async,
@@ -178,7 +178,7 @@ class RestApiTest(unittest.TestCase):
     api = rest_api._RestApi('scope')
 
     fut = ndb.Future()
-    fut.set_result(MockUrlFetchResult(200, {}, 'response'))
+    fut.set_result(test_utils.MockUrlFetchResult(200, {}, 'response'))
     ndb.Context.urlfetch = mock.create_autospec(
         ndb.Context.urlfetch,
         return_value=fut)
@@ -189,7 +189,9 @@ class RestApiTest(unittest.TestCase):
     self.assertEqual(res.content, 'response')
 
   def testPickling(self):
-    api = rest_api._RestApi('scope', service_account_id=1)
+    retry_params = api_utils.RetryParams(max_retries=1000)
+    api = rest_api._RestApi('scope', service_account_id=1,
+                            retry_params=retry_params)
     self.assertNotEqual(None, api.get_token())
 
     pickled_api = pickle.loads(pickle.dumps(api))
@@ -202,12 +204,68 @@ class RestApiTest(unittest.TestCase):
     pickled_api.token = None
 
     fut_urlfetch = ndb.Future()
-    fut_urlfetch.set_result(MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
+    fut_urlfetch.set_result(
+        test_utils.MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
     pickled_api.urlfetch_async = mock.create_autospec(
         pickled_api.urlfetch_async, return_value=fut_urlfetch)
 
     res = pickled_api.do_request('http://example.com')
     self.assertEqual(res, (200, {'foo': 'bar'}, 'yoohoo'))
+
+  def testRetryAfterDoRequestUrlFetchTimeout(self):
+    api = rest_api._RestApi('scope')
+
+    fut = ndb.Future()
+    fut.set_exception(urlfetch.DownloadError())
+    ndb.Context.urlfetch = mock.create_autospec(
+        ndb.Context.urlfetch,
+        return_value=fut)
+
+    with mock.patch('google.appengine.api.urlfetch'
+                    '.fetch') as f:
+      f.return_value = test_utils.MockUrlFetchResult(httplib.ACCEPTED,
+                                                     None, None)
+      self.assertEqual(httplib.ACCEPTED, api.do_request('foo')[0])
+
+  def testRetryAfterNoRequsetResponseTimeout(self):
+    api = rest_api._RestApi('scope')
+
+    fut = ndb.Future()
+    fut.set_result(test_utils.MockUrlFetchResult(httplib.REQUEST_TIMEOUT,
+                                                 None, None))
+    ndb.Context.urlfetch = mock.create_autospec(
+        ndb.Context.urlfetch,
+        return_value=fut)
+
+    with mock.patch('google.appengine.api.urlfetch'
+                    '.fetch') as f:
+      f.return_value = test_utils.MockUrlFetchResult(httplib.ACCEPTED,
+                                                     None, None)
+      self.assertEqual(httplib.ACCEPTED, api.do_request('foo')[0])
+
+  def testNoRetryAfterDoRequestUrlFetchTimeout(self):
+    retry_params = api_utils.RetryParams(max_retries=0)
+    api = rest_api._RestApi('scope', retry_params=retry_params)
+
+    fut = ndb.Future()
+    fut.set_exception(urlfetch.DownloadError())
+    ndb.Context.urlfetch = mock.create_autospec(
+        ndb.Context.urlfetch,
+        return_value=fut)
+    self.assertRaises(urlfetch.DownloadError, api.do_request, 'foo')
+
+  def testNoRetryAfterDoRequestResponseTimeout(self):
+    retry_params = api_utils.RetryParams(max_retries=0)
+    api = rest_api._RestApi('scope', retry_params=retry_params)
+
+    fut = ndb.Future()
+    fut.set_result(test_utils.MockUrlFetchResult(httplib.REQUEST_TIMEOUT,
+                                                 None, None))
+    ndb.Context.urlfetch = mock.create_autospec(
+        ndb.Context.urlfetch,
+        return_value=fut)
+    self.assertEqual(httplib.REQUEST_TIMEOUT, api.do_request('foo')[0])
+
 
 if __name__ == '__main__':
   unittest.main()

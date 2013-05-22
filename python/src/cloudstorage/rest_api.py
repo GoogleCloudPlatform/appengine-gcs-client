@@ -8,7 +8,10 @@
 
 __all__ = ['add_sync_methods']
 
+import httplib
 import time
+
+from . import api_utils
 
 try:
   from google.appengine.api import app_identity
@@ -97,13 +100,17 @@ class _RestApi(object):
   and is subject to change at any release.
   """
 
-  def __init__(self, scopes, service_account_id=None, token_maker=None):
+  def __init__(self, scopes, service_account_id=None, token_maker=None,
+               retry_params=None):
     """Constructor.
 
     Args:
       scopes: A scope or a list of scopes.
       token_maker: An asynchronous function of the form
         (scopes, service_account_id) -> (token, expires).
+      retry_params: An instance of api_utils.RetryParams. If None, the
+        default for current thread will be used.
+      service_account_id: Internal use only.
     """
 
     if isinstance(scopes, basestring):
@@ -112,6 +119,9 @@ class _RestApi(object):
     self.service_account_id = service_account_id
     self.make_token_async = token_maker or _make_token_async
     self.token = None
+    if not retry_params:
+      retry_params = api_utils._get_default_retry_params()
+    self.retry_params = retry_params
 
   def __getstate__(self):
     """Store state as part of serialization/pickling."""
@@ -119,13 +129,15 @@ class _RestApi(object):
             'scopes': self.scopes,
             'id': self.service_account_id,
             'a_maker': None if self.make_token_async == _make_token_async
-            else self.make_token_async}
+            else self.make_token_async,
+            'retry_params': self.retry_params}
 
   def __setstate__(self, state):
     """Restore state as part of deserialization/unpickling."""
     self.__init__(state['scopes'],
                   service_account_id=state['id'],
-                  token_maker=state['a_maker'])
+                  token_maker=state['a_maker'],
+                  retry_params=state['retry_params'])
     self.token = state['token']
 
   @ndb.tasklet
@@ -133,24 +145,40 @@ class _RestApi(object):
                        deadline=None, callback=None):
     """Issue one HTTP request.
 
-    This is a thin (async) wrapper around urlfetch() which adds an
-    authentication header and retries on a 401 status code.  It also
-    logs requests and responses
+    This is an async wrapper around urlfetch(). It adds an authentication
+    header and retries on a 401 status code. Upon other retriable errors,
+    it performs blocking retries.
     """
     headers = {} if headers is None else dict(headers)
     token = yield self.get_token_async()
     headers['authorization'] = 'OAuth ' + token
-    resp = yield self.urlfetch_async(url, payload=payload, method=method,
-                                     headers=headers, follow_redirects=False,
-                                     deadline=deadline, callback=callback)
 
-    if resp.status_code == 401:
-      token = yield self.get_token_async(refresh=True)
-      headers['authorization'] = 'OAuth ' + token
+    retry = False
+    resp = None
+    try:
       resp = yield self.urlfetch_async(url, payload=payload, method=method,
-                                       headers=headers,
-                                       follow_redirects=False,
+                                       headers=headers, follow_redirects=False,
                                        deadline=deadline, callback=callback)
+      if resp.status_code == httplib.UNAUTHORIZED:
+        token = yield self.get_token_async(refresh=True)
+        headers['authorization'] = 'OAuth ' + token
+        resp = yield self.urlfetch_async(
+            url, payload=payload, method=method, headers=headers,
+            follow_redirects=False, deadline=deadline, callback=callback)
+    except api_utils._RETRIABLE_EXCEPTIONS:
+      retry = True
+    else:
+      retry = api_utils._should_retry(resp)
+
+    if retry:
+      retry_resp = api_utils._retry_fetch(
+          url, retry_params=self.retry_params, payload=payload, method=method,
+          headers=headers, follow_redirects=False, deadline=deadline)
+      if retry_resp:
+        resp = retry_resp
+      elif not resp:
+        raise
+
     raise ndb.Return((resp.status_code, resp.headers, resp.content))
 
   @ndb.tasklet
