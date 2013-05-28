@@ -67,10 +67,10 @@ class RetryParams(object):
   @datastore_rpc._positional(1)
   def __init__(self,
                backoff_factor=2.0,
-               initial_delay=0.01,
+               initial_delay=0.1,
                max_delay=10.0,
-               min_retries=3,
-               max_retries=10,
+               min_retries=2,
+               max_retries=5,
                max_retry_period=30.0,
                urlfetch_timeout=None):
     """Init.

@@ -84,6 +84,7 @@ class RetryParamsTest(unittest.TestCase):
     retry_params = api_utils.RetryParams(backoff_factor=3,
                                          initial_delay=1,
                                          max_delay=28,
+                                         max_retries=10,
                                          max_retry_period=100)
     with mock.patch('time.time') as t:
       t.return_value = start_time + 1
