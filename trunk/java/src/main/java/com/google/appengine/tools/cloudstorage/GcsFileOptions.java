@@ -2,6 +2,7 @@ package com.google.appengine.tools.cloudstorage;
 
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableMap;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -9,19 +10,40 @@ import java.util.Map;
 
 /**
  * Container class for holding options for creating Google Storage files.
+ *
+ * To construct {@code GcsFileOptions}, first create a {@link GcsFileOptions.Builder}. The builder
+ * is mutable and each of the parameters can be set (any unset parameters will fallback to the
+ * defaults). The {@code Builder} can be then used to create an immutable {@code GcsFileOptions}
+ * object.
+ *
+ * For default {@code GcsFileOptions} use {@link #getDefaultInstance}. Default settings are subject
+ * to change release to release. Currently the default values are to not specify any of the options.
+ * If you require specific settings, explicitly create an instance of {@code GcsFileOptions} with
+ * the required settings.
+ *
  * @see <a href="http://code.google.com/apis/storage/">Google Storage API</a>
  */
 public final class GcsFileOptions implements Serializable {
   private static final long serialVersionUID = -7350111525144535653L;
-  private String mimeType;private String acl;private String cacheControl;private String contentEncoding;private String contentDisposition;
-  private final Map<String, String> userMetadata = new HashMap<String, String>();
+private final String mimeType;private final String acl;private final String cacheControl;private final String contentEncoding;private final String contentDisposition;
+  private final ImmutableMap<String, String> userMetadata;
 
-  private GcsFileOptions(String mimeType,String acl,String cacheControl,String contentEncoding,String contentDisposition) {
-    this.mimeType = mimeType;
-    this.acl = acl;
-    this.cacheControl = cacheControl;
-    this.contentEncoding = contentEncoding;
-    this.contentDisposition = contentDisposition;
+  private static final GcsFileOptions DEFAULT_INSTANCE = new GcsFileOptions(new Builder());
+
+  private GcsFileOptions(Builder builder) {
+    this.mimeType = builder.mimeType;
+    this.acl = builder.acl;
+    this.cacheControl = builder.cacheControl;
+    this.contentEncoding = builder.contentEncoding;
+    this.contentDisposition = builder.contentDisposition;
+    this.userMetadata = ImmutableMap.copyOf(builder.userMetadata);
+  }
+
+  /**
+   * Retrieve an instance with the default parameters
+   */
+  public static GcsFileOptions getDefaultInstance() {
+    return DEFAULT_INSTANCE;
   }
 
   /**
@@ -102,102 +124,16 @@ public final class GcsFileOptions implements Serializable {
         userMetadata);
   }
 
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  private static String checkNotEmpty(String value, String what) {
-    Preconditions.checkNotNull(value, "Null %s", what);
-    Preconditions.checkArgument(!value.isEmpty(), "Empty %s", what);
-    return value;
-  }
-
-
-  /**
-   * Sets the mime type of the object. If not set, default Google Storage mime type is used when
-   * served out of Google Storage.
-   * {@link "http://code.google.com/apis/storage/docs/reference-headers.html#contenttype"}
-   *
-   * @param mimeType of the Google Storage object.
-   * @return this for chaining.
-   */
-  public GcsFileOptions mimeType(String mimeType) {
-    this.mimeType = checkNotEmpty(mimeType, "MIME type");
-    return this;
-  }
-
-  /**
-   * Sets the acl of the object. If not set, defaults to none (i.e., bucket default).
-   * {@link "http://code.google.com/apis/storage/docs/accesscontrol.html"}
-   *
-   * @param acl to use for the Google Storage object.
-   * @return this for chaining.
-   */
-  public GcsFileOptions acl(String acl) {
-    this.acl = checkNotEmpty(acl, "ACL");
-    return this;
-  }
-
-  /**
-   * Sets the cache control for the object. If not set, default value is used.
-   * {@link "http://code.google.com/apis/storage/docs/reference-headers.html#cachecontrol"}
-   *
-   * @param cacheControl to use for the Google Storage object.
-   * @return this for chaining.
-   */
-  public GcsFileOptions cacheControl(String cacheControl) {
-    this.cacheControl = checkNotEmpty(cacheControl, "cache control");
-    return this;
-  }
-
-  /**
-   * Sets the content encoding for the object. If not set, default value is used.
-   * {@link "http://code.google.com/apis/storage/docs/reference-headers.html#contentencoding"}
-   *
-   * @param contentEncoding to use for the Google Storage object.
-   * @return this for chaining.
-   */
-  public GcsFileOptions contentEncoding(String contentEncoding) {
-    this.contentEncoding = checkNotEmpty(contentEncoding, "content encoding");
-    return this;
-  }
-
-  /**
-   * Sets the content disposition for the object. If not set, default value is used.
-   * {@link "http://code.google.com/apis/storage/docs/reference-headers.html#contentdisposition"}
-   *
-   * @param contentDisposition to use for the Google Storage object.
-   * @return this for chaining.
-   */
-  public GcsFileOptions contentDisposition(String contentDisposition) {
-    this.contentDisposition = checkNotEmpty(contentDisposition, "content disposition");
-    return this;
-  }
-
-  /**
-   * Adds user specific metadata that will be added to object headers when served through Google
-   * Storage: {@link "http://code.google.com/apis/storage/docs/reference-headers.html#xgoogmeta"}
-   * Each entry will be prefixed with x-goog-meta- when serving out. For example, if you add
-   * 'foo'->'bar' entry to userMetadata map, it will be served out as a header: x-goog-meta-foo: bar
-   *
-   * @param key
-   * @param value
-   * @return this for chaining.
-   */
-  public GcsFileOptions addUserMetadata(String key, String value) {
-    checkNotEmpty(key, "key");
-    checkNotEmpty(value, "value");
-    userMetadata.put(key, value);
-    return this;
-  }
-
-
   /**
    * A builder of GcsFileOptions.
    */
   public static final class Builder {
+private String mimeType;private String acl;private String cacheControl;private String contentEncoding;private String contentDisposition;
+    private final Map<String, String> userMetadata;
 
-    private Builder() {}
+    public Builder() {
+      this.userMetadata = new HashMap<String, String>();
+    }
 
     /**
      * Sets the mime type of the object. If not set, default Google Storage mime type is used when
@@ -205,21 +141,23 @@ public final class GcsFileOptions implements Serializable {
      * {@link "http://code.google.com/apis/storage/docs/reference-headers.html#contenttype"}
      *
      * @param mimeType of the Google Storage object.
-     * @return this for chaining.
+     * @return this builder for chaining.
      */
-    public GcsFileOptions withMimeType(String mimeType) {
-      return withDefaults().mimeType(mimeType);
+    public Builder mimeType(String mimeType) {
+      this.mimeType = checkNotEmpty(mimeType, "MIME type");
+      return this;
     }
 
     /**
-     * Sets the acl of the object. If not set, defaults to none (ie, bucket default).
+     * Sets the acl of the object. If not set, defaults to none (i.e., bucket default).
      * {@link "http://code.google.com/apis/storage/docs/accesscontrol.html"}
      *
      * @param acl to use for the Google Storage object.
-     * @return this for chaining.
+     * @return this builder for chaining.
      */
-    public GcsFileOptions withAcl(String acl) {
-      return withDefaults().acl(acl);
+    public Builder acl(String acl) {
+      this.acl = checkNotEmpty(acl, "ACL");
+      return this;
     }
 
     /**
@@ -227,10 +165,11 @@ public final class GcsFileOptions implements Serializable {
      * {@link "http://code.google.com/apis/storage/docs/reference-headers.html#cachecontrol"}
      *
      * @param cacheControl to use for the Google Storage object.
-     * @return this for chaining.
+     * @return this builder for chaining.
      */
-    public GcsFileOptions withCacheControl(String cacheControl) {
-      return withDefaults().cacheControl(cacheControl);
+    public Builder cacheControl(String cacheControl) {
+      this.cacheControl = checkNotEmpty(cacheControl, "cache control");
+      return this;
     }
 
     /**
@@ -238,10 +177,11 @@ public final class GcsFileOptions implements Serializable {
      * {@link "http://code.google.com/apis/storage/docs/reference-headers.html#contentencoding"}
      *
      * @param contentEncoding to use for the Google Storage object.
-     * @return this for chaining.
+     * @return this builder for chaining.
      */
-    public GcsFileOptions withContentEncoding(String contentEncoding) {
-      return withDefaults().contentEncoding(contentEncoding);
+    public Builder contentEncoding(String contentEncoding) {
+      this.contentEncoding = checkNotEmpty(contentEncoding, "content encoding");
+      return this;
     }
 
     /**
@@ -249,30 +189,44 @@ public final class GcsFileOptions implements Serializable {
      * {@link "http://code.google.com/apis/storage/docs/reference-headers.html#contentdisposition"}
      *
      * @param contentDisposition to use for the Google Storage object.
-     * @return this for chaining.
+     * @return this builder for chaining.
      */
-    public GcsFileOptions withContentDisposition(String contentDisposition) {
-      return withDefaults().contentDisposition(contentDisposition);
+    public Builder contentDisposition(String contentDisposition) {
+      this.contentDisposition = checkNotEmpty(contentDisposition, "content disposition");
+      return this;
     }
 
     /**
      * Adds user specific metadata that will be added to object headers when served through Google
      * Storage: {@link "http://code.google.com/apis/storage/docs/reference-headers.html#xgoogmeta"}
      * Each entry will be prefixed with x-goog-meta- when serving out. For example, if you add
-     * 'foo'->'bar' entry to userMetadata map, it will be served out as a header: x-goog-meta-foo:
-     * bar
+     * 'foo'->'bar' entry to userMetadata map, it will be served out as a header: 'x-goog-meta-foo:
+     * bar'.
      *
-     * @param key
-     * @param value
-     * @return this for chaining.
+     * @param key metadata/header name suffix
+     * @param value metadata/header value
+     * @return this builder for chaining.
      */
-    public GcsFileOptions addUserMetadata(String key, String value) {
-      return withDefaults().addUserMetadata(key, value);
+    public Builder addUserMetadata(String key, String value) {
+      checkNotEmpty(key, "key");
+      checkNotEmpty(value, "value");
+      userMetadata.put(key, value);
+      return this;
     }
 
-    public GcsFileOptions withDefaults() {
-      return new GcsFileOptions(null, null, null, null, null);
+    private static String checkNotEmpty(String value, String what) {
+      Preconditions.checkNotNull(value, "Null %s", what);
+      Preconditions.checkArgument(!value.isEmpty(), "Empty %s", what);
+      return value;
+    }
+
+    /**
+     * Create an instance of GcsFileOptions with the parameters set in this builder
+     *
+     * @return a new instance of GcsFileOptions
+     */
+    public GcsFileOptions build() {
+      return new GcsFileOptions(this);
     }
   }
-
 }

@@ -395,33 +395,34 @@ final class OauthRawGcsService implements RawGcsService {
   private GcsFileMetadata getMetadataFromResponse(
       GcsFilename filename, HTTPResponse resp, long length) {
     List<HTTPHeader> headers = resp.getHeaders();
-    GcsFileOptions options = GcsFileOptions.builder().withDefaults();
+    GcsFileOptions.Builder optionsBuilder = new GcsFileOptions.Builder();
     String etag = null;
     for (HTTPHeader header : headers) {
       if (header.getName().startsWith("x-goog-meta-")) {
         String key = header.getName().replaceFirst("x-goog-meta-", "");
         String value = header.getValue();
-        options.addUserMetadata(key, value);
+        optionsBuilder.addUserMetadata(key, value);
       }
       if (header.getName().equals(ACL)) {
-        options.acl(header.getValue());
+        optionsBuilder.acl(header.getValue());
       }
       if (header.getName().equals(CACHE_CONTROL)) {
-        options.cacheControl(header.getValue());
+        optionsBuilder.cacheControl(header.getValue());
       }
       if (header.getName().equals(CONTENT_ENCODING)) {
-        options.contentEncoding(header.getValue());
+        optionsBuilder.contentEncoding(header.getValue());
       }
       if (header.getName().equals(CONTENT_DISPOSITION)) {
-        options.contentDisposition(header.getValue());
+        optionsBuilder.contentDisposition(header.getValue());
       }
       if (header.getName().equals(CONTENT_TYPE)) {
-        options.mimeType(header.getValue());
+        optionsBuilder.mimeType(header.getValue());
       }
       if (header.getName().equals(ETAG)) {
         etag = header.getValue();
       }
     }
+    GcsFileOptions options = optionsBuilder.build();
 
     return new GcsFileMetadata(filename, options, etag, length);
   }

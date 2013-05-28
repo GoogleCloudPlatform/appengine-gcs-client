@@ -46,7 +46,7 @@ public class GcsExampleServlet extends HttpServlet {
   void writeFileFromStream(String name, InputStream inputStream) throws IOException {
     GcsFilename fileName = new GcsFilename(bucket, name);
     GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(fileName, GcsFileOptions.builder().withDefaults());
+        gcsService.createOrReplace(fileName, GcsFileOptions.getDefaultInstance());
     try {
       copy(inputStream, Channels.newOutputStream(outputChannel));
     } finally {

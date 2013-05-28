@@ -59,7 +59,7 @@ public class GcsOutputChannelTest {
     GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsFilename filename = new GcsFilename("GcsOutputChannelTestBucket", name);
     GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
     outputChannel = reconstruct(outputChannel);
     for (int written = 0; written < size; written += pattern.length) {
       int toWrite = Math.min(pattern.length, size - written);
@@ -199,7 +199,7 @@ public class GcsOutputChannelTest {
     GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsFilename filename = new GcsFilename("GcsOutputChannelTestBucket", "testPartialFlush");
     GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
 
     outputChannel.write(ByteBuffer.wrap(content, 0, content.length));
 
