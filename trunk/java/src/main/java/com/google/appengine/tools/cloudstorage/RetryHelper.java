@@ -96,7 +96,7 @@ public class RetryHelper<V> {
 
       if (attemptsSoFar >= retryParams.getRetryMaxAttempts() || (
           attemptsSoFar >= retryParams.getRetryMinAttempts()
-          && stopwatch.elapsed(MILLISECONDS) >= retryParams.getRetryPeriodMillis())) {
+          && stopwatch.elapsed(MILLISECONDS) >= retryParams.getTotalRetryPeriodMillis())) {
         throw new RetriesExhaustedException(this + ": Too many failures, giving up", exception);
       }
       try {
@@ -116,7 +116,7 @@ public class RetryHelper<V> {
   }
 
   public static <V> V runWithRetries(Body<V> body) throws IOException {
-    return new RetryHelper<V>(body, new RetryParams()).doRetry();
+    return new RetryHelper<V>(body, RetryParams.getDefaultInstance()).doRetry();
   }
 
   public static <V> V runWithRetries(Body<V> body, RetryParams parms) throws IOException {
