@@ -56,7 +56,7 @@ public class GcsServiceTest {
 
     GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
 
     outputChannel.write(utf8.encode(CharBuffer.wrap(content)));
     outputChannel.close();
@@ -81,7 +81,7 @@ public class GcsServiceTest {
 
     GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
 
     outputChannel.write(ByteBuffer.wrap(content));
     outputChannel.close();
@@ -101,7 +101,7 @@ public class GcsServiceTest {
 
     GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
 
     outputChannel.write(ByteBuffer.wrap(content));
     outputChannel.close();
@@ -121,7 +121,7 @@ public class GcsServiceTest {
 
     GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
 
     outputChannel.write(ByteBuffer.wrap(content));
     outputChannel.close();
@@ -154,7 +154,7 @@ public class GcsServiceTest {
 
     GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
 
     outputChannel.write(ByteBuffer.wrap(content));
     outputChannel.close();
@@ -173,7 +173,7 @@ public class GcsServiceTest {
     GcsFilename filename = new GcsFilename("testReadMetadataBucket", "testReadMetadataFile");
 
     GcsService gcsService = GcsServiceFactory.createGcsService();
-    GcsFileOptions options = GcsFileOptions.builder().withDefaults();
+    GcsFileOptions options = GcsFileOptions.getDefaultInstance();
     GcsOutputChannel outputChannel = gcsService.createOrReplace(filename, options);
 
     outputChannel.write(ByteBuffer.wrap(content));

@@ -65,7 +65,7 @@ public class GcsInputChannelTest {
         contents.append(i % 10);
       }
       GcsOutputChannel outputChannel =
-          gcsService.createOrReplace(file.filename, GcsFileOptions.builder().withDefaults());
+          gcsService.createOrReplace(file.filename, GcsFileOptions.getDefaultInstance());
       outputChannel.write(utf8.encode(CharBuffer.wrap(contents.toString())));
       outputChannel.close();
     }

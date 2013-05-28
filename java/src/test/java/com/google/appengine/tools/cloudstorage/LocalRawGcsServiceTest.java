@@ -64,7 +64,7 @@ public class LocalRawGcsServiceTest {
         contents.append(i % 10);
       }
       GcsOutputChannel outputChannel =
-          gcsService.createOrReplace(file.filename, GcsFileOptions.builder().withDefaults());
+          gcsService.createOrReplace(file.filename, GcsFileOptions.getDefaultInstance());
       outputChannel.write(utf8.encode(CharBuffer.wrap(contents.toString())));
       outputChannel.close();
     }
@@ -80,7 +80,7 @@ public class LocalRawGcsServiceTest {
     GcsFilename filename = new GcsFilename("unit-tests", "testDelete");
     GcsService gcsService = new GcsServiceImpl(rawGcsService, RetryParams.getDefaultInstance());
     GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.builder().withDefaults());
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
     outputChannel.write(ByteBuffer.wrap(new byte[] {0, 1, 2, 3, 4}));
     outputChannel.close();
     GcsFileMetadata metadata = rawGcsService.getObjectMetadata(filename, 1000);
