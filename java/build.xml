@@ -10,7 +10,7 @@
   <property name="sdk" value="sdk"/>
   <property name="test" value="test"/>
   <property name="war" value="war"/>
-  <property name="sdk_version" value="1.7.7.1"/>
+  <property name="sdk_version" value="1.8.0"/>
 
   <!-- Paths -->
   <property name="src" location="src/main/java"/>
@@ -101,7 +101,24 @@
   </target>
 
   <target name="javadoc">
-    <javadoc sourcepath="${src}" destdir="${javadoc}"/>
+    <delete dir="${javadoc}"/>
+    <mkdir dir="${javadoc}"/>
+    <javadoc sourcepath="${src}" destdir="${javadoc}" windowtitle="App Engine GCS Library">
+      <classpath>
+        <fileset dir="${lib_thirdparty}">
+          <include name="*.jar"/>
+        </fileset>
+        <fileset dir="${lib_sdk}">
+          <include name="*.jar"/>
+        </fileset>
+      </classpath>
+      <doctitle>
+        <![CDATA[<h1>App Engine GCS Library</h1>]]>
+      </doctitle>
+      <bottom>
+        <![CDATA[<i>Copyright &#169; 2013 Google Inc. All Rights Reserved.</i>]]>
+      </bottom>
+    </javadoc>
   </target>
 
   <target name="dist" depends="compile">
@@ -169,6 +186,7 @@
 
   <!-- Targets for GCS example -->
   <target name="copy_libs_to_example" depends="dist">
+    <mkdir dir="${example_war}/WEB-INF/lib"/>
     <copy todir="${example_war}/WEB-INF/lib">
       <fileset dir="${dist}"/>
     </copy>
