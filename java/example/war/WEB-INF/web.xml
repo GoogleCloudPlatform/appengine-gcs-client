@@ -7,14 +7,25 @@
           http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" version="2.5">
 
   <servlet>
-    <servlet-name>demo</servlet-name>
+    <servlet-name>GcsExample</servlet-name>
     <servlet-class>
       com.google.appengine.demos.GcsExampleServlet
     </servlet-class>
   </servlet>
   <servlet-mapping>
-    <servlet-name>demo</servlet-name>
-    <url-pattern>/*</url-pattern>
+    <servlet-name>GcsExample</servlet-name>
+    <url-pattern>/gcs/*</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>PortOfFilesAPIGuestbookServlet</servlet-name>
+    <servlet-class>
+      com.google.appengine.demos.PortOfFilesAPIGuestbookServlet
+    </servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>PortOfFilesAPIGuestbookServlet</servlet-name>
+    <url-pattern>/guestbook/*</url-pattern>
   </servlet-mapping>
 
   <security-constraint>

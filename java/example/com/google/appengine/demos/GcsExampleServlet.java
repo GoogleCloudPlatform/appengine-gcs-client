@@ -5,20 +5,13 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
-import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
-import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
+import com.google.appengine.tools.cloudstorage.RetryParams;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
-import java.util.Arrays;
 
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -28,79 +21,67 @@ import javax.servlet.http.HttpServletResponse;
 /**
  * A simple servlet that proxies reads and writes to its Google Cloud Storage bucket.
  */
+@SuppressWarnings("serial")
 public class GcsExampleServlet extends HttpServlet {
 
-  private static final long serialVersionUID = -8289942698798877155L;
+  /**
+   * This is where backoff parameters are configured. Here it is aggressively retrying with
+   * backoff, up to 10 times but taking no more that 15 seconds total to do so.
+   */
+  private final GcsService gcsService = GcsServiceFactory.createGcsService(new RetryParams.Builder()
+      .initialRetryDelayMillis(10)
+      .retryMaxAttempts(10)
+      .totalRetryPeriodMillis(15000)
+      .build());
 
-  private final GcsService gcsService = GcsServiceFactory.createGcsService();
-
+  /**Used below to determine the size of chucks to read in. Should be > 1kb and < 10MB */
   private static final int BUFFER_SIZE = 2 * 1024 * 1024;
 
-  private String bucket = "ExampleBucket";
-
-  @Override
-  public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-    writeFileFromStream(req.getRequestURI().substring(1), req.getInputStream());
-  }
-
-  void writeFileFromStream(String name, InputStream inputStream) throws IOException {
-    GcsFilename fileName = new GcsFilename(bucket, name);
-    GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(fileName, GcsFileOptions.getDefaultInstance());
-    try {
-      copy(inputStream, Channels.newOutputStream(outputChannel));
-    } finally {
-      outputChannel.close();
-      inputStream.close();
-    }
-  }
-
+  /**
+   * Retrieves a file from GCS and returns it in the http response.
+   * If a get comes in for request path /gcs/Foo/Bar this will be interpreted as
+   * a request to read the GCS file named Bar in the bucket Foo.
+   */
   @Override
   public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-    writeFileToStream(req.getRequestURI().substring(1), resp.getOutputStream());
-  }
-
-  void writeFileToStream(String name, OutputStream outputStream) throws IOException {
-    GcsFilename fileName = new GcsFilename(bucket, name);
     ReadableByteChannel readChannel =
-        gcsService.openPrefetchingReadChannel(fileName, 0, BUFFER_SIZE);
-    try {
-      copy(Channels.newInputStream(readChannel), outputStream);
-    } finally {
-      readChannel.close();
-      outputStream.close();
-    }
-  }
-
-  private void copy(InputStream input, OutputStream output) throws IOException {
-    byte[] buffer = new byte[BUFFER_SIZE];
-    int bytesRead = input.read(buffer);
-    while (bytesRead != -1) {
-      output.write(buffer, 0, bytesRead);
-      bytesRead = input.read(buffer);
-    }
+      gcsService.openPrefetchingReadChannel(getFileName(req), 0, BUFFER_SIZE);
+    copy(Channels.newInputStream(readChannel), resp.getOutputStream());
   }
 
   /**
-   * A main method to test to make sure the servlet works locally.
+   * Writes the payload of the incoming post as the contents of a file to GCS.
+   * If the post is to request path is /gcs/Foo/Bar this will be interpreted as
+   * a request to create a GCS file named Bar in bucket Foo.
    */
-  public static void main(String[] args) throws IOException {
-    LocalServiceTestHelper helper = new LocalServiceTestHelper(
-        new LocalTaskQueueTestConfig(), new LocalFileServiceTestConfig(),
-        new LocalBlobstoreServiceTestConfig(), new LocalDatastoreServiceTestConfig());
-    helper.setUp();
+  @Override
+  public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    GcsOutputChannel outputChannel =
+        gcsService.createOrReplace(getFileName(req), GcsFileOptions.getDefaultInstance());
+    copy(req.getInputStream(), Channels.newOutputStream(outputChannel));
+  }
+
+  private GcsFilename getFileName(HttpServletRequest req) {
+    String[] splits = req.getRequestURI().split("/", 3);
+    return new GcsFilename(splits[1], splits[2]);
+  }
+
+  /**
+   * Transfer the data from the inputStream to the outputStream. Then close both streams.
+   */
+  private void copy(InputStream input, OutputStream output) throws IOException {
     try {
-      GcsExampleServlet servlet = new GcsExampleServlet();
-      byte[] content = new byte[] {1, 2, 3, 4, 5};
-      ByteArrayInputStream contents = new ByteArrayInputStream(content);
-      servlet.writeFileFromStream("/foo", contents);
-      ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-      servlet.writeFileToStream("/foo", outputStream);
-      System.out.println("Wrote " + Arrays.toString(content) + " read: "
-          + Arrays.toString(outputStream.toByteArray()));
+      byte[] buffer = new byte[BUFFER_SIZE];
+      int bytesRead = input.read(buffer);
+      while (bytesRead != -1) {
+        output.write(buffer, 0, bytesRead);
+        bytesRead = input.read(buffer);
+      }
     } finally {
-      helper.tearDown();
+      input.close();
+      output.close();
     }
   }
+
 
 }

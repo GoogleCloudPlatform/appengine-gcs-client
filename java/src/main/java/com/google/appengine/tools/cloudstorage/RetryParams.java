@@ -26,7 +26,7 @@ import java.io.Serializable;
  * {@code RetryParams} with the required settings.
  *
  */
-class RetryParams implements Serializable {
+public class RetryParams implements Serializable {
   private static final long serialVersionUID = -8492751576749007700L;
 
   public static final long DEFAULT_REQUEST_TIMEOUT_MILLIS = 5000;
