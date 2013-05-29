@@ -21,7 +21,12 @@ import httplib
 
 
 class Error(Exception):
-  """Base error for all gcs operations."""
+  """Base error for all gcs operations.
+
+  Error can happen on GAE side or GCS server side.
+  For details on a particular GCS HTTP response code, see
+  https://developers.google.com/storage/docs/reference-status#standardcodes
+  """
 
 
 class TransientError(Error):
@@ -29,7 +34,7 @@ class TransientError(Error):
 
 
 class TimeoutError(TransientError):
-  """Http 408 timeout."""
+  """HTTP 408 timeout."""
 
 
 class FatalError(Error):
@@ -37,23 +42,33 @@ class FatalError(Error):
 
 
 class NotFoundError(FatalError):
-  """Http 404 resource not found."""
+  """HTTP 404 resource not found."""
 
 
 class ForbiddenError(FatalError):
-  """Http 403 Forbidden."""
+  """HTTP 403 Forbidden.
+
+  While GCS replies with a 403 error for many reasons, the most common one
+  is due to bucket permission not correctly setup for your app to access.
+  """
 
 
 class AuthorizationError(FatalError):
-  """Http 401 authentication required."""
+  """HTTP 401 authentication required.
+
+  Unauthorized request has been received by GCS.
+
+  This error is mostly handled by GCS client. GCS client will request
+  a new access token and retry the request.
+  """
 
 
 class InvalidRange(FatalError):
-  """Http 416 RequestRangeNotSatifiable."""
+  """HTTP 416 RequestRangeNotSatifiable."""
 
 
 class ServerError(TransientError):
-  """Http >= 500 server side error."""
+  """HTTP >= 500 server side error."""
 
 
 def check_status(status, expected, headers=None):
