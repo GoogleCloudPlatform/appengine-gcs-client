@@ -77,6 +77,10 @@ class RetryParams(object):
 
     This object is unique per request per thread.
 
+    Library will retry according to this setting when App Engine Server
+    can't call urlfetch, urlfetch timed out, or urlfetch got a 408 or
+    500-600 response.
+
     Args:
       backoff_factor: exponential backoff multiplier.
       initial_delay: seconds to delay for the first retry.
