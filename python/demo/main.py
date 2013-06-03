@@ -16,8 +16,10 @@ my_default_retry_params = gcs.RetryParams(initial_delay=0.2,
                                           max_retry_period=15)
 """
 All requests to GCS using the GCS client within current GAE request and
-current thread will use this retry params as default. A specific GCS
-client call can override the default.
+current thread will use this retry params as default. If a default is not
+set via this mechanism, the library's built-in default will be used.
+Any GCS client function can also be given a more specific retry params
+that overrides the default.
 """
 gcs.set_default_retry_params(my_default_retry_params)
 
@@ -29,6 +31,7 @@ class MainPage(webapp2.RequestHandler):
     filename = bucket + '/demo-testfile'
 
     self.response.headers['Content-Type'] = 'text/plain'
+    self.tmp_filenames_to_clean_up = []
 
     self.create_file(filename)
     self.response.write('\n\n')
@@ -42,7 +45,7 @@ class MainPage(webapp2.RequestHandler):
     self.list_bucket(bucket)
     self.response.write('\n\n')
 
-    self.delete_file(filename)
+    self.delete_files()
 
   def create_file(self, filename):
     """Create a file.
@@ -53,7 +56,7 @@ class MainPage(webapp2.RequestHandler):
     Args:
       filename: filename.
     """
-    self.response.write('Creating file...\n')
+    self.response.write('Creating file %s\n' % filename)
 
     write_retry_params = gcs.RetryParams(backoff_factor=1.1)
     gcs_file = gcs.open(filename,
@@ -65,6 +68,7 @@ class MainPage(webapp2.RequestHandler):
     gcs_file.write('abcde\n')
     gcs_file.write('f'*1024*1024 + '\n')
     gcs_file.close()
+    self.tmp_filenames_to_clean_up.append(filename)
 
   def read_file(self, filename):
     self.response.write('Truncated file content:\n')
@@ -82,21 +86,39 @@ class MainPage(webapp2.RequestHandler):
     self.response.write(repr(stat))
 
   def list_bucket(self, bucket):
-    self.response.write('Listbucket result:\n')
+    """Create several files and paginate through them.
 
-    stats = gcs.listbucket(bucket)
-    for stat in stats:
-      self.response.write(repr(stat))
-      self.response.write('\n')
+    Production apps should set page_size to a practical value.
 
-  def delete_file(self, filename):
-    self.response.write('Deleting file...\n')
-    gcs.delete(filename)
+    Args:
+      bucket: bucket.
+    """
+    self.response.write('Creating more files for listbucket...\n')
+    self.create_file(bucket + '/foo1')
+    self.create_file(bucket + '/foo2')
+    self.response.write('\nListbucket result:\n')
 
-    try:
-      gcs.delete(filename)
-    except gcs.NotFoundError:
-      pass
+    page_size = 1
+    stats = gcs.listbucket(bucket, max_keys=page_size)
+    while True:
+      count = 0
+      for stat in stats:
+        count += 1
+        self.response.write(repr(stat))
+        self.response.write('\n')
+
+      if count != page_size or count == 0:
+        break
+      last_filename = stat.filename[len(bucket)+1:]
+      stats = gcs.listbucket(bucket, max_keys=page_size, marker=last_filename)
+
+  def delete_files(self):
+    self.response.write('Deleting files...\n')
+    for filename in self.tmp_filenames_to_clean_up:
+      try:
+        gcs.delete(filename)
+      except gcs.NotFoundError:
+        pass
 
 
 app = webapp2.WSGIApplication([('/', MainPage)],
