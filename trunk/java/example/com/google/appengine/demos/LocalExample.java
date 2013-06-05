@@ -1,5 +1,4 @@
 package com.google.appengine.demos;
-
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
@@ -19,7 +18,6 @@ import java.nio.channels.ReadableByteChannel;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-
 /**
  * A main method to show how to use the GCS client locally.
  *
