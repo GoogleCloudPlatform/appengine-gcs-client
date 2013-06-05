@@ -155,16 +155,16 @@ class ReadBuffer(object):
     self._offset = 0
     self._reset_buffer()
     self._closed = False
+    self._etag = None
+
+    self._buffer_future = self._get_segment(0, self._max_buffer_size)
 
     status, headers, _ = self._api.head_object(path)
     errors.check_status(status, [200])
     self._file_size = long(headers['content-length'])
-    self._etag = headers.get('etag')
+    self._check_etag(headers.get('etag'))
     if self._file_size == 0:
       self._buffer_future = None
-    else:
-
-      self._buffer_future = self._get_segment(0, self._max_buffer_size)
 
   def __getstate__(self):
     """Store state as part of serialization/pickling.
@@ -381,9 +381,32 @@ class ReadBuffer(object):
     status, headers, content = yield self._api.get_object_async(self._path,
                                                                 headers=headers)
     errors.check_status(status, [200, 206], headers)
-    if self._etag != headers.get('etag'):
-      raise ValueError('File on GCS has changed while reading.')
+    self._check_etag(headers.get('etag'))
     raise ndb.Return(content)
+
+  def _check_etag(self, etag):
+    """Check if etag is the same across requests to GCS.
+
+    If self._etag is None, set it. If etag is set, check that the new
+    etag equals the old one.
+
+    In the __init__ method, we fire one HEAD and one GET request using
+    ndb tasklet. One of them would return first and set the first value.
+
+    Args:
+      etag: etag from a GCS HTTP response. None if etag is not part of the
+        response header. It could be None for example in the case of GCS
+        composite file.
+
+    Raises:
+      ValueError: if two etags are not equal.
+    """
+    if etag is None:
+      return
+    elif self._etag is None:
+      self._etag = etag
+    elif self._etag != etag:
+      raise ValueError('File on GCS has changed while reading.')
 
   def close(self):
     self._closed = True
