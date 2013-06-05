@@ -1,5 +1,5 @@
 <ivy-module version="2.0">
-  <info organisation="com.google.appengine" module="tools.cloudstorage"/>
+  <info organisation="com.google.appengine.tools" module="appengine-gcs-client"/>
   <configurations>
     <conf name="${thirdparty}" description="3rd Party libraries required to build"/>
     <conf name="${test}" description="3rd Party libraries required to test"/>
@@ -10,7 +10,7 @@
     <dependency org="com.google.appengine" name="appengine-api-1.0-sdk" rev="${sdk_version}"
                 conf="${sdk}->default"/>
 
-    <dependency org="com.google.guava" name="guava" rev="latest.milestone"
+    <dependency org="com.google.guava" name="guava" rev="[14.0,14.99]"
                 conf="${thirdparty}->default"/>
 
     <dependency org="com.google.appengine" name="appengine-testing" rev="${sdk_version}"
