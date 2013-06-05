@@ -5,7 +5,7 @@
   <artifactId>appengine-gcs-client</artifactId>
   <name>App Engine Client for Google Cloud Storage</name>
   <url>http://code.google.com/p/appengine-gcs-client/</url>
-  <version>0.1</version>
+  <version>0.2-SNAPSHOT</version>
   <packaging>jar</packaging>
   <licenses>
     <license>
@@ -14,7 +14,7 @@
     </license>
   </licenses>
   <properties>
-    <appengine.target.version>1.7.7.1</appengine.target.version>
+    <appengine.target.version>1.8.0</appengine.target.version>
   </properties>
   <build>
     <plugins>
