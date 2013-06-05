@@ -43,7 +43,6 @@ final class OauthRawGcsService implements RawGcsService {
   private static final String ETAG = "ETag";
   private final HTTPHeader versionHeader = new HTTPHeader("x-goog-api-version", "2");
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(OauthRawGcsService.class.getName());
 
   public static final List<String> OAUTH_SCOPES =
