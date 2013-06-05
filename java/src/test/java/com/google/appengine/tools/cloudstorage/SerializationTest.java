@@ -23,13 +23,12 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
-import java.nio.channels.ReadableByteChannel;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 
 /**
- * Test to make sure the ReadableByteChannels returned by the library serialize and deserialize in a
- * working state.
+ * Test to make sure the @{link GcsInputChannel}s returned by the library serialize and deserialize
+ * in a working state.
  *
  */
 @RunWith(JUnit4.class)
@@ -82,7 +81,7 @@ public class SerializationTest {
   public void testSimpleGcsInputChannelLocal() throws IOException, ClassNotFoundException {
     GcsService gcsService = GcsServiceFactory.createGcsService();
     createFiles(gcsService);
-    ReadableByteChannel readChannel = gcsService.openReadChannel(TestFile.SMALL.filename, 0);
+    GcsInputChannel readChannel = gcsService.openReadChannel(TestFile.SMALL.filename, 0);
     try {
       ByteBuffer buffer = ByteBuffer.allocate(5);
       readChannel.read(buffer);
@@ -103,8 +102,8 @@ public class SerializationTest {
   public void testOauthSerializes() throws IOException, ClassNotFoundException {
     RawGcsService rawGcsService = OauthRawGcsServiceFactory.createOauthRawGcsService();
     GcsService gcsService = new GcsServiceImpl(rawGcsService, RetryParams.getDefaultInstance());
-    ReadableByteChannel readChannel = gcsService.openReadChannel(TestFile.SMALL.filename, 0);
-    ReadableByteChannel reconstruct = reconstruct(readChannel);
+    GcsInputChannel readChannel = gcsService.openReadChannel(TestFile.SMALL.filename, 0);
+    GcsInputChannel reconstruct = reconstruct(readChannel);
     readChannel.close();
     reconstruct.close();
   }
@@ -114,7 +113,7 @@ public class SerializationTest {
     GcsService gcsService = GcsServiceFactory.createGcsService();
     createFiles(gcsService);
     @SuppressWarnings("resource")
-    ReadableByteChannel readChannel =
+    GcsInputChannel readChannel =
         gcsService.openPrefetchingReadChannel(TestFile.MEDIUM.filename, 0, 1031);
     ByteBuffer buffer = ByteBuffer.allocate(5);
     int read = readChannel.read(buffer);
@@ -144,7 +143,7 @@ public class SerializationTest {
     GcsService gcsService = GcsServiceFactory.createGcsService();
     createFiles(gcsService);
     @SuppressWarnings("resource")
-    ReadableByteChannel readChannel = gcsService.openPrefetchingReadChannel(
+    GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(
         TestFile.MEDIUM.filename, 0, TestFile.MEDIUM.contentSize / 2);
     ByteBuffer buffer = ByteBuffer.allocate(10);
     int read = 0;
@@ -167,7 +166,7 @@ public class SerializationTest {
     GcsService gcsService = GcsServiceFactory.createGcsService();
     createFiles(gcsService);
     @SuppressWarnings("resource")
-    ReadableByteChannel readChannel = gcsService.openPrefetchingReadChannel(
+    GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(
         TestFile.LARGE.filename, 0, TestFile.LARGE.contentSize / 2);
     ByteBuffer buffer = ByteBuffer.allocate(TestFile.LARGE.contentSize * 2);
     int read = readChannel.read(buffer);
@@ -182,7 +181,7 @@ public class SerializationTest {
     readChannel.close();
   }
 
-  private ReadableByteChannel reconstruct(ReadableByteChannel readChannel)
+  private GcsInputChannel reconstruct(GcsInputChannel readChannel)
       throws IOException, ClassNotFoundException {
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
     ObjectOutputStream oout = new ObjectOutputStream(bout);
@@ -192,7 +191,7 @@ public class SerializationTest {
       oout.close();
     }
     ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bout.toByteArray()));
-    return (ReadableByteChannel) in.readObject();
+    return (GcsInputChannel) in.readObject();
   }
 
 }

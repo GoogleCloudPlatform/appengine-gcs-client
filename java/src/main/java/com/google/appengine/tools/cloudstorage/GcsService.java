@@ -1,7 +1,6 @@
 package com.google.appengine.tools.cloudstorage;
 
 import java.io.IOException;
-import java.nio.channels.ReadableByteChannel;
 
 /**
  * Allows creating and accessing files in Google Cloud Storage.
@@ -33,7 +32,7 @@ public interface GcsService {
    *
    * If buffering is desired openPrefetchingReadChannel should be called instead.
    */
-  ReadableByteChannel openReadChannel(GcsFilename filename, long startPosition) throws IOException;
+  GcsInputChannel openReadChannel(GcsFilename filename, long startPosition) throws IOException;
 
   /**
    * Same as openReadChannel but buffers data in memory and prefetches it before it is required to
@@ -42,7 +41,7 @@ public interface GcsService {
    * If some data is already available locally (prefetched), but not enough to fill the dst buffer,
    * the returned channel might fill only part of it, to avoid blocking.
    */
-  ReadableByteChannel openPrefetchingReadChannel(
+  GcsInputChannel openPrefetchingReadChannel(
       GcsFilename filename, long startPosition, int blockSizeBytes);
 
   /**

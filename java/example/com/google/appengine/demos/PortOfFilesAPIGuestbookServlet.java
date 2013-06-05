@@ -2,6 +2,7 @@ package com.google.appengine.demos;
 
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
+import com.google.appengine.tools.cloudstorage.GcsInputChannel;
 import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
@@ -11,7 +12,6 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
 
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -49,7 +49,7 @@ public class PortOfFilesAPIGuestbookServlet extends HttpServlet {
     resp.getWriter().println("Done writing...");
 
 
-    ReadableByteChannel readChannel = gcsService.openReadChannel(filename, 0);
+    GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0);
     BufferedReader reader = new BufferedReader(Channels.newReader(readChannel, "UTF8"));
     String line;
     while ((line = reader.readLine()) != null) {

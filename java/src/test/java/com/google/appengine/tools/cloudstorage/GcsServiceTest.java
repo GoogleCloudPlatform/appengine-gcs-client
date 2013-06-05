@@ -21,7 +21,6 @@ import org.junit.runners.JUnit4;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
-import java.nio.channels.ReadableByteChannel;
 import java.nio.charset.Charset;
 import java.util.Random;
 
@@ -61,7 +60,7 @@ public class GcsServiceTest {
     outputChannel.write(utf8.encode(CharBuffer.wrap(content)));
     outputChannel.close();
 
-    ReadableByteChannel readChannel = gcsService.openReadChannel(filename, 0);
+    GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0);
     ByteBuffer result = ByteBuffer.allocate(7);
     int read = readChannel.read(result);
     result.limit(read);
@@ -86,7 +85,7 @@ public class GcsServiceTest {
     outputChannel.write(ByteBuffer.wrap(content));
     outputChannel.close();
 
-    ReadableByteChannel readChannel = gcsService.openReadChannel(filename, 0);
+    GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0);
     verifyContent(content, readChannel, 25000);
     gcsService.delete(filename);
   }
@@ -106,8 +105,7 @@ public class GcsServiceTest {
     outputChannel.write(ByteBuffer.wrap(content));
     outputChannel.close();
 
-    ReadableByteChannel readChannel =
-        gcsService.openPrefetchingReadChannel(filename, 0, 512 * 1024);
+    GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(filename, 0, 512 * 1024);
     verifyContent(content, readChannel, 13);
     gcsService.delete(filename);
   }
@@ -130,7 +128,7 @@ public class GcsServiceTest {
 
     ByteBuffer result = ByteBuffer.allocate(1);
 
-    ReadableByteChannel readChannel = gcsService.openReadChannel(filename, 0);
+    GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0);
     try {
       readChannel.read(result);
       fail();
@@ -159,8 +157,7 @@ public class GcsServiceTest {
     outputChannel.write(ByteBuffer.wrap(content));
     outputChannel.close();
 
-    ReadableByteChannel readChannel =
-        gcsService.openPrefetchingReadChannel(filename, 0, 512 * 1024);
+    GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(filename, 0, 512 * 1024);
     verifyContent(content, readChannel, 13);
     gcsService.delete(filename);
   }
@@ -195,7 +192,7 @@ public class GcsServiceTest {
   }
 
 
-  private void verifyContent(byte[] content, ReadableByteChannel readChannel, int readSize)
+  private void verifyContent(byte[] content, GcsInputChannel readChannel, int readSize)
       throws IOException {
     ByteBuffer result = ByteBuffer.allocate(readSize);
     ByteBuffer wrapped = ByteBuffer.wrap(content);
