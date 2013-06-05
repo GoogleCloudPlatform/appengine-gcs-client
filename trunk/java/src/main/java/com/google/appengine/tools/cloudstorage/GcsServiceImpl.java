@@ -6,7 +6,6 @@ import com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken
 import com.google.appengine.tools.cloudstorage.RetryHelper.Body;
 
 import java.io.IOException;
-import java.nio.channels.ReadableByteChannel;
 
 /**
  * Basic implementation of {@link GcsService}. Mostly delegates to {@link RawGcsService}
@@ -39,12 +38,12 @@ final class GcsServiceImpl implements GcsService {
   }
 
   @Override
-  public ReadableByteChannel openReadChannel(GcsFilename filename, long startPosition) {
+  public GcsInputChannel openReadChannel(GcsFilename filename, long startPosition) {
     return new SimpleGcsInputChannelImpl(raw, filename, startPosition, retryParams);
   }
 
   @Override
-  public ReadableByteChannel openPrefetchingReadChannel(
+  public GcsInputChannel openPrefetchingReadChannel(
       GcsFilename filename, long startPosition, int blockSize) {
     return new PrefetchingGcsInputChannelImpl(
         raw, filename, blockSize, startPosition, retryParams);

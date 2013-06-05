@@ -1,6 +1,7 @@
 package com.google.appengine.demos;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
+import com.google.appengine.tools.cloudstorage.GcsInputChannel;
 import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
@@ -14,7 +15,6 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -77,8 +77,7 @@ public class LocalExample {
    */
   private Object readObjectFromFile(GcsFilename fileName)
       throws IOException, ClassNotFoundException {
-    ReadableByteChannel readChannel =
-        gcsService.openPrefetchingReadChannel(fileName, 0, 1024 * 1024);
+    GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(fileName, 0, 1024 * 1024);
     ObjectInputStream oin = new ObjectInputStream(Channels.newInputStream(readChannel));
     try {
       return oin.readObject();
@@ -99,7 +98,7 @@ public class LocalExample {
   private byte[] readFromFile(GcsFilename fileName) throws IOException {
     int fileSize = (int) gcsService.getMetadata(fileName).getLength();
     ByteBuffer result = ByteBuffer.allocate(fileSize);
-    ReadableByteChannel readChannel = gcsService.openReadChannel(fileName, 0);
+    GcsInputChannel readChannel = gcsService.openReadChannel(fileName, 0);
     try {
       readChannel.read(result);
     } finally {

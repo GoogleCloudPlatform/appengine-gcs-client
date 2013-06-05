@@ -21,7 +21,6 @@ import org.junit.runners.JUnit4;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
-import java.nio.channels.ReadableByteChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 
@@ -79,7 +78,7 @@ public class GcsInputChannelTest {
   @Test
   public void readAfterEndOfFile() throws IOException {
     GcsService gcsService = GcsServiceFactory.createGcsService();
-    ReadableByteChannel readChannel = gcsService.openPrefetchingReadChannel(
+    GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(
         TestFile.SMALL.filename, TestFile.SMALL.contentSize, 1024);
     int result = readChannel.read(ByteBuffer.allocate(100));
     assertEquals(result, -1);
@@ -88,7 +87,7 @@ public class GcsInputChannelTest {
   @Test
   public void readOneByteAtATime() throws IOException {
     GcsService gcsService = GcsServiceFactory.createGcsService();
-    ReadableByteChannel readChannel =
+    GcsInputChannel readChannel =
         gcsService.openPrefetchingReadChannel(TestFile.LARGE.filename, 0, 1024);
     ByteBuffer buff = ByteBuffer.allocate(1);
     for (int i = 0; i < TestFile.LARGE.contentSize; i++) {
@@ -100,7 +99,7 @@ public class GcsInputChannelTest {
     assertEquals(result, -1);
   }
 
-  private ReadableByteChannel createChannel(
+  private GcsInputChannel createChannel(
       ChannelType type, GcsFilename filename, int offset, int fetchSize) throws IOException {
     final GcsService gcsService = GcsServiceFactory.createGcsService();
     switch (type) {
@@ -113,7 +112,7 @@ public class GcsInputChannelTest {
     }
   }
 
-  private String runTest(ReadableByteChannel channel, int readSize) throws IOException {
+  private String runTest(GcsInputChannel channel, int readSize) throws IOException {
     final StringBuffer contents = new StringBuffer();
     try {
       final ByteBuffer buffer = ByteBuffer.allocateDirect(readSize);
@@ -166,7 +165,7 @@ public class GcsInputChannelTest {
                   + file.contentSize + " using: " + type + " w/ fetch=" + fetchSize + ", read="
                   + readSize + ", offset=" + finalOffset;
 
-              ReadableByteChannel channel = null;
+              GcsInputChannel channel = null;
               boolean shouldCreate =
                   (type != ChannelType.PREFETCHING_GCS_INPUT || (fetchSize >= 1024))
                   && finalOffset >= 0;

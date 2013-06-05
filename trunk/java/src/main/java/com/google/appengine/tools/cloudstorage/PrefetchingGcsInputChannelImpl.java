@@ -10,22 +10,20 @@ import com.google.common.base.Preconditions;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
-import java.nio.channels.ReadableByteChannel;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * An implementation of {@link ReadableByteChannel} than attempts to load the data into memory
+ * An implementation of {@link GcsInputChannel} than attempts to load the data into memory
  * before it is actually needed to avoid blocking the calling thread.
  *
  */
-final class PrefetchingGcsInputChannelImpl implements ReadableByteChannel, Serializable {
+final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
 
   private static final long serialVersionUID = 5119437751884637172L;
 

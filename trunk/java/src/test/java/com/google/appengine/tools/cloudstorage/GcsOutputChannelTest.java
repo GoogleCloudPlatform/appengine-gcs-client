@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
-import java.nio.channels.ReadableByteChannel;
 import java.util.Random;
 
 /**
@@ -76,8 +75,7 @@ public class GcsOutputChannelTest {
   private void verifyContent(String name, byte[] content, int expectedSize) throws IOException {
     GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsFilename filename = new GcsFilename("GcsOutputChannelTestBucket", name);
-    ReadableByteChannel readChannel =
-        gcsService.openPrefetchingReadChannel(filename, 0, BUFFER_SIZE);
+    GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(filename, 0, BUFFER_SIZE);
     ByteBuffer result = ByteBuffer.allocate(content.length);
     ByteBuffer wrapped = ByteBuffer.wrap(content);
     int size = 0;
@@ -96,7 +94,7 @@ public class GcsOutputChannelTest {
     assertEquals(expectedSize, size);
   }
 
-  private int readFully(ReadableByteChannel readChannel, ByteBuffer result) throws IOException {
+  private int readFully(GcsInputChannel readChannel, ByteBuffer result) throws IOException {
     int totalRead = 0;
     while (result.hasRemaining()) {
       int read = readChannel.read(result);

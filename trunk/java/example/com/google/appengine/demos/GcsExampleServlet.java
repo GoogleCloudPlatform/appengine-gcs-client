@@ -2,6 +2,7 @@ package com.google.appengine.demos;
 
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
+import com.google.appengine.tools.cloudstorage.GcsInputChannel;
 import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
@@ -11,7 +12,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
 
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -44,7 +44,7 @@ public class GcsExampleServlet extends HttpServlet {
    */
   @Override
   public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-    ReadableByteChannel readChannel =
+    GcsInputChannel readChannel =
       gcsService.openPrefetchingReadChannel(getFileName(req), 0, BUFFER_SIZE);
     copy(Channels.newInputStream(readChannel), resp.getOutputStream());
   }

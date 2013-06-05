@@ -9,14 +9,12 @@ import com.google.common.base.Preconditions;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
-import java.nio.channels.ReadableByteChannel;
 import java.util.concurrent.ExecutionException;
 
-final class SimpleGcsInputChannelImpl implements ReadableByteChannel, Serializable {
+final class SimpleGcsInputChannelImpl implements GcsInputChannel {
 
   private static final long serialVersionUID = -5076387489828467162L;
   private transient Object lock = new Object();
