@@ -7,20 +7,10 @@ import os
 import cloudstorage as gcs
 import webapp2
 
-"""
-Retry can help overcome transient urlfetch or GCS issues, such as timeouts.
-"""
 my_default_retry_params = gcs.RetryParams(initial_delay=0.2,
                                           max_delay=5.0,
                                           backoff_factor=2,
                                           max_retry_period=15)
-"""
-All requests to GCS using the GCS client within current GAE request and
-current thread will use this retry params as default. If a default is not
-set via this mechanism, the library's built-in default will be used.
-Any GCS client function can also be given a more specific retry params
-that overrides the default.
-"""
 gcs.set_default_retry_params(my_default_retry_params)
 
 
