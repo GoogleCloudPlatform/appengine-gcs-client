@@ -20,7 +20,6 @@
     <dependency org="junit" name="junit" rev="4.10" conf="${test}->default"/>
     <dependency org="org.hamcrest" name="hamcrest-core" rev="1.1" conf="${test}->default"/>
 
-    <dependency org="org.mortbay.jetty" name="servlet-api" rev="2.5.20110712"
-                conf="${war}->default"/>
+    <dependency org="javax.servlet" name="servlet-api" rev="2.5" conf="${war}->default"/>
   </dependencies>
 </ivy-module>
