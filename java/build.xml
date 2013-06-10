@@ -24,7 +24,7 @@
   <property name="lib_test" location="${lib}/${test}"/>
   <property name="lib_war" location="${lib}/${war}"/>
   <property name="dist" location="dist"/>
-  <property name="example_src" location="example"/>
+  <property name="example_src" location="example/src"/>
   <property name="example_war" location="example/war"/>
 
   <!-- Ivy Bootstrap Properties -->
