@@ -5,16 +5,16 @@ import java.io.Serializable;
 
 /**
  * Parameters for configuring exponential backoff. See {@link RetryHelper}. The initial request is
- * executed immediately. It is given {@link #requestTimeoutMillis} to complete or it is regarded as
- * a failure. If the request fails the calling thread sleeps for {@link #initialRetryDelayMillis}.
+ * executed immediately. It is given {@code requestTimeoutMillis} to complete or it is regarded as
+ * a failure. If the request fails the calling thread sleeps for {@code initialRetryDelayMillis}.
  * Each subsequent failure the sleep interval is calculated as at least half of and no more than:
  *
  * <pre>
- *{@link #initialRetryDelayMillis} * {@link #retryDelayBackoffFactor} ^ NumFailures
+ *{@code initialRetryDelayMillis} * {@code retryDelayBackoffFactor} ^ NumFailures
  *</pre>
  *
- * This proceeds until either the request is successful, {@link #retryMaxAttempts} are made, or both
- * {@link #retryMinAttempts} are made and {@link #totalRetryPeriodMillis} have elapsed.
+ * This proceeds until either the request is successful, {@code retryMaxAttempts} are made, or both
+ * {@code retryMinAttempts} are made and {@code totalRetryPeriodMillis} have elapsed.
  *
  * To construct {@code RetryParams}, first create a {@link RetryParams.Builder}. The builder is
  * mutable and each of the parameters can be set (any unset parameters will fallback to the
@@ -80,7 +80,7 @@ public class RetryParams implements Serializable {
 
     /**
      * @param retryMinAttempts the retryMinAttempts to set
-     * @returns the Builder for chaining
+     * @return the Builder for chaining
      */
     public Builder retryMinAttempts(int retryMinAttempts) {
       this.retryMinAttempts = retryMinAttempts;
@@ -89,7 +89,7 @@ public class RetryParams implements Serializable {
 
     /**
      * @param retryMaxAttempts the retryMaxAttempts to set
-     * @returns the Builder for chaining
+     * @return the Builder for chaining
      */
     public Builder retryMaxAttempts(int retryMaxAttempts) {
       this.retryMaxAttempts = retryMaxAttempts;
@@ -98,7 +98,7 @@ public class RetryParams implements Serializable {
 
     /**
      * @param initialRetryDelayMillis the initialRetryDelayMillis to set
-     * @returns the Builder for chaining
+     * @return the Builder for chaining
      */
     public Builder initialRetryDelayMillis(long initialRetryDelayMillis) {
       this.initialRetryDelayMillis = initialRetryDelayMillis;
@@ -107,7 +107,7 @@ public class RetryParams implements Serializable {
 
     /**
      * @param maxRetryDelayMillis the maxRetryDelayMillis to set
-     * @returns the Builder for chaining
+     * @return the Builder for chaining
      */
     public Builder maxRetryDelayMillis(long maxRetryDelayMillis) {
       this.maxRetryDelayMillis = maxRetryDelayMillis;
@@ -116,7 +116,7 @@ public class RetryParams implements Serializable {
 
     /**
      * @param retryDelayBackoffFactor the retryDelayBackoffFactor to set
-     * @returns the Builder for chaining
+     * @return the Builder for chaining
      */
     public Builder retryDelayBackoffFactor(double retryDelayBackoffFactor) {
       this.retryDelayBackoffFactor = retryDelayBackoffFactor;
@@ -125,7 +125,7 @@ public class RetryParams implements Serializable {
 
     /**
      * @param totalRetryPeriodMillis the totalRetryPeriodMillis to set
-     * @returns the Builder for chaining
+     * @return the Builder for chaining
      */
     public Builder totalRetryPeriodMillis(long totalRetryPeriodMillis) {
       this.totalRetryPeriodMillis = totalRetryPeriodMillis;
@@ -134,7 +134,7 @@ public class RetryParams implements Serializable {
 
     /**
      * @param requestTimeoutMillis the requestTimeoutMillis to set
-     * @returns the Builder for chaining
+     * @return the Builder for chaining
      */
     public Builder requestTimeoutMillis(long requestTimeoutMillis) {
       this.requestTimeoutMillis = requestTimeoutMillis;
