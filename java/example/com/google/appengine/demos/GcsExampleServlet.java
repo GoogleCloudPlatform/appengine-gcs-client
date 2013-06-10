@@ -1,5 +1,8 @@
 package com.google.appengine.demos;
 
+import com.google.appengine.api.blobstore.BlobKey;
+import com.google.appengine.api.blobstore.BlobstoreService;
+import com.google.appengine.api.blobstore.BlobstoreServiceFactory;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsInputChannel;
@@ -24,6 +27,8 @@ import javax.servlet.http.HttpServletResponse;
 @SuppressWarnings("serial")
 public class GcsExampleServlet extends HttpServlet {
 
+  public static final boolean SERVE_USING_BLOBSTORE_API = false;
+
   /**
    * This is where backoff parameters are configured. Here it is aggressively retrying with
    * backoff, up to 10 times but taking no more that 15 seconds total to do so.
@@ -44,9 +49,16 @@ public class GcsExampleServlet extends HttpServlet {
    */
   @Override
   public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-    GcsInputChannel readChannel =
-      gcsService.openPrefetchingReadChannel(getFileName(req), 0, BUFFER_SIZE);
-    copy(Channels.newInputStream(readChannel), resp.getOutputStream());
+    GcsFilename fileName = getFileName(req);
+    if (SERVE_USING_BLOBSTORE_API) {
+      BlobstoreService blobstoreService = BlobstoreServiceFactory.getBlobstoreService();
+      BlobKey blobKey = blobstoreService.createGsBlobKey(
+          "/gs/" + fileName.getBucketName() + "/" + fileName.getObjectName());
+      blobstoreService.serve(blobKey, resp);
+    } else {
+      GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(fileName, 0, BUFFER_SIZE);
+      copy(Channels.newInputStream(readChannel), resp.getOutputStream());
+    }
   }
 
   /**
