@@ -62,8 +62,12 @@ public class GcsExampleServlet extends HttpServlet {
   }
 
   private GcsFilename getFileName(HttpServletRequest req) {
-    String[] splits = req.getRequestURI().split("/", 3);
-    return new GcsFilename(splits[1], splits[2]);
+    String[] splits = req.getRequestURI().split("/", 4);
+    if (!splits[0].equals("") || !splits[1].equals("gcs")) {
+      throw new IllegalArgumentException("The URL is not formed as expected. " +
+          "Expecting /gcs/<bucket>/<object>");
+    }
+    return new GcsFilename(splits[2], splits[3]);
   }
 
   /**
