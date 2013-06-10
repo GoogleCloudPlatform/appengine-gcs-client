@@ -100,7 +100,7 @@
     </javac>
   </target>
 
-  <target name="javadoc">
+  <target name="javadoc" depends="dependencies_thirdparty,dependencies_sdk">
     <delete dir="${javadoc}"/>
     <mkdir dir="${javadoc}"/>
     <javadoc sourcepath="${src}" destdir="${javadoc}" windowtitle="App Engine GCS Library">
@@ -201,7 +201,7 @@
     </junit>
   </target>
 
-  <target name="clean">
+  <target name="clean" depends="clean_example">
     <delete dir="${build}"/>
     <delete dir="${javadoc}"/>
     <delete dir="${dist}"/>
