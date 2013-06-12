@@ -11,6 +11,7 @@ import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestC
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
+import com.google.common.base.Charsets;
 
 import org.junit.After;
 import org.junit.Before;
@@ -23,7 +24,6 @@ import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.util.Random;
-
 
 /**
  * End to end test to test the basics of the GcsService. This class uses the in-process
@@ -49,7 +49,7 @@ public class GcsServiceTest {
 
   @Test
   public void testReadWrittenData() throws IOException {
-    Charset utf8 = Charset.forName("UTF-8");
+    Charset utf8 = Charsets.UTF_8;
     String content = "FooBar";
     GcsFilename filename = new GcsFilename("testReadWrittenDataBucket", "testReadWrittenDataFile");
 
