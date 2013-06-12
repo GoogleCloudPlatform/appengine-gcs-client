@@ -56,7 +56,7 @@ public class GcsInputChannelTest {
   public void setUp() throws Exception {
     helper.setUp();
 
-    Charset utf8 = Charset.forName("UTF-8");
+    Charset utf8 = Charsets.UTF_8;
     GcsService gcsService = GcsServiceFactory.createGcsService();
     for (TestFile file : TestFile.values()) {
       StringBuffer contents = new StringBuffer(file.contentSize);

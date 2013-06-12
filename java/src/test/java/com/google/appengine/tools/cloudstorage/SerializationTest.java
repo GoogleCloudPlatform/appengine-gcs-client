@@ -9,6 +9,7 @@ import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestC
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
+import com.google.common.base.Charsets;
 
 import org.junit.After;
 import org.junit.Before;
@@ -59,7 +60,7 @@ public class SerializationTest {
   }
 
   private void createFiles(GcsService gcsService) throws IOException {
-    Charset utf8 = Charset.forName("UTF-8");
+    Charset utf8 = Charsets.UTF_8;
     for (TestFile file : TestFile.values()) {
       StringBuffer contents = new StringBuffer(file.contentSize);
       for (int i = 0; i < file.contentSize; i++) {
