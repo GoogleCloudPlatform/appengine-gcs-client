@@ -79,6 +79,7 @@ class _StorageApi(rest_api._RestApi):
       headers = {}
     if 'x-goog-api-version' not in headers:
       headers['x-goog-api-version'] = '2'
+    headers['accept-encoding'] = 'gzip, *'
     try:
       resp_tuple = yield super(_StorageApi, self).do_request_async(
           url, method=method, headers=headers, payload=payload,

@@ -39,7 +39,7 @@ def open(filename,
     options: A str->basestring dict to specify additional headers to pass to
       GCS e.g. {'x-goog-acl': 'private', 'x-goog-meta-foo': 'foo'}.
       Supported options are x-goog-acl, x-goog-meta-, cache-control,
-      and content-disposition.
+      content-disposition, and content-encoding.
       Only valid in writing mode.
       See https://developers.google.com/storage/docs/reference-headers
       for details.
