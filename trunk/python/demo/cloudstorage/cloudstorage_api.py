@@ -36,9 +36,10 @@ def open(filename,
       In reading mode, the file must exist. In writing mode, a file will
       be created or be overrode.
     content_type: The MIME type of the file. str. Only valid in writing mode.
-    options: A str->basestring dict to specify additional Google Cloud Storage
-      options. e.g. {'x-goog-acl': 'private', 'x-goog-meta-foo': 'foo'}
-      Currently supported options are x-goog-acl and x-goog-meta-.
+    options: A str->basestring dict to specify additional headers to pass to
+      GCS e.g. {'x-goog-acl': 'private', 'x-goog-meta-foo': 'foo'}.
+      Supported options are x-goog-acl, x-goog-meta-, cache-control,
+      and content-disposition.
       Only valid in writing mode.
       See https://developers.google.com/storage/docs/reference-headers
       for details.
