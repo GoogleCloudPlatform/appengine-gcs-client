@@ -44,7 +44,9 @@ _GCS_BUCKET_REGEX = re.compile(_GCS_BUCKET_REGEX_BASE + r'$')
 _GCS_BUCKET_PATH_REGEX = re.compile(r'/' + _GCS_BUCKET_REGEX_BASE + r'$')
 _GCS_FULLPATH_REGEX = re.compile(r'/' + _GCS_BUCKET_REGEX_BASE + r'/.*')
 _GCS_OPTIONS = ('x-goog-acl',
-                'x-goog-meta-')
+                'x-goog-meta-',
+                'content-disposition',
+                'cache-control')
 CS_XML_NS = 'http://doc.s3.amazonaws.com/2006-03-01'
 LOCAL_API_HOST = 'gcs-magicstring.appspot.com'
 _access_token = ''
@@ -92,8 +94,8 @@ class GCSFileStat(object):
       etag: hex digest of the md5 hash of the file's content. str.
       st_ctime: posix file creation time. float compatible.
       content_type: content type. str.
-      metadata: a str->str dict of user specified metadata from the
-        x-goog-meta header, e.g. {'x-goog-meta-foo': 'foo'}.
+      metadata: a str->str dict of user specified options when creating
+        the file. See options parameter in cloudstorage.open.
     """
     self.filename = filename
     self.st_size = long(st_size)
@@ -122,9 +124,9 @@ CSFileStat = GCSFileStat
 
 
 def get_metadata(headers):
-  """Get user defined metadata from HTTP response headers."""
+  """Get user defined options from HTTP response headers."""
   return dict((k, v) for k, v in headers.iteritems()
-              if k.startswith('x-goog-meta-'))
+              if any(k.lower().startswith(valid) for valid in _GCS_OPTIONS))
 
 
 def validate_bucket_name(name):

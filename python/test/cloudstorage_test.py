@@ -57,7 +57,10 @@ class CloudStorageTest(unittest.TestCase):
                           'w',
                           'text/plain',
                           {'x-goog-meta-foo': 'foo',
-                           'x-goog-meta-bar': 'bar'})
+                           'x-goog-meta-bar': 'bar',
+                           'x-goog-acl': 'public-read',
+                           'cache-control': 'public, max-age=6000',
+                           'content-disposition': 'attachment; filename=f.txt'})
     for content in DEFAULT_CONTENT:
       f.write(content)
     f.close()
@@ -217,6 +220,13 @@ class CloudStorageTest(unittest.TestCase):
     self.assertEqual('text/plain', filestat.content_type)
     self.assertEqual('foo', filestat.metadata['x-goog-meta-foo'])
     self.assertEqual('bar', filestat.metadata['x-goog-meta-bar'])
+    self.assertEqual('public, max-age=6000', filestat.metadata['cache-control'])
+    self.assertEqual(
+        'attachment; filename=f.txt',
+        filestat.metadata['content-disposition'])
+    self.assertEqual(
+        'public-read',
+        filestat.metadata['x-goog-acl'])
     self.assertEqual(TESTFILE, filestat.filename)
     self.assertEqual(hashlib.md5(content).hexdigest(), filestat.etag)
     self.assertTrue(math.floor(self.start_time) <= filestat.st_ctime)
