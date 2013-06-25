@@ -62,14 +62,14 @@ class CloudStorageTest(unittest.TestCase):
       f.write(content)
     f.close()
 
-  def testRename(self):
+  def testCopy2(self):
     with cloudstorage.open(TESTFILE, 'w',
                            'text/foo', {'x-goog-meta-foo': 'foo'}) as f:
       f.write('abcde')
 
     dst = TESTFILE + 'copy'
     self.assertRaises(cloudstorage.NotFoundError, cloudstorage.stat, dst)
-    cloudstorage_api._rename(TESTFILE, dst)
+    cloudstorage_api._copy2(TESTFILE, dst)
 
     src_stat = cloudstorage.stat(TESTFILE)
     dst_stat = cloudstorage.stat(dst)

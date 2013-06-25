@@ -127,10 +127,10 @@ def stat(filename, retry_params=None, _account_id=None):
   return file_stat
 
 
-def _rename(src, dst, retry_params=None):
-  """Rename the file src to dst.
+def _copy2(src, dst, retry_params=None):
+  """Copy the file content and metadata from src to dst.
 
-  Internal use only! Metadata is also copied.
+  Internal use only!
 
   Args:
     src: /bucket/filename
