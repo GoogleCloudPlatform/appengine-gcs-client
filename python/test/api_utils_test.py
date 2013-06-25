@@ -134,17 +134,15 @@ class RetryFetchTest(unittest.TestCase):
     self.results.append(apiproxy_errors.Error())
     self.results.append(test_utils.MockUrlFetchResult(httplib.ACCEPTED,
                                                       None, None))
-    with mock.patch('google.appengine.api.urlfetch'
-                    '.fetch') as f:
+    with mock.patch.object(api_utils.urlfetch, 'fetch') as f:
       f.side_effect = self._SideEffect
       self.assertEqual(httplib.ACCEPTED,
                        api_utils._retry_fetch('foo', self.retry_params,
                                               deadline=1000).status_code)
-      f.assertEqual(1000, f.call_args[1]['deadline'])
+      self.assertEqual(1000, f.call_args[1]['deadline'])
 
   def testRetryFailWithUrlfetchTimeOut(self):
-    with mock.patch('google.appengine.api.urlfetch'
-                    '.fetch') as f:
+    with mock.patch.object(api_utils.urlfetch, 'fetch') as f:
       f.side_effect = urlfetch.DownloadError
       try:
         api_utils._retry_fetch('foo', self.retry_params)
@@ -156,8 +154,7 @@ class RetryFetchTest(unittest.TestCase):
     self.results.extend([urlfetch.DownloadError()] * (self.max_retries - 1))
     self.results.append(test_utils.MockUrlFetchResult(httplib.REQUEST_TIMEOUT,
                                                       None, None))
-    with mock.patch('google.appengine.api.urlfetch'
-                    '.fetch') as f:
+    with mock.patch.object(api_utils.urlfetch, 'fetch') as f:
       f.side_effect = self._SideEffect
       self.assertEqual(
           httplib.REQUEST_TIMEOUT,
