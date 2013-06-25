@@ -75,6 +75,10 @@ class _StorageApi(rest_api._RestApi):
 
     This method translates urlfetch exceptions to more service specific ones.
     """
+    if headers is None:
+      headers = {}
+    if 'x-goog-api-version' not in headers:
+      headers['x-goog-api-version'] = '2'
     try:
       resp_tuple = yield super(_StorageApi, self).do_request_async(
           url, method=method, headers=headers, payload=payload,

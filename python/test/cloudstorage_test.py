@@ -18,9 +18,11 @@ from google.appengine.ext.cloudstorage import stub_dispatcher
 
 try:
   import cloudstorage
+  from cloudstorage import cloudstorage_api
   from cloudstorage import errors
 except ImportError:
   from google.appengine.ext import cloudstorage
+  from google.appengine.ext.cloudstorage import cloudstorage_api
   from google.appengine.ext.cloudstorage import errors
 
 BUCKET = '/bucket'
@@ -59,6 +61,28 @@ class CloudStorageTest(unittest.TestCase):
     for content in DEFAULT_CONTENT:
       f.write(content)
     f.close()
+
+  def testRename(self):
+    with cloudstorage.open(TESTFILE, 'w',
+                           'text/foo', {'x-goog-meta-foo': 'foo'}) as f:
+      f.write('abcde')
+
+    dst = TESTFILE + 'copy'
+    self.assertRaises(cloudstorage.NotFoundError, cloudstorage.stat, dst)
+    cloudstorage_api._rename(TESTFILE, dst)
+
+    src_stat = cloudstorage.stat(TESTFILE)
+    dst_stat = cloudstorage.stat(dst)
+    self.assertEqual(src_stat.st_size, dst_stat.st_size)
+    self.assertEqual(src_stat.etag, dst_stat.etag)
+    self.assertEqual(src_stat.content_type, dst_stat.content_type)
+    self.assertEqual(src_stat.metadata, dst_stat.metadata)
+
+    with cloudstorage.open(dst) as f:
+      self.assertEqual('abcde', f.read())
+
+    cloudstorage.delete(dst)
+    cloudstorage.delete(TESTFILE)
 
   def testDelete(self):
     self.assertRaises(errors.NotFoundError, cloudstorage.delete, TESTFILE)

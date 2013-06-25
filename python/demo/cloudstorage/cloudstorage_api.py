@@ -127,6 +127,34 @@ def stat(filename, retry_params=None, _account_id=None):
   return file_stat
 
 
+def _rename(src, dst, retry_params=None):
+  """Rename the file src to dst.
+
+  Internal use only! Metadata is also copied.
+
+  Args:
+    src: /bucket/filename
+    dst: /bucket/filename
+    retry_params: An api_utils.RetryParams for this call to GCS. If None,
+      the default one is used.
+
+  Raises:
+    errors.AuthorizationError: if authorization failed.
+    errors.NotFoundError: if an object that's expected to exist doesn't.
+  """
+  common.validate_file_path(src)
+  common.validate_file_path(dst)
+  if src == dst:
+    return
+
+  api = _get_storage_api(retry_params=retry_params)
+  status, headers, _ = api.put_object(
+      dst,
+      headers={'x-goog-copy-source': src,
+               'Content-Length': '0'})
+  errors.check_status(status, [200], headers)
+
+
 def listbucket(bucket, marker=None, prefix=None, max_keys=None,
                retry_params=None, _account_id=None):
   """Return an GCSFileStat iterator over files in the given bucket.
