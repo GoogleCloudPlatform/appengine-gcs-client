@@ -13,12 +13,13 @@ my_default_retry_params = gcs.RetryParams(initial_delay=0.2,
                                           max_retry_period=15)
 gcs.set_default_retry_params(my_default_retry_params)
 
+BUCKET = '/yey-cloud-storage-trial'
+
 
 class MainPage(webapp2.RequestHandler):
 
   def get(self):
-    bucket = '/yey-cloud-storage-trial'
-    filename = bucket + '/demo-testfile'
+    filename = BUCKET + '/demo-testfile'
 
     self.response.headers['Content-Type'] = 'text/plain'
     self.tmp_filenames_to_clean_up = []
@@ -32,7 +33,7 @@ class MainPage(webapp2.RequestHandler):
     self.stat_file(filename)
     self.response.write('\n\n')
 
-    self.list_bucket(bucket)
+    self.list_bucket(BUCKET)
     self.response.write('\n\n')
 
     self.delete_files()
