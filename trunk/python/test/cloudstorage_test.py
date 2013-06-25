@@ -6,6 +6,7 @@ from __future__ import with_statement
 
 
 
+import gzip
 import hashlib
 import math
 import os
@@ -64,6 +65,25 @@ class CloudStorageTest(unittest.TestCase):
     for content in DEFAULT_CONTENT:
       f.write(content)
     f.close()
+
+  def testGzip(self):
+    with cloudstorage.open(TESTFILE, 'w', 'text/plain',
+                           {'content-encoding': 'gzip'}) as f:
+      gz = gzip.GzipFile('', 'wb', 9, f)
+      gz.write('a'*1024)
+      gz.write('b'*1024)
+      gz.close()
+
+    stat = cloudstorage.stat(TESTFILE)
+    self.assertEqual('text/plain', stat.content_type)
+    self.assertEqual('gzip', stat.metadata['content-encoding'])
+    self.assertTrue(stat.st_size < 1024*2)
+
+    with cloudstorage.open(TESTFILE) as f:
+      gz = gzip.GzipFile('', 'rb', 9, f)
+      result = gz.read(10)
+      self.assertEqual('a'*10, result)
+      self.assertEqual('a'*1014 + 'b'*1024, gz.read())
 
   def testCopy2(self):
     with cloudstorage.open(TESTFILE, 'w',
@@ -224,9 +244,6 @@ class CloudStorageTest(unittest.TestCase):
     self.assertEqual(
         'attachment; filename=f.txt',
         filestat.metadata['content-disposition'])
-    self.assertEqual(
-        'public-read',
-        filestat.metadata['x-goog-acl'])
     self.assertEqual(TESTFILE, filestat.filename)
     self.assertEqual(hashlib.md5(content).hexdigest(), filestat.etag)
     self.assertTrue(math.floor(self.start_time) <= filestat.st_ctime)
