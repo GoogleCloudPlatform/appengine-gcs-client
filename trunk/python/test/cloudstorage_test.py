@@ -20,10 +20,12 @@ from google.appengine.ext.cloudstorage import stub_dispatcher
 try:
   import cloudstorage
   from cloudstorage import cloudstorage_api
+  from google.appengine.ext.cloudstorage import cloudstorage_stub
   from cloudstorage import errors
 except ImportError:
   from google.appengine.ext import cloudstorage
   from google.appengine.ext.cloudstorage import cloudstorage_api
+  from google.appengine.ext.cloudstorage import cloudstorage_stub
   from google.appengine.ext.cloudstorage import errors
 
 BUCKET = '/bucket'
@@ -248,6 +250,13 @@ class CloudStorageTest(unittest.TestCase):
     self.assertEqual(hashlib.md5(content).hexdigest(), filestat.etag)
     self.assertTrue(math.floor(self.start_time) <= filestat.st_ctime)
     self.assertTrue(filestat.st_ctime <= time.time())
+
+  def testDefaultContentType(self):
+    with cloudstorage.open(TESTFILE, 'w') as f:
+      f.write('foo')
+    filestat = cloudstorage.stat(TESTFILE)
+    self.assertEqual(cloudstorage_stub._GCS_DEFAULT_CONTENT_TYPE,
+                     filestat.content_type)
 
   def testListBucket(self):
     bars = [BUCKET + '/test/bar' + str(i) for i in range(3)]
