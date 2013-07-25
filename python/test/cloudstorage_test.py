@@ -68,6 +68,18 @@ class CloudStorageTest(unittest.TestCase):
       f.write(content)
     f.close()
 
+  def testFilenameEscaping(self):
+    name = BUCKET + '/a b/c d/*%$'
+    with cloudstorage.open(name, 'w') as f:
+      f.write('foo')
+    with cloudstorage.open(name) as f:
+      self.assertEqual('foo', f.read())
+    self.assertEqual(name, cloudstorage.stat(name).filename)
+    bucket = cloudstorage.listbucket(BUCKET)
+    for stat in bucket:
+      self.assertEqual(name, stat.filename)
+    cloudstorage.delete(name)
+
   def testGzip(self):
     with cloudstorage.open(TESTFILE, 'w', 'text/plain',
                            {'content-encoding': 'gzip'}) as f:
