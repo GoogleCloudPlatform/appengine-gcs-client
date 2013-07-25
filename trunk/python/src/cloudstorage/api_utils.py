@@ -15,6 +15,7 @@ import math
 import os
 import threading
 import time
+import urllib
 
 
 try:
@@ -52,6 +53,18 @@ def _get_default_retry_params():
     return RetryParams()
   else:
     return copy.copy(default)
+
+
+def _quote_filename(filename):
+  """Quotes filename to use as a valid URI path.
+
+  Args:
+    filename: user provided filename. /bucket/filename.
+
+  Returns:
+    The filename properly quoted to use as URI's path component.
+  """
+  return urllib.quote(filename)
 
 
 def _should_retry(resp):
@@ -218,14 +231,13 @@ def _retry_fetch(url, retry_params, **kwds):
       break
     elif resp:
       logging.info(
-          'Got status %s from GCS. Will retry in %s seconds.',
-          resp.status_code, delay)
+          'Got status %s from GCS when fetching with url %s. '
+          'Will retry in %s seconds.',
+          resp.status_code, url, delay)
     else:
       logging.info(
-          'Got exception while contacting GCS. Will retry in %s seconds.',
-          delay)
-      logging.info(e)
-    logging.debug('Tried to reach url %s', url)
+          'Got exception "%r" while contacting GCS. Will retry in %s seconds.',
+          e, delay)
 
   if resp:
     return resp

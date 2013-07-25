@@ -7,6 +7,7 @@ import os
 import threading
 import time
 import unittest
+import urllib
 
 import mock
 
@@ -20,6 +21,21 @@ try:
 except ImportError:
   from google.appengine.ext.cloudstorage import api_utils
   from google.appengine.ext.cloudstorage import test_utils
+
+
+class FilenameEscapingTest(unittest.TestCase):
+  """Tests for _quote_filename."""
+
+  def testEscaping(self):
+    filename = '/bucket/foo'
+    self.assertEqual(filename, api_utils._quote_filename(filename))
+
+    filename = '/bucket._-bucket/foo'
+    self.assertEqual(filename, api_utils._quote_filename(filename))
+
+    filename = '/bucket/a ;/?:@&=+$,'
+    self.assertEqual('/bucket/a%20%3B/%3F%3A%40%26%3D%2B%24%2C',
+                     api_utils._quote_filename(filename))
 
 
 class RetryParamsTest(unittest.TestCase):

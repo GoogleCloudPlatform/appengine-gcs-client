@@ -16,6 +16,7 @@ __all__ = ['delete',
 
 import urllib
 import xml.etree.ElementTree as ET
+from . import api_utils
 from . import common
 from . import errors
 from . import storage_api
@@ -64,6 +65,7 @@ def open(filename,
   """
   common.validate_file_path(filename)
   api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
+  filename = api_utils._quote_filename(filename)
 
   if mode == 'w':
     common.validate_options(options)
@@ -93,6 +95,7 @@ def delete(filename, retry_params=None, _account_id=None):
   """
   api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
   common.validate_file_path(filename)
+  filename = api_utils._quote_filename(filename)
   status, _, _ = api.delete_object(filename)
   errors.check_status(status, [204])
 
@@ -115,7 +118,7 @@ def stat(filename, retry_params=None, _account_id=None):
   """
   common.validate_file_path(filename)
   api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
-  status, headers, _ = api.head_object(filename)
+  status, headers, _ = api.head_object(api_utils._quote_filename(filename))
   errors.check_status(status, [200])
   file_stat = common.GCSFileStat(
       filename=filename,
@@ -150,7 +153,7 @@ def _copy2(src, dst, retry_params=None):
 
   api = _get_storage_api(retry_params=retry_params)
   status, headers, _ = api.put_object(
-      dst,
+      api_utils._quote_filename(dst),
       headers={'x-goog-copy-source': src,
                'Content-Length': '0'})
   errors.check_status(status, [200], headers)
