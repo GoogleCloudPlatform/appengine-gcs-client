@@ -183,6 +183,26 @@ class CloudStorageTest(unittest.TestCase):
     self.assertEqual('fghij', f.read())
     f.close()
 
+  def testReadIterator(self):
+    content = 'ab\n\ncd\nef\ng'
+    with cloudstorage.open(TESTFILE, 'w') as f:
+      f.write(content)
+
+    f = cloudstorage.open(TESTFILE)
+    lines = [line for line in f]
+    self.assertEqual(content, ''.join(lines))
+
+    lines = [line for line in f]
+    self.assertEqual([], lines)
+
+    f.seek(0)
+    lines = [line for line in f]
+    self.assertEqual(content, ''.join(lines))
+
+    with cloudstorage.open(TESTFILE) as f:
+      lines = [line for line in f]
+      self.assertEqual(content, ''.join(lines))
+
   def testWriteRead(self):
     f = cloudstorage.open(TESTFILE, 'w')
     f.write('a')
