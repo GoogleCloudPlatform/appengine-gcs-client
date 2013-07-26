@@ -208,10 +208,6 @@ def _retry_fetch(url, retry_params, **kwds):
   if delay <= 0:
     return
 
-  deadline = kwds.get('deadline', None)
-  if deadline is None:
-    kwds['deadline'] = retry_params.urlfetch_timeout
-
   while delay > 0:
     resp = None
     try:

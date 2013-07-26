@@ -212,6 +212,24 @@ class RestApiTest(unittest.TestCase):
     res = pickled_api.do_request('http://example.com')
     self.assertEqual(res, (200, {'foo': 'bar'}, 'yoohoo'))
 
+  def testUrlFetchCalledWithUserProvidedDeadline(self):
+    retry_params = api_utils.RetryParams(urlfetch_timeout=90)
+    api = rest_api._RestApi('scope', retry_params=retry_params)
+
+    fut = ndb.Future()
+    fut.set_exception(urlfetch.DownloadError())
+    ndb.Context.urlfetch = mock.create_autospec(
+        ndb.Context.urlfetch,
+        return_value=fut)
+
+    with mock.patch('google.appengine.api.urlfetch'
+                    '.fetch') as f:
+      f.return_value = test_utils.MockUrlFetchResult(httplib.ACCEPTED,
+                                                     None, None)
+      self.assertEqual(httplib.ACCEPTED, api.do_request('foo')[0])
+      self.assertEqual(90, f.call_args[1]['deadline'])
+      self.assertEqual(90, ndb.Context.urlfetch.call_args[1]['deadline'])
+
   def testRetryAfterDoRequestUrlFetchTimeout(self):
     api = rest_api._RestApi('scope')
 
