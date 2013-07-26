@@ -214,6 +214,26 @@ class ReadBuffer(object):
     else:
       self._buffer_future = None
 
+  def __iter__(self):
+    """Iterator interface.
+
+    Note the ReadBuffer container itself is the iterator. It's
+    (quote PEP0234)
+    'destructive: they consumes all the values and a second iterator
+    cannot easily be created that iterates independently over the same values.
+    You could open the file for the second time, or seek() to the beginning.'
+
+    Returns:
+      Self.
+    """
+    return self
+
+  def next(self):
+    line = self.readline()
+    if not line:
+      raise StopIteration()
+    return line
+
   def readline(self, size=-1):
     """Read one line delimited by '\n' from the file.
 
