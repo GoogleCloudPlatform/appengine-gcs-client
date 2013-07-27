@@ -204,7 +204,7 @@ final class OauthRawGcsService implements RawGcsService {
       req.setHeader(new HTTPHeader(CACHE_CONTROL, options.getCacheControl()));
     }
     if (options.getContentDisposition() != null) {
-      req.setHeader(new HTTPHeader(CONTENT_DISPOSITION, options.getCacheControl()));
+      req.setHeader(new HTTPHeader(CONTENT_DISPOSITION, options.getContentDisposition()));
     }
     if (options.getContentEncoding() != null) {
       req.setHeader(new HTTPHeader(CONTENT_ENCODING, options.getContentEncoding()));
