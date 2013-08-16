@@ -154,7 +154,7 @@ class ReadBuffer(object):
       max_request_size: Max bytes to request in one urlfetch.
     """
     self._api = api
-    self._path = path
+    self.name = path
     self._max_buffer_size = max_buffer_size
     self._max_request_size = max_request_size
     self._offset = 0
@@ -183,7 +183,8 @@ class ReadBuffer(object):
       A dictionary with the state of this object
     """
     return {'api': self._api,
-            'path': self._path,
+            'path': self.name,
+            'name': self.name,
             'buffer_size': self._max_buffer_size,
             'request_size': self._max_request_size,
             'etag': self._etag,
@@ -200,7 +201,10 @@ class ReadBuffer(object):
     Along with restoring the state, pre-fetch the next read buffer.
     """
     self._api = state['api']
-    self._path = state['path']
+    if 'name' in state:
+      self.name = state['name']
+    else:
+      self.name = state['path']
     self._max_buffer_size = state['buffer_size']
     self._max_request_size = state['request_size']
     self._etag = state['etag']
@@ -403,7 +407,7 @@ class ReadBuffer(object):
     end = start + request_size - 1
     content_range = '%d-%d' % (start, end)
     headers = {'Range': 'bytes=' + content_range}
-    status, headers, content = yield self._api.get_object_async(self._path,
+    status, headers, content = yield self._api.get_object_async(self.name,
                                                                 headers=headers)
     errors.check_status(status, [200, 206], headers)
     self._check_etag(headers.get('etag'))
@@ -534,7 +538,7 @@ class StreamingBuffer(object):
     assert self._maxrequestsize % self._blocksize == 0
 
     self._api = api
-    self._path = path
+    self.name = path
 
     self._buffer = collections.deque()
     self._buffered = 0
@@ -554,7 +558,7 @@ class StreamingBuffer(object):
     if not loc:
       raise IOError('No location header found in 201 response')
     parsed = urlparse.urlparse(loc)
-    self._path_with_token = '%s?%s' % (self._path, parsed.query)
+    self._path_with_token = '%s?%s' % (self.name, parsed.query)
 
   def __getstate__(self):
     """Store state as part of serialization/pickling.
@@ -569,6 +573,7 @@ class StreamingBuffer(object):
 
     """
     return {'api': self._api,
+            'name': self.name,
             'path_token': self._path_with_token,
             'buffer': self._buffer,
             'buffered': self._buffered,
@@ -589,6 +594,7 @@ class StreamingBuffer(object):
     self._written = state['written']
     self._offset = state['offset']
     self._closed = state['closed']
+    self.name = state.get('name', None)
 
   def write(self, data):
     """Write some bytes."""
