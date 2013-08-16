@@ -57,20 +57,22 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
   private void readObject(ObjectInputStream aInputStream)
       throws ClassNotFoundException, IOException {
     aInputStream.defaultReadObject();
-    lock = new Object();
-    raw = GcsServiceFactory.createRawGcsService();
-    buf = ByteBuffer.allocate(getBufferSize(raw.getChunkSizeBytes()));
-    int length = aInputStream.readInt();
-    if (length > buf.capacity()) {
-      throw new IllegalArgumentException(
-          "Size of buffer is smaller than initial contents: " + length);
-    }
-    if (length > 0) {
-      byte[] initialBuffer = new byte[length];
-      for (int pos = 0; pos < length;) {
-        pos += aInputStream.read(initialBuffer, pos, length - pos);
+    this.lock = new Object();
+    this.raw = GcsServiceFactory.createRawGcsService();
+    if (this.token != null) {
+      this.buf = ByteBuffer.allocate(getBufferSize(this.raw.getChunkSizeBytes()));
+      int length = aInputStream.readInt();
+      if (length > this.buf.capacity()) {
+        throw new IllegalArgumentException(
+            "Size of buffer is smaller than initial contents: " + length);
       }
-      buf.put(initialBuffer);
+      if (length > 0) {
+        byte[] initialBuffer = new byte[length];
+        for (int pos = 0; pos < length;) {
+          pos += aInputStream.read(initialBuffer, pos, length - pos);
+        }
+        this.buf.put(initialBuffer);
+      }
     }
   }
 
@@ -78,7 +80,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
     aOutputStream.defaultWriteObject();
     int length = buf.position();
     aOutputStream.writeInt(length);
-    if (length > 0) {
+    if (length > 0 && isOpen()) {
       buf.rewind();
       byte[] toWrite = new byte[length];
       buf.get(toWrite);
@@ -99,6 +101,9 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
 
   @Override
   public int getBufferSizeBytes() {
+    if (buf == null) {
+      return getBufferSize(raw.getChunkSizeBytes());
+    }
     return buf.capacity();
   }
 
@@ -193,6 +198,9 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
   @Override
   public void waitForOutstandingWrites() throws ClosedByInterruptException, IOException {
     synchronized (lock) {
+      if (!isOpen()) {
+        return;
+      }
       int chunkSize = raw.getChunkSizeBytes();
       int position = buf.position();
       int bytesToWrite = (position / chunkSize) * chunkSize;

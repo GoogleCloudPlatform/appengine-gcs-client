@@ -95,9 +95,11 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
     this.fetchPosition = readPosition;
     this.current = EMPTY_BUFFER;
     this.eofHit = length != -1 && readPosition >= length;
-    this.next = ByteBuffer.allocate(blockSizeBytes);
-    this.pendingFetch =
-        raw.readObjectAsync(next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
+    if (!closed) {
+      this.next = ByteBuffer.allocate(blockSizeBytes);
+      this.pendingFetch =
+          raw.readObjectAsync(next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
+    }
   }
 
   @Override
