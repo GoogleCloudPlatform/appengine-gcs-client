@@ -17,6 +17,7 @@
 package com.google.appengine.tools.cloudstorage;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
@@ -83,6 +84,9 @@ public class GcsOutputChannelTest {
       outputChannel = reconstruct(outputChannel);
     }
     outputChannel.close();
+    outputChannel = reconstruct(outputChannel);
+    assertFalse(outputChannel.isOpen());
+    outputChannel = reconstruct(outputChannel);
   }
 
   /**

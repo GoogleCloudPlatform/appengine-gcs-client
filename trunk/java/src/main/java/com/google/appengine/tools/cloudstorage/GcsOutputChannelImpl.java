@@ -78,7 +78,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
 
   private void writeObject(ObjectOutputStream aOutputStream) throws IOException {
     aOutputStream.defaultWriteObject();
-    int length = buf.position();
+    int length = (buf == null) ? 0 : buf.position();
     aOutputStream.writeInt(length);
     if (length > 0 && isOpen()) {
       buf.rewind();
