@@ -292,9 +292,15 @@ def posix_to_dt_str(posix):
 
 
 def local_run():
-  """Whether running in dev appserver."""
-  return ('SERVER_SOFTWARE' not in os.environ or
-          os.environ['SERVER_SOFTWARE'].startswith('Development'))
+  """Whether we should hit GCS dev appserver stub."""
+  server_software = os.environ.get('SERVER_SOFTWARE')
+  if server_software is None:
+    return True
+  if 'remote_api' in server_software:
+    return False
+  if server_software.startswith('Development'):
+    return True
+  return False
 
 
 def memory_usage(method):
