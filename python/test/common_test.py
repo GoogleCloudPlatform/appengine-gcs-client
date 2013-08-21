@@ -19,6 +19,34 @@ except ImportError:
 from google.appengine.tools import remote_api_shell
 
 
+class GCSFileStatTest(unittest.TestCase):
+  """Test for GCSFileStat."""
+
+  def testValidation(self):
+    self.assertRaises(ValueError, common.GCSFileStat,
+                      '/bucket/file',
+                      st_size='',
+                      etag='',
+                      st_ctime=1)
+    self.assertRaises(ValueError, common.GCSFileStat,
+                      '/bucket/file',
+                      st_size=1,
+                      etag='',
+                      st_ctime='')
+    common.GCSFileStat('/bucket/file', st_size=None, etag=None, st_ctime=None,
+                       is_dir=True)
+
+  def testCmp(self):
+    a = common.GCSFileStat('/bucket/a', st_size=1, etag='a', st_ctime=1)
+    a_copy = common.GCSFileStat('/bucket/a', st_size=1, etag='a', st_ctime=1)
+    b = common.GCSFileStat('/bucket/b', st_size=1, etag='a', st_ctime=1)
+    c = 'c'
+
+    self.assertTrue(a < b)
+    self.assertTrue(a == a_copy)
+    self.assertRaises(ValueError, lambda: a < c)
+
+
 class HelpersTest(unittest.TestCase):
   """Test for common helpers."""
 
@@ -41,6 +69,12 @@ class HelpersTest(unittest.TestCase):
     common.validate_file_path('/bucket/file')
     common.validate_file_path('/bucket/dir/dir2/file')
     common.validate_file_path('/bucket/dir/dir2/file' + 'c' * 64)
+
+  def testProcessPathPrefix(self):
+    self.assertEqual(('/bucket', None), common._process_path_prefix('/bucket'))
+    self.assertEqual(('/bucket', None), common._process_path_prefix('/bucket/'))
+    self.assertEqual(('/bucket', 'prefix/'),
+                     common._process_path_prefix('/bucket/prefix/'))
 
   def testValidateGcsOptions(self):
     self.assertRaises(TypeError, common.validate_options, {1: 'foo'})

@@ -14,12 +14,14 @@ __all__ = ['delete',
            'stat',
           ]
 
+import StringIO
 import urllib
-import xml.etree.ElementTree as ET
+import xml.etree.cElementTree as ET
 from . import api_utils
 from . import common
 from . import errors
 from . import storage_api
+
 
 
 def open(filename,
@@ -159,37 +161,79 @@ def _copy2(src, dst, retry_params=None):
   errors.check_status(status, [200], headers)
 
 
-def listbucket(bucket, marker=None, prefix=None, max_keys=None,
-               retry_params=None, _account_id=None):
-  """Return an GCSFileStat iterator over files in the given bucket.
+def listbucket(path_prefix, marker=None, prefix=None, max_keys=None,
+               delimiter=None, retry_params=None, _account_id=None):
+  """Returns a GCSFileStat iterator over a bucket.
 
-  Optional arguments are to limit the result to a subset of files under bucket.
+  Optional arguments can limit the result to a subset of files under bucket.
 
-  This function is asynchronous. It does not block unless iterator is called
-  before the iterator gets result.
+  This function has two modes:
+  1. List bucket mode: Lists all files in the bucket without any concept of
+     hierarchy. GCS doesn't have real directory hierarchies.
+  2. Directory emulation mode: If you specify the 'delimiter' argument,
+     it is used as a path separator to emulate a hierarchy of directories.
+     In this mode, the "path_prefix" argument should end in the delimiter
+     specified (thus designates a logical directory). The logical directory's
+     contents, both files and subdirectories, are listed. The names of
+     subdirectories returned will end with the delimiter. So listbucket
+     can be called with the subdirectory name to list the subdirectory's
+     contents.
 
   Args:
-    bucket: A Google Cloud Storage bucket of form "/bucket".
-    marker: A string after which (exclusive) to start listing.
-    prefix: Limits the returned filenames to those with this prefix. no regex.
-    max_keys: The maximum number of filenames to match. int.
+    path_prefix: A Google Cloud Storage path of format "/bucket" or
+      "/bucket/prefix". Only objects whose fullpath starts with the
+      path_prefix will be returned.
+    marker: Another path prefix. Only objects whose fullpath starts
+      lexicographically after marker will be returned (exclusive).
+    prefix: Deprecated. Use path_prefix.
+    max_keys: The limit on the number of objects to return. int.
+      For best performance, specify max_keys only if you know how many objects
+      you want. Otherwise, this method requests large batches and handles
+      pagination for you.
+    delimiter: Use to turn on directory mode. str of one or multiple chars
+      that your bucket uses as its directory separator.
     retry_params: An api_utils.RetryParams for this call to GCS. If None,
       the default one is used.
     _account_id: Internal-use only.
 
-  Example:
-    For files "/bucket/foo1", "/bucket/foo2", "/bucket/foo3", "/bucket/www",
-    listbucket("/bucket", prefix="foo", marker="foo1")
-    will match "/bucket/foo2" and "/bucket/foo3".
+  Examples:
+    For files "/bucket/a",
+              "/bucket/bar/1"
+              "/bucket/foo",
+              "/bucket/foo/1", "/bucket/foo/2/1", "/bucket/foo/3/1",
 
-    See Google Cloud Storage documentation for more details and examples.
-    https://developers.google.com/storage/docs/reference-methods#getbucket
+    Regular mode:
+    listbucket("/bucket/f", marker="/bucket/foo/1")
+    will match "/bucket/foo/2/1", "/bucket/foo/3/1".
+
+    Directory mode:
+    listbucket("/bucket/", delimiter="/")
+    will match "/bucket/a, "/bucket/bar/" "/bucket/foo", "/bucket/foo/".
+    listbucket("/bucket/foo/", delimiter="/")
+    will match "/bucket/foo/1", "/bucket/foo/2/", "/bucket/foo/3/"
 
   Returns:
-    An GSFileStat iterator over matched files, sorted by filename.
-    Only filename, etag, and st_size are set in these GSFileStat objects.
+    Regular mode:
+    A GCSFileStat iterator over matched files ordered by filename.
+    The iterator returns GCSFileStat objects. filename, etag, st_size,
+    st_ctime, and is_dir are set.
+
+    Directory emulation mode:
+    A GCSFileStat iterator over matched files and directories ordered by
+    name. The iterator returns GCSFileStat objects. For directories,
+    only the filename and is_dir fields are set.
+
+    The last name yielded can be used as next call's marker.
   """
-  common.validate_bucket_path(bucket)
+  if prefix:
+    common.validate_bucket_path(path_prefix)
+    bucket = path_prefix
+  else:
+    bucket, prefix = common._process_path_prefix(path_prefix)
+
+  if marker and marker.startswith(bucket):
+    marker = marker[len(bucket) + 1:]
+
   api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
   options = {}
   if marker:
@@ -198,6 +242,8 @@ def listbucket(bucket, marker=None, prefix=None, max_keys=None,
     options['max-keys'] = max_keys
   if prefix:
     options['prefix'] = prefix
+  if delimiter:
+    options['delimiter'] = delimiter
 
   return _Bucket(api, bucket, options)
 
@@ -219,10 +265,6 @@ class _Bucket(object):
     self._get_bucket_fut = self._api.get_bucket_async(
         self._path + '?' + urllib.urlencode(self._options))
 
-  def _add_ns(self, tagname):
-    return '{%(ns)s}%(tag)s' % {'ns': common.CS_XML_NS,
-                                'tag': tagname}
-
   def __iter__(self):
     """Iter over the bucket.
 
@@ -231,29 +273,119 @@ class _Bucket(object):
         They are ordered by GCSFileStat.filename.
     """
     total = 0
+    max_keys = None
+    if 'max-keys' in self._options:
+      max_keys = self._options['max-keys']
+
     while self._get_bucket_fut:
       status, _, content = self._get_bucket_fut.get_result()
       errors.check_status(status, [200])
-      root = ET.fromstring(content)
-      for contents in root.getiterator(self._add_ns('Contents')):
-        last_modified = contents.find(self._add_ns('LastModified')).text
-        st_ctime = common.dt_str_to_posix(last_modified)
-        yield common.GCSFileStat(
-            self._path + '/' + contents.find(self._add_ns('Key')).text,
-            contents.find(self._add_ns('Size')).text,
-            contents.find(self._add_ns('ETag')).text,
-            st_ctime)
-        total += 1
 
-      max_keys = root.find(self._add_ns('MaxKeys'))
-      next_marker = root.find(self._add_ns('NextMarker'))
-      if (max_keys is None or total < int(max_keys.text)) and (
-          next_marker is not None):
-        self._options['marker'] = next_marker.text
+      if self._should_get_another_batch(content):
         self._get_bucket_fut = self._api.get_bucket_async(
             self._path + '?' + urllib.urlencode(self._options))
       else:
         self._get_bucket_fut = None
+
+      root = ET.fromstring(content)
+      dirs = self._next_dir_gen(root)
+      files = self._next_file_gen(root)
+      next_file = files.next()
+      next_dir = dirs.next()
+
+      while ((max_keys is None or total < max_keys) and
+             not (next_file is None and next_dir is None)):
+        total += 1
+        if next_file is None:
+          yield next_dir
+          next_dir = dirs.next()
+        elif next_dir is None:
+          yield next_file
+          next_file = files.next()
+        elif next_dir < next_file:
+          yield next_dir
+          next_dir = dirs.next()
+        elif next_file < next_dir:
+          yield next_file
+          next_file = files.next()
+        else:
+          pass
+
+  def _next_file_gen(self, root):
+    for e in root.getiterator(common._T_CONTENTS):
+      st_ctime, size, etag, key = None, None, None, None
+      for child in e.getiterator('*'):
+        if child.tag == common._T_LAST_MODIFIED:
+          st_ctime = common.dt_str_to_posix(child.text)
+        elif child.tag == common._T_ETAG:
+          etag = child.text
+        elif child.tag == common._T_SIZE:
+          size = child.text
+        elif child.tag == common._T_KEY:
+          key = child.text
+      yield common.GCSFileStat(self._path + '/' + key,
+                               size, etag, st_ctime)
+      e.clear()
+    yield None
+
+  def _next_dir_gen(self, root):
+    for e in root.getiterator(common._T_COMMON_PREFIXES):
+      yield common.GCSFileStat(
+          self._path + '/' + e.find(common._T_PREFIX).text,
+          st_size=None, etag=None, st_ctime=None, is_dir=True)
+      e.clear()
+    yield None
+
+  def _should_get_another_batch(self, content):
+    """Whether to issue another GET bucket call.
+
+    Args:
+      content: response XML.
+
+    Returns:
+      True if should, also update self._options for the next request.
+      False otherwise.
+    """
+    if ('max-keys' in self._options and
+        self._options['max-keys'] <= common._MAX_GET_BUCKET_RESULT):
+      return False
+
+    elements = self._find_elements(
+        content, set([common._T_IS_TRUNCATED,
+                      common._T_NEXT_MARKER]))
+    if elements.get(common._T_IS_TRUNCATED, 'false').lower() != 'true':
+      return False
+
+    next_marker = elements.get(common._T_NEXT_MARKER)
+    if next_marker is None:
+      self._options.pop('marker', None)
+      return False
+    self._options['marker'] = next_marker
+    return True
+
+  def _find_elements(self, result, elements):
+    """Find interesting elements from XML.
+
+    This function tries to only look for specified elements
+    without parsing the entire XML. The specified elements is better
+    located near the beginning.
+
+    Args:
+      result: response XML.
+      elements: a set of interesting element tags.
+
+    Returns:
+      A dict from element tag to element value.
+    """
+    element_mapping = {}
+    result = StringIO.StringIO(result)
+    for _, e in ET.iterparse(result, events=('end',)):
+      if not elements:
+        break
+      if e.tag in elements:
+        element_mapping[e.tag] = e.text
+        elements.remove(e.tag)
+    return element_mapping
 
 
 def _get_storage_api(retry_params, account_id=None):
