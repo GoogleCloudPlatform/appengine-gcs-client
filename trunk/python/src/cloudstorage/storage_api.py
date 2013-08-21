@@ -14,6 +14,7 @@ import collections
 import os
 import urlparse
 
+from . import api_utils
 from . import errors
 from . import rest_api
 
@@ -23,6 +24,7 @@ try:
 except ImportError:
   from google.appengine.api import urlfetch
   from google.appengine.ext import ndb
+
 
 
 class _StorageApi(rest_api._RestApi):
@@ -125,7 +127,9 @@ class _StorageApi(rest_api._RestApi):
 
   def get_bucket_async(self, path, **kwds):
     """GET a bucket."""
-    return self.do_request_async(self.api_url + path, 'GET', **kwds)
+    fut = self.do_request_async(self.api_url + path, 'GET', **kwds)
+    api_utils._run_until_rpc()
+    return fut
 
 
 _StorageApi = rest_api.add_sync_methods(_StorageApi)

@@ -21,6 +21,7 @@ import urllib
 try:
   from google.appengine.api import urlfetch
   from google.appengine.datastore import datastore_rpc
+  from google.appengine.ext.ndb import eventloop
   from google.appengine import runtime
   from google.appengine.runtime import apiproxy_errors
 except ImportError:
@@ -28,6 +29,7 @@ except ImportError:
   from google.appengine.datastore import datastore_rpc
   from google.appengine import runtime
   from google.appengine.runtime import apiproxy_errors
+  from google.appengine.ext.ndb import eventloop
 
 
 _RETRIABLE_EXCEPTIONS = (urlfetch.DownloadError,
@@ -242,3 +244,25 @@ def _retry_fetch(url, retry_params, **kwds):
                n - 1, time.time() - start_time)
   raise
 
+
+def _run_until_rpc():
+  """Eagerly evaluate tasklets until it is blocking on some RPC.
+
+  Usually ndb eventloop el isn't run until some code calls future.get_result().
+
+  When an async tasklet is called, the tasklet wrapper evaluates the tasklet
+  code into a generator, enqueues a callback _help_tasklet_along onto
+  the el.current queue, and returns a future.
+
+  _help_tasklet_along, when called by the el, will
+  get one yielded value from the generator. If the value if another future,
+  set up a callback _on_future_complete to invoke _help_tasklet_along
+  when the dependent future fulfills. If the value if a RPC, set up a
+  callback _on_rpc_complete to invoke _help_tasklet_along when the RPC fulfills.
+  Thus _help_tasklet_along drills down
+  the the chain of futures until some future is blocked by RPC. El runs
+  all callbacks and constantly check pending RPC status.
+  """
+  el = eventloop.get_event_loop()
+  while el.current:
+    el.run0()

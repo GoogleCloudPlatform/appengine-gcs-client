@@ -15,17 +15,18 @@ import unittest
 
 from google.appengine.ext import testbed
 
-from google.appengine.ext.cloudstorage import stub_dispatcher
 
 try:
   import cloudstorage
   from cloudstorage import cloudstorage_api
   from google.appengine.ext.cloudstorage import cloudstorage_stub
+  from cloudstorage import common
   from cloudstorage import errors
 except ImportError:
   from google.appengine.ext import cloudstorage
   from google.appengine.ext.cloudstorage import cloudstorage_api
   from google.appengine.ext.cloudstorage import cloudstorage_stub
+  from google.appengine.ext.cloudstorage import common
   from google.appengine.ext.cloudstorage import errors
 
 BUCKET = '/bucket'
@@ -46,13 +47,13 @@ class CloudStorageTest(unittest.TestCase):
     self.testbed.init_datastore_v3_stub()
     self.testbed.init_memcache_stub()
     self.testbed.init_urlfetch_stub()
-    self._old_max_keys = stub_dispatcher._MAX_GET_BUCKET_RESULT
-    stub_dispatcher._MAX_GET_BUCKET_RESULT = 2
+    self._old_max_keys = common._MAX_GET_BUCKET_RESULT
+    common._MAX_GET_BUCKET_RESULT = 2
     self.start_time = time.time()
     cloudstorage.set_default_retry_params(None)
 
   def tearDown(self):
-    stub_dispatcher._MAX_GET_BUCKET_RESULT = self._old_max_keys
+    common._MAX_GET_BUCKET_RESULT = self._old_max_keys
     self.testbed.deactivate()
 
   def CreateFile(self, filename):
@@ -290,6 +291,17 @@ class CloudStorageTest(unittest.TestCase):
     self.assertEqual(cloudstorage_stub._GCS_DEFAULT_CONTENT_TYPE,
                      filestat.content_type)
 
+  def testListBucketCompatibility(self):
+    """Test listbucket's old interface still works."""
+    bars = [BUCKET + '/test/bar' + str(i) for i in range(3)]
+    foos = [BUCKET + '/test/foo' + str(i) for i in range(3)]
+    filenames = bars + foos
+    for filename in filenames:
+      self.CreateFile(filename)
+
+    bucket = cloudstorage.listbucket(BUCKET, prefix='test/', marker='test/foo')
+    self.assertEqual(foos, [stat.filename for stat in bucket])
+
   def testListBucket(self):
     bars = [BUCKET + '/test/bar' + str(i) for i in range(3)]
     foos = [BUCKET + '/test/foo' + str(i) for i in range(3)]
@@ -297,10 +309,10 @@ class CloudStorageTest(unittest.TestCase):
     for filename in filenames:
       self.CreateFile(filename)
 
-    bucket = cloudstorage.listbucket(BUCKET, prefix='test/')
+    bucket = cloudstorage.listbucket(BUCKET + '/test/')
     self.assertEqual(filenames, [stat.filename for stat in bucket])
 
-    bucket = cloudstorage.listbucket(BUCKET, prefix='test/', max_keys=1)
+    bucket = cloudstorage.listbucket(BUCKET + '/test/', max_keys=1)
     stats = list(bucket)
     self.assertEqual(1, len(stats))
     stat = stats[0]
@@ -309,14 +321,39 @@ class CloudStorageTest(unittest.TestCase):
     self.assertEqual(len(content), stat.st_size)
     self.assertEqual(hashlib.md5(content).hexdigest(), stat.etag)
 
-    bucket = cloudstorage.listbucket(BUCKET,
-                                     prefix='test/',
-                                     marker='test/foo0',
+    bucket = cloudstorage.listbucket(BUCKET + '/test/',
+                                     marker=BUCKET + '/test/foo0',
                                      max_keys=1)
     stats = [stat for stat in bucket]
     self.assertEqual(1, len(stats))
     stat = stats[0]
     self.assertEqual(foos[1], stat.filename)
+
+  def testListBucketWithDelimiter(self):
+    filenames = ['/bar',
+                 '/foo0', '/foo1',
+                 '/foo/a', '/foo/b/bb', '/foo/b/bbb', '/foo/c/c',
+                 '/foo1/a',
+                 '/foo2/a', '/foo2/b',
+                 '/foo3/a']
+    def FullyQualify(n):
+      return BUCKET + n
+    fullnames = [FullyQualify(n) for n in filenames]
+    for n in fullnames:
+      self.CreateFile(n)
+
+    bucket = cloudstorage.listbucket(BUCKET + '/foo',
+                                     delimiter='/',
+                                     max_keys=5)
+    expected = [FullyQualify(n) for n in ['/foo/', '/foo0', '/foo1',
+                                          '/foo1/', '/foo2/']]
+    self.assertEqual(expected, [stat.filename for stat in bucket])
+
+    bucket = cloudstorage.listbucket(BUCKET + '/foo/',
+                                     delimiter='/',
+                                     max_keys=2)
+    expected = [FullyQualify(n) for n in ['/foo/a', '/foo/b/']]
+    self.assertEqual(expected, [stat.filename for stat in bucket])
 
 
 if __name__ == '__main__':
