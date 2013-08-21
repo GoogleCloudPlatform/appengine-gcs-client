@@ -17,8 +17,11 @@
 package com.google.appengine.tools.cloudstorage;
 
 import com.google.appengine.api.utils.SystemProperty;
+import com.google.appengine.api.utils.SystemProperty.Environment.Value;
 import com.google.appengine.tools.cloudstorage.dev.LocalRawGcsServiceFactory;
 import com.google.appengine.tools.cloudstorage.oauth.OauthRawGcsServiceFactory;
+import com.google.apphosting.api.ApiProxy;
+import com.google.apphosting.api.ApiProxy.Delegate;
 
 /**
  * Provides implementations of {@link GcsService}.
@@ -34,10 +37,19 @@ public final class GcsServiceFactory {
 
   static RawGcsService createRawGcsService() {
     RawGcsService rawGcsService;
-    if (SystemProperty.environment.value() == SystemProperty.Environment.Value.Production) {
+    Value location = SystemProperty.environment.value();
+    if (location == SystemProperty.Environment.Value.Production) {
       rawGcsService = OauthRawGcsServiceFactory.createOauthRawGcsService();
-    } else {
+    } else if (location == SystemProperty.Environment.Value.Development) {
       rawGcsService = LocalRawGcsServiceFactory.createLocalRawGcsService();
+    } else {
+      Delegate<?> delegate = ApiProxy.getDelegate();
+      if (delegate != null
+          && delegate.getClass().getName().startsWith("com.google.appengine.tools.development")) {
+        rawGcsService = LocalRawGcsServiceFactory.createLocalRawGcsService();
+      } else {
+        rawGcsService = OauthRawGcsServiceFactory.createOauthRawGcsService();
+      }
     }
     return rawGcsService;
   }
