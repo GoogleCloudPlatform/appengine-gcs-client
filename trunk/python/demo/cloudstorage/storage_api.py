@@ -597,9 +597,17 @@ class StreamingBuffer(object):
     self.name = state.get('name', None)
 
   def write(self, data):
-    """Write some bytes."""
+    """Write some bytes.
+
+    Args:
+      data: data to write. str.
+
+    Raises:
+      TypeError: if data is not of type str.
+    """
     self._check_open()
-    assert isinstance(data, str)
+    if not isinstance(data, str):
+      raise TypeError('Expected str but got %s.' % type(data))
     if not data:
       return
     self._buffer.append(data)
