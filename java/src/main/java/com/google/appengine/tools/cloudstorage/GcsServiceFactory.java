@@ -44,8 +44,8 @@ public final class GcsServiceFactory {
       rawGcsService = LocalRawGcsServiceFactory.createLocalRawGcsService();
     } else {
       Delegate<?> delegate = ApiProxy.getDelegate();
-      if (delegate != null
-          && delegate.getClass().getName().startsWith("com.google.appengine.tools.development")) {
+      if (delegate == null
+          || delegate.getClass().getName().startsWith("com.google.appengine.tools.development")) {
         rawGcsService = LocalRawGcsServiceFactory.createLocalRawGcsService();
       } else {
         rawGcsService = OauthRawGcsServiceFactory.createOauthRawGcsService();
