@@ -10,6 +10,7 @@ import gzip
 import hashlib
 import math
 import os
+import pickle
 import time
 import unittest
 
@@ -34,6 +35,76 @@ TESTFILE = BUCKET + '/testfile'
 DEFAULT_CONTENT = ['a'*1024*257,
                    'b'*1024*257,
                    'c'*1024*257]
+
+
+class IrregularPatternTest(unittest.TestCase):
+  """Invoke APIs in some unusual pattern.
+
+  Mostly to test behaviors replied by MapReduce.
+  """
+
+  def setUp(self):
+    self.testbed = testbed.Testbed()
+    self.testbed.activate()
+    self.testbed.init_app_identity_stub()
+    self.testbed.init_blobstore_stub()
+    self.testbed.init_datastore_v3_stub()
+    self.testbed.init_memcache_stub()
+    self.testbed.init_urlfetch_stub()
+    self._old_max_keys = common._MAX_GET_BUCKET_RESULT
+    common._MAX_GET_BUCKET_RESULT = 2
+    self.start_time = time.time()
+    cloudstorage.set_default_retry_params(None)
+
+  def tearDown(self):
+    common._MAX_GET_BUCKET_RESULT = self._old_max_keys
+    self.testbed.deactivate()
+
+  def testNoEffectAfterClose(self):
+    """Test file ops after close are discarded."""
+    f = cloudstorage.open(TESTFILE, 'w')
+    f.write('a'*(256+50)*1024)
+    f2 = pickle.loads(pickle.dumps(f))
+    f.write('b'*(50)*1024)
+    f3 = pickle.loads(pickle.dumps(f))
+    f.close()
+
+    self.assertRaises(IOError, f.write, 'foo')
+    f2.write('c'*256*1024)
+    f3.write('c'*256*1024)
+
+    f.close()
+    f2.close()
+    f3.close()
+
+    a, b = 0, 0
+    f = cloudstorage.open(TESTFILE)
+    for c in f.read():
+      if c == 'a':
+        a += 1
+      elif c == 'b':
+        b += 1
+    self.assertEqual(256+50, a/1024.0)
+    self.assertEqual(50, b/1024.0)
+
+  def testReuploadSameContent(self):
+    """Test re write same content to same offset works."""
+    f = cloudstorage.open(TESTFILE, 'w')
+    f.write('a'*(256+50)*1024)
+    f2 = pickle.loads(pickle.dumps(f))
+    f.write('b'*(256+50)*1024)
+    f2.write('b'*(256+256+50)*1024)
+    f2.close()
+    a, b = 0, 0
+
+    f = cloudstorage.open(TESTFILE)
+    for c in f.read():
+      if c == 'a':
+        a += 1
+      elif c == 'b':
+        b += 1
+    self.assertEqual(256+50, a/1024.0)
+    self.assertEqual(256+256+50, b/1024.0)
 
 
 class CloudStorageTest(unittest.TestCase):
