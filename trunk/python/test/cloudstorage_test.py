@@ -426,6 +426,33 @@ class CloudStorageTest(unittest.TestCase):
     expected = [FullyQualify(n) for n in ['/foo/a', '/foo/b/']]
     self.assertEqual(expected, [stat.filename for stat in bucket])
 
+  def testListBucketPickle(self):
+    bars = [BUCKET + '/test/bar' + str(i) for i in range(3)]
+    foos = [BUCKET + '/test/foo' + str(i) for i in range(3)]
+    filenames = bars + foos
+    for filename in filenames:
+      self.CreateFile(filename)
+
+    bucket = cloudstorage.listbucket(BUCKET + '/test/')
+    self.AssertListBucketEqual(filenames, bucket)
+
+    bucket = cloudstorage.listbucket(BUCKET + '/test/', max_keys=2)
+    self.AssertListBucketEqual(bars[:2], bucket)
+
+    bucket = cloudstorage.listbucket(BUCKET + '/test/',
+                                     marker=BUCKET + '/test/bar2',
+                                     max_keys=2)
+    self.AssertListBucketEqual(foos[:2], bucket)
+
+  def AssertListBucketEqual(self, expected, bucket):
+    result = []
+    while True:
+      try:
+        result.append(iter(bucket).next().filename)
+        bucket = pickle.loads(pickle.dumps(bucket))
+      except StopIteration:
+        break
+    self.assertEqual(expected, result)
 
 if __name__ == '__main__':
   unittest.main()

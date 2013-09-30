@@ -14,6 +14,7 @@ __all__ = ['delete',
            'stat',
           ]
 
+import logging
 import StringIO
 import urllib
 import xml.etree.cElementTree as ET
@@ -258,11 +259,29 @@ class _Bucket(object):
       path: bucket path of form '/bucket'.
       options: a dict of listbucket options. Please see listbucket doc.
     """
+    self._init(api, path, options)
+
+  def _init(self, api, path, options):
     self._api = api
     self._path = path
     self._options = options.copy()
     self._get_bucket_fut = self._api.get_bucket_async(
         self._path + '?' + urllib.urlencode(self._options))
+    self._last_yield = None
+    self._new_max_keys = self._options.get('max-keys')
+
+  def __getstate__(self):
+    options = self._options
+    if self._last_yield:
+      options['marker'] = self._last_yield.filename[len(self._path) + 1:]
+    if self._new_max_keys is not None:
+      options['max-keys'] = self._new_max_keys
+    return {'api': self._api,
+            'path': self._path,
+            'options': options}
+
+  def __setstate__(self, state):
+    self._init(state['api'], state['path'], state['options'])
 
   def __iter__(self):
     """Iter over the bucket.
@@ -272,9 +291,7 @@ class _Bucket(object):
         They are ordered by GCSFileStat.filename.
     """
     total = 0
-    max_keys = None
-    if 'max-keys' in self._options:
-      max_keys = self._options['max-keys']
+    max_keys = self._options.get('max-keys')
 
     while self._get_bucket_fut:
       status, _, content = self._get_bucket_fut.get_result()
@@ -296,21 +313,34 @@ class _Bucket(object):
              not (next_file is None and next_dir is None)):
         total += 1
         if next_file is None:
-          yield next_dir
+          self._last_yield = next_dir
           next_dir = dirs.next()
         elif next_dir is None:
-          yield next_file
+          self._last_yield = next_file
           next_file = files.next()
         elif next_dir < next_file:
-          yield next_dir
+          self._last_yield = next_dir
           next_dir = dirs.next()
         elif next_file < next_dir:
-          yield next_file
+          self._last_yield = next_file
           next_file = files.next()
         else:
-          pass
+          logging.error(
+              'Should never reach. next file is %r. next dir is %r.',
+              next_file, next_dir)
+        if self._new_max_keys:
+          self._new_max_keys -= 1
+        yield self._last_yield
 
   def _next_file_gen(self, root):
+    """Generator for next file element in the document.
+
+    Args:
+      root: root element of the XML tree.
+
+    Yields:
+      GCSFileStat for the next file.
+    """
     for e in root.getiterator(common._T_CONTENTS):
       st_ctime, size, etag, key = None, None, None, None
       for child in e.getiterator('*'):
@@ -328,6 +358,14 @@ class _Bucket(object):
     yield None
 
   def _next_dir_gen(self, root):
+    """Generator for next directory element in the document.
+
+    Args:
+      root: root element in the XML tree.
+
+    Yields:
+      GCSFileStat for the next directory.
+    """
     for e in root.getiterator(common._T_COMMON_PREFIXES):
       yield common.GCSFileStat(
           self._path + '/' + e.find(common._T_PREFIX).text,
