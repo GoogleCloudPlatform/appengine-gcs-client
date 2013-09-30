@@ -46,11 +46,10 @@ def open(filename,
       Only valid in writing mode.
       See https://developers.google.com/storage/docs/reference-headers
       for details.
-    read_buffer_size: The buffer size for read. If buffer is empty, the read
-      stream will asynchronously prefetch a new buffer before the next read().
-      To minimize blocking for large files, always read in buffer size.
-      To minimize number of requests for small files, set a larger
-      buffer size.
+    read_buffer_size: The buffer size for read. Read keeps a buffer
+      and prefetches another one. To minimize blocking for large files,
+      always read by buffer size. To minimize number of RPC requests for
+      small files, set a large buffer size. Max is 30MB.
     retry_params: An instance of api_utils.RetryParams for subsequent calls
       to GCS from this file handle. If None, the default one is used.
     _account_id: Internal-use only.
@@ -78,7 +77,7 @@ def open(filename,
                        'for writing mode.')
     return storage_api.ReadBuffer(api,
                                   filename,
-                                  max_buffer_size=read_buffer_size)
+                                  buffer_size=read_buffer_size)
   else:
     raise ValueError('Invalid mode %s.' % mode)
 

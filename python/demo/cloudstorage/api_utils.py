@@ -22,6 +22,7 @@ try:
   from google.appengine.api import urlfetch
   from google.appengine.datastore import datastore_rpc
   from google.appengine.ext.ndb import eventloop
+  from google.appengine.ext.ndb import utils
   from google.appengine import runtime
   from google.appengine.runtime import apiproxy_errors
 except ImportError:
@@ -30,6 +31,7 @@ except ImportError:
   from google.appengine import runtime
   from google.appengine.runtime import apiproxy_errors
   from google.appengine.ext.ndb import eventloop
+  from google.appengine.ext.ndb import utils
 
 
 _RETRIABLE_EXCEPTIONS = (urlfetch.DownloadError,
@@ -266,3 +268,15 @@ def _run_until_rpc():
   el = eventloop.get_event_loop()
   while el.current:
     el.run0()
+
+
+def _eager_tasklet(tasklet):
+  """Decorator to turn tasklet to run eagerly."""
+
+  @utils.wrapping(tasklet)
+  def eager_wrapper(*args, **kwds):
+    fut = tasklet(*args, **kwds)
+    _run_until_rpc()
+    return fut
+
+  return eager_wrapper

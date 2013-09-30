@@ -11,9 +11,11 @@ import urllib
 
 import mock
 
+from google.appengine.ext import ndb
+from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import urlfetch
+from google.appengine.ext import testbed
 from google.appengine.runtime import apiproxy_errors
-
 
 try:
   from cloudstorage import api_utils
@@ -21,6 +23,50 @@ try:
 except ImportError:
   from google.appengine.ext.cloudstorage import api_utils
   from google.appengine.ext.cloudstorage import test_utils
+
+
+class EagerTaskletTest(unittest.TestCase):
+  """Tests for eager tasklet decorator."""
+
+  def setUp(self):
+    self.testbed = testbed.Testbed()
+    self.testbed.activate()
+    self.testbed.init_all_stubs()
+    self.urlfetch_called = False
+    hooks = apiproxy_stub_map.apiproxy.GetPreCallHooks()
+    hooks.Append('key', self.UrlfetchPreCallHook, 'urlfetch')
+
+  def tearDown(self):
+    self.testbed.deactivate()
+
+  def LazyTasklet(self):
+    """A ndb tasklet that does urlfetch."""
+    ctx = ndb.get_context()
+    return ctx.urlfetch('http://www.google.com')
+
+  @api_utils._eager_tasklet
+  def EagerTasklet(self):
+    """Same tasklet but with decorator."""
+    ctx = ndb.get_context()
+    return ctx.urlfetch('http://www.google.com')
+
+  def UrlfetchPreCallHook(self, service, call, req, res, rpc, error):
+    if service == 'urlfetch':
+      self.urlfetch_called = True
+
+  def testLazyTasklet(self):
+    fut = self.LazyTasklet()
+    self.assertFalse(self.urlfetch_called)
+    try:
+      fut.get_result()
+    except:
+      pass
+    self.assertTrue(self.urlfetch_called)
+
+  def testEagerTasklet(self):
+    self.assertFalse(self.urlfetch_called)
+    self.EagerTasklet()
+    self.assertTrue(self.urlfetch_called)
 
 
 class FilenameEscapingTest(unittest.TestCase):
