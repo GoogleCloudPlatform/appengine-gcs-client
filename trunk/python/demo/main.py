@@ -33,7 +33,11 @@ class MainPage(webapp2.RequestHandler):
     self.stat_file(filename)
     self.response.write('\n\n')
 
+    self.create_files_for_list_bucket(BUCKET)
     self.list_bucket(BUCKET)
+    self.response.write('\n\n')
+
+    self.list_bucket_directory_mode(BUCKET)
     self.response.write('\n\n')
 
     self.delete_files()
@@ -57,7 +61,7 @@ class MainPage(webapp2.RequestHandler):
                                  'x-goog-meta-bar': 'bar'},
                         retry_params=write_retry_params)
     gcs_file.write('abcde\n')
-    gcs_file.write('f'*1024*1024 + '\n')
+    gcs_file.write('f'*1024 + '\n')
     gcs_file.close()
     self.tmp_filenames_to_clean_up.append(filename)
 
@@ -76,6 +80,14 @@ class MainPage(webapp2.RequestHandler):
     stat = gcs.stat(filename)
     self.response.write(repr(stat))
 
+  def create_files_for_list_bucket(self, bucket):
+    self.response.write('Creating more files for listbucket...\n')
+    filenames = [bucket + n for n in ['/foo1', '/foo2', '/bar', '/bar/1',
+                                      '/bar/2', '/boo/']]
+    for f in filenames:
+      self.create_file(f)
+    self.tmp_filenames_to_clean_up.extend(filenames)
+
   def list_bucket(self, bucket):
     """Create several files and paginate through them.
 
@@ -84,13 +96,10 @@ class MainPage(webapp2.RequestHandler):
     Args:
       bucket: bucket.
     """
-    self.response.write('Creating more files for listbucket...\n')
-    self.create_file(bucket + '/foo1')
-    self.create_file(bucket + '/foo2')
     self.response.write('\nListbucket result:\n')
 
     page_size = 1
-    stats = gcs.listbucket(bucket, max_keys=page_size)
+    stats = gcs.listbucket(bucket + '/foo', max_keys=page_size)
     while True:
       count = 0
       for stat in stats:
@@ -100,8 +109,18 @@ class MainPage(webapp2.RequestHandler):
 
       if count != page_size or count == 0:
         break
-      last_filename = stat.filename[len(bucket)+1:]
-      stats = gcs.listbucket(bucket, max_keys=page_size, marker=last_filename)
+      stats = gcs.listbucket(bucket + '/foo', max_keys=page_size,
+                             marker=stat.filename)
+
+  def list_bucket_directory_mode(self, bucket):
+    self.response.write('\nListbucket directory mode result:\n')
+    for stat in gcs.listbucket(bucket + '/b', delimiter='/'):
+      self.response.write('%r' % stat)
+      self.response.write('\n')
+      if stat.is_dir:
+        for subdir_file in gcs.listbucket(stat.filename, delimiter='/'):
+          self.response.write('  %r' % subdir_file)
+          self.response.write('\n')
 
   def delete_files(self):
     self.response.write('Deleting files...\n')
