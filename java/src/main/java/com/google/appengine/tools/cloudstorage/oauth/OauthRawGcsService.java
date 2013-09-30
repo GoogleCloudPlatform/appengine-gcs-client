@@ -215,12 +215,10 @@ final class OauthRawGcsService implements RawGcsService {
   }
 
   @Override
-  public RawGcsCreationToken continueObjectCreation(
+  public Future<RawGcsCreationToken> continueObjectCreationAsync(
       RawGcsCreationToken x, ByteBuffer chunk, long timeoutMillis) throws IOException {
     GcsRestCreationToken token = (GcsRestCreationToken) x;
-    int length = chunk.remaining();
-    put(token, chunk, false, timeoutMillis);
-    return new GcsRestCreationToken(token.filename, token.uploadId, token.offset + length);
+    return putAsync(token, chunk, false, timeoutMillis);
   }
 
   @Override
@@ -230,9 +228,8 @@ final class OauthRawGcsService implements RawGcsService {
     put(token, chunk, true, timeoutMillis);
   }
 
-  private void put(GcsRestCreationToken token, ByteBuffer chunk, boolean isFinalChunk,
-      long timeoutMillis) throws IOException {
-    int length = chunk.remaining();
+  HTTPRequest createPutRequest(final GcsRestCreationToken token, final ByteBuffer chunk,
+      final boolean isFinalChunk, long timeoutMillis, final int length) {
     long offset = token.offset;
     Preconditions.checkArgument(offset % CHUNK_ALIGNMENT_BYTES == 0,
         "%s: Offset not aligned; offset=%s, length=%s, token=%s",
@@ -249,7 +246,7 @@ final class OauthRawGcsService implements RawGcsService {
           + "; isFinalChunk: " + isFinalChunk + ")");
     }
     long limit = offset + length;
-    HTTPRequest req = makeRequest(token.filename, token.uploadId,
+    final HTTPRequest req = makeRequest(token.filename, token.uploadId,
         HTTPMethod.PUT, timeoutMillis);
     req.setHeader(versionHeader);
     req.setHeader(
@@ -257,13 +254,19 @@ final class OauthRawGcsService implements RawGcsService {
             "bytes " + (length == 0 ? "*" : offset + "-" + (limit - 1))
             + (isFinalChunk ? "/" + limit : "/*")));
     req.setPayload(peekBytes(chunk));
-    HTTPResponse resp;
-    try {
-      resp = urlfetch.fetch(req);
-    } catch (IOException e) {
-      throw new IOException(
-          "URLFetch threw IOException; request: " + URLFetchUtils.describeRequest(req), e);
-    }
+    return req;
+  }
+
+  /**
+   * Given a HTTPResponce, process it, throwing an error if needed and return a Token for the next
+   * request.
+   */
+  GcsRestCreationToken handlePutResponse(final GcsRestCreationToken token,
+      final ByteBuffer chunk,
+      final boolean isFinalChunk,
+      final int length,
+      final HTTPRequest req,
+      HTTPResponse resp) throws Error, IOException {
     switch (resp.getResponseCode()) {
       case 200:
         if (!isFinalChunk) {
@@ -271,7 +274,7 @@ final class OauthRawGcsService implements RawGcsService {
               + URLFetchUtils.describeRequestAndResponse(req, resp, true));
         } else {
           chunk.position(chunk.limit());
-          return;
+          return null;
         }
       case 308:
         if (isFinalChunk) {
@@ -279,11 +282,52 @@ final class OauthRawGcsService implements RawGcsService {
               + URLFetchUtils.describeRequestAndResponse(req, resp, true));
         } else {
           chunk.position(chunk.limit());
-          return;
+          return new GcsRestCreationToken(token.filename, token.uploadId, token.offset + length);
         }
       default:
         throw handleError(req, resp);
     }
+  }
+
+  /**
+   * Write the provided chunk at the offset specified in the token. If finalChunk is set, the file
+   * will be closed.
+   */
+  private RawGcsCreationToken put(final GcsRestCreationToken token, final ByteBuffer chunk,
+      final boolean isFinalChunk, long timeoutMillis) throws IOException {
+    final int length = chunk.remaining();
+    final HTTPRequest req = createPutRequest(token, chunk, isFinalChunk, timeoutMillis, length);
+    HTTPResponse response;
+    try {
+      response = urlfetch.fetch(req);
+    } catch (IOException e) {
+      throw new IOException(
+          "URLFetch threw IOException; request: " + URLFetchUtils.describeRequest(req), e);
+    }
+    return handlePutResponse(token, chunk, isFinalChunk, length, req, response);
+  }
+
+  /**
+   * Same as {@link #put} but is runs asynchronously and returns a future. In the event of an error
+   * the exception out of the future will be an ExecutionException with the cause set to the same
+   * exception that would have been thrown by put.
+   */
+  private Future<RawGcsCreationToken> putAsync(final GcsRestCreationToken token,
+      final ByteBuffer chunk, final boolean isFinalChunk, long timeoutMillis) {
+    final int length = chunk.remaining();
+    final HTTPRequest req = createPutRequest(token, chunk, isFinalChunk, timeoutMillis, length);
+    return new FutureWrapper<HTTPResponse, RawGcsCreationToken>(urlfetch.fetchAsync(req)) {
+      @Override
+      protected IOException convertException(Throwable e) {
+        return new IOException(
+            "URLFetch threw IOException; request: " + URLFetchUtils.describeRequest(req), e);
+      }
+
+      @Override
+      protected GcsRestCreationToken wrap(HTTPResponse resp) throws Exception {
+        return handlePutResponse(token, chunk, isFinalChunk, length, req, resp);
+      }
+    };
   }
 
   private static byte[] peekBytes(ByteBuffer in) {

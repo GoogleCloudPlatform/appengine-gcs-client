@@ -71,27 +71,28 @@ public interface RawGcsService {
       throws IOException;
 
   /**
-   * Reads all remaining bytes from {@code chunk} and writes them to the object
-   * and offset specified by {@code token}.
+   * Reads all remaining bytes from {@code chunk} and writes them to the object and offset specified
+   * by {@code token} asynchronusly.
    *
-   * <p>Returns a new token to be used to continue writing to the object.
-   * Does not mutate {@code token}.
+   * <p>
+   * Returns a future for a new token to be used to continue writing to the object. Does not mutate
+   * {@code token}.
    *
-   * <p>The number of bytes remaining in {@code chunk} must be a nonzero multiple
-   * of {@link #getChunkSizeBytes()} and may be subject to an upper limit that
-   * is implementation-dependent.
+   * <p>
+   * The number of bytes remaining in {@code chunk} must be a nonzero multiple of
+   * {@link #getChunkSizeBytes()} and may be subject to an upper limit that is
+   * implementation-dependent.
    *
-   * <p>On error, does not consume any bytes from {@code chunk}.  The write may
-   * be retried by making another call with the same {@code token}.  A whole
-   * sequence of writes may be retried by using a previous token (this is useful
-   * if the calling code crashes and rolls back to an earlier state).  In both
-   * cases, the calling code is responsible for guaranteeing that the byte
-   * sequence written to the object remains identical across retries.  (This is
-   * because the write may have succeeded on the backend even though an
-   * exception was thrown by this method, and writing different data on a retry
-   * leaves the object in a bad state.)
+   * <p>
+   * On error, does not consume any bytes from {@code chunk}. The write may be retried by making
+   * another call with the same {@code token}. A whole sequence of writes may be retried by using a
+   * previous token (this is useful if the calling code crashes and rolls back to an earlier state).
+   * In both cases, the calling code is responsible for guaranteeing that the byte sequence written
+   * to the object remains identical across retries. (This is because the write may have succeeded
+   * on the backend even though an exception was thrown by this method, and writing different data
+   * on a retry leaves the object in a bad state.)
    */
-  RawGcsCreationToken continueObjectCreation(RawGcsCreationToken token,
+  Future<RawGcsCreationToken> continueObjectCreationAsync(RawGcsCreationToken token,
       ByteBuffer chunk, long timeoutMillis)
       throws IOException;
 

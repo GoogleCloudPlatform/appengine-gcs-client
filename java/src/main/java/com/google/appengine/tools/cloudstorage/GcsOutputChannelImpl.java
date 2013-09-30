@@ -30,8 +30,23 @@ import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * This implementation uses double buffering. This works as follows: incoming calls to write append
+ * data to a buffer. Once this buffer is filled, if there are no outstanding requests, a request is
+ * sent over the network asynchronously and a new buffer is allocated so more writes can occur while
+ * the request is processing. If there is already an outstanding request, the thread that called
+ * write blocks until this request is completed. If a request fails it is retried with exponential
+ * backoff while the thread is blocked. This allows for a very simple implementation while still
+ * being very fast in the happy case where the writer is slower than the network and no failures
+ * occur.
+ *
+ * @see GcsOutputChannel
+ */
 final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
 
   private static final long serialVersionUID = 3011935384698648440L;
@@ -39,9 +54,31 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
   @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(GcsOutputChannelImpl.class.getName());
 
+  /**
+   * Represents a request that is currently inflight. Contains all the information needed to retry
+   * the request, as well as the future for its completion.
+   */
+  private class OutstandingRequest {
+    private RawGcsCreationToken requestToken;
+    /** buffer that is associated with the on outstanding request */
+    private final ByteBuffer ongoingRequestBuf;
+    private final Future<RawGcsCreationToken> nextToken;
+
+    OutstandingRequest(RawGcsCreationToken requestToken, ByteBuffer ongoingRequestBuf,
+        Future<RawGcsCreationToken> nextToken) {
+      this.requestToken = requestToken;
+      this.ongoingRequestBuf = ongoingRequestBuf;
+      this.nextToken = nextToken;
+    }
+  }
+
+  /**
+   * Held over write and close for the entire call. Per Channel specification.
+   */
   private transient Object lock = new Object();
   private transient ByteBuffer buf;
-  private transient RawGcsService raw;private RawGcsCreationToken token;
+  private transient RawGcsService raw;
+  private transient OutstandingRequest ongoingWrite;private RawGcsCreationToken token;
   private final GcsFilename filename;
   private RetryParams retryParams;
 
@@ -49,7 +86,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
   GcsOutputChannelImpl(RawGcsService raw, RawGcsCreationToken nextToken, RetryParams retryParams) {
     this.retryParams = retryParams;
     this.raw = checkNotNull(raw, "Null raw");
-    this.buf = ByteBuffer.allocate(getBufferSize(raw.getChunkSizeBytes()));
+    createNewBuffer();
     this.token = checkNotNull(nextToken, "Null token");
     this.filename = nextToken.getFilename();
   }
@@ -60,7 +97,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
     this.lock = new Object();
     this.raw = GcsServiceFactory.createRawGcsService();
     if (this.token != null) {
-      this.buf = ByteBuffer.allocate(getBufferSize(this.raw.getChunkSizeBytes()));
+      createNewBuffer();
       int length = aInputStream.readInt();
       if (length > this.buf.capacity()) {
         throw new IllegalArgumentException(
@@ -74,6 +111,10 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
         this.buf.put(initialBuffer);
       }
     }
+  }
+
+  private void createNewBuffer() {
+    this.buf = ByteBuffer.allocate(getBufferSize(this.raw.getChunkSizeBytes()));
   }
 
   private void writeObject(ObjectOutputStream aOutputStream) throws IOException {
@@ -141,6 +182,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
       if (!isOpen()) {
         return;
       }
+      waitForNextToken();
       final ByteBuffer out = getSliceForWrite();
       RetryHelper.runWithRetries(new Body<Void>() {
         @Override
@@ -155,22 +197,58 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
 
   private void flushIfNeeded() throws IOException {
     if (!buf.hasRemaining()) {
-      writeOut(getSliceForWrite());
-      buf.clear();
+      waitForNextToken();
+      ByteBuffer toWrite = getSliceForWrite();
+      createNewBuffer();
+      ongoingWrite = new OutstandingRequest(token, toWrite,
+          raw.continueObjectCreationAsync(token, toWrite, retryParams.getRequestTimeoutMillis()));
     }
   }
 
-  void writeOut(final ByteBuffer toWrite) throws IOException, ClosedByInterruptException {
-    try {
-      token = RetryHelper.runWithRetries(new Body<RawGcsCreationToken>() {
-        @Override
-        public RawGcsCreationToken run() throws IOException {
-          return raw.continueObjectCreation(token, toWrite, retryParams.getRequestTimeoutMillis());
-        }}, retryParams);
-    } catch (ClosedByInterruptException e) {
-      token = null;
-      throw new ClosedByInterruptException();
+  /**
+   * Waits for the current outstanding request retrying it with exponential backoff if it fails.
+   *
+   * @throws IOException In the event of FileNotFoundException, MalformedURLException,
+   *         RetriesExhaustedException, or ClosedByInterruptException
+   */
+  private void waitForNextToken() throws IOException {
+    if (ongoingWrite == null) {
+      return;
     }
+    RetryHelper.runWithRetries(new Body<Void>() {
+      boolean failed = false;
+      @Override
+      public Void run() throws IOException {
+        if (failed) {
+          retryWrite();
+        }
+        try {
+          token = ongoingWrite.nextToken.get();
+          ongoingWrite = null;
+          return null;
+        } catch (ExecutionException e) {
+          failed = true;
+          Throwable cause = e.getCause();
+          if (cause instanceof IOException) {
+            log.log(Level.WARNING, this + ": IOException writing block", cause);
+            throw (IOException) cause;
+          } else {
+            throw new RuntimeException(this + ": Unexpected cause of ExecutionException", cause);
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          token = null;
+          throw new ClosedByInterruptException();
+        }
+      }
+    }, retryParams);
+  }
+
+  private void retryWrite() throws IOException {
+    ongoingWrite = new OutstandingRequest(ongoingWrite.requestToken,
+        ongoingWrite.ongoingRequestBuf, raw.continueObjectCreationAsync(
+            ongoingWrite.requestToken, ongoingWrite.ongoingRequestBuf,
+            retryParams.getRequestTimeoutMillis()));
   }
 
   @Override
@@ -201,17 +279,20 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
       if (!isOpen()) {
         return;
       }
+      waitForNextToken();
       int chunkSize = raw.getChunkSizeBytes();
       int position = buf.position();
       int bytesToWrite = (position / chunkSize) * chunkSize;
       if (bytesToWrite > 0) {
         ByteBuffer outputBuffer = getSliceForWrite();
         outputBuffer.limit(bytesToWrite);
-        writeOut(outputBuffer);
+        ongoingWrite = new OutstandingRequest(token, outputBuffer, raw.continueObjectCreationAsync(
+            token, outputBuffer, retryParams.getRequestTimeoutMillis()));
+        waitForNextToken();
         buf.position(bytesToWrite);
         buf.limit(position);
         ByteBuffer remaining = buf.slice();
-        buf.clear();
+        createNewBuffer();
         buf.put(remaining);
       }
     }
