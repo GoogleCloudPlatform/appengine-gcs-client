@@ -39,6 +39,8 @@ import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.RawGcsService;
+import com.google.apphosting.api.ApiProxy;
+import com.google.apphosting.api.ApiProxy.Environment;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Futures;
@@ -51,7 +53,10 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.util.Map.Entry;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Implementation of {@code RawGcsService} for dev_appserver. For now, uses datastore and
@@ -161,10 +166,25 @@ final class LocalRawGcsService implements RawGcsService {
     return new Token(t.filename, t.options, t.offset + n, t.file);
   }
 
+  private static final ScheduledThreadPoolExecutor writePool = new ScheduledThreadPoolExecutor(1);
+
+  /**
+   * Runs calls in a background thread so that the results will actually be asyncronus.
+   *
+   * @see com.google.appengine.tools.cloudstorage.RawGcsService#continueObjectCreationAsync(com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken,
+   *      java.nio.ByteBuffer, long)
+   */
   @Override
-  public RawGcsCreationToken continueObjectCreation(
-      RawGcsCreationToken token, ByteBuffer chunk, long timeoutMillis) throws IOException {
-    return append(token, chunk);
+  public Future<RawGcsCreationToken> continueObjectCreationAsync(final RawGcsCreationToken token,
+      final ByteBuffer chunk, long timeoutMillis) throws IOException {
+    final Environment environment = ApiProxy.getCurrentEnvironment();
+    return writePool.schedule(new Callable<RawGcsCreationToken>() {
+      @Override
+      public RawGcsCreationToken call() throws Exception {
+        ApiProxy.setEnvironmentForCurrentThread(environment);
+        return append(token, chunk);
+      }
+    }, 50, TimeUnit.MILLISECONDS);
   }
 
   private Key makeKey(GcsFilename filename) {
