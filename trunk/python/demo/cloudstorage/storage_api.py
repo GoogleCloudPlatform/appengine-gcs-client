@@ -11,6 +11,7 @@ __all__ = ['ReadBuffer',
           ]
 
 import collections
+import logging
 import os
 import urlparse
 
@@ -715,13 +716,20 @@ class StreamingBuffer(object):
     else:
       headers['content-range'] = ('bytes */%s' %
                                   length if last else '*')
-    status, _, _ = self._api.put_object(
+    status, response_headers, _ = self._api.put_object(
         self._path_with_token, payload=data, headers=headers)
     if last:
       expected = 200
     else:
       expected = 308
-    errors.check_status(status, [expected], headers)
+    if expected == 308 and status == 200:
+      logging.warning(
+          'This upload session for file %s has already been finalized. It is '
+          'likely this is an outdated copy of an already closed file handler.'
+          'Request headers: %r\n'
+          'Response headers: %r\n', self.name, headers, response_headers)
+    else:
+      errors.check_status(status, [expected], headers)
     self._written += len(data)
 
   def _check_open(self):
