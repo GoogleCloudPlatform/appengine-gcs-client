@@ -312,7 +312,7 @@ class CloudStorageTest(unittest.TestCase):
       f.write('c'*1024 + '\n')
       f.write('d'*1024*1024)
       f.write('e'*1024*1024*10)
-    self.assertTrue(f._closed)
+    self.assertTrue(f.closed)
 
     with cloudstorage.open(TESTFILE) as f:
       self.assertEqual('a' + 'b'*1024, f.read(1025))
@@ -321,7 +321,7 @@ class CloudStorageTest(unittest.TestCase):
       self.assertEqual('e'*1024*1024*10, f.read())
       self.assertEqual('', f.read())
       self.assertEqual('', f.readline())
-    self.assertTrue(f._closed)
+    self.assertTrue(f.closed)
 
   def testSeekAndTell(self):
     f = cloudstorage.open(TESTFILE, 'w')
