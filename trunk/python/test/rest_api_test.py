@@ -105,10 +105,18 @@ class RestApiTest(unittest.TestCase):
     self.assertNotEqual(token1, token2)
 
   def testTokenMemoized(self):
+
+    ndb_ctx = ndb.get_context()
+    ndb_ctx.set_cache_policy(lambda key: False)
+    ndb_ctx.set_memcache_policy(lambda key: False)
+
     api = rest_api._RestApi('scope')
     self.assertEqual(api.token, None)
     t1 = api.get_token()
+    self.assertNotEqual(None, t1)
     self.assertEqual(api.token, t1)
+
+    api = rest_api._RestApi('scope')
     t2 = api.get_token()
     self.assertEqual(t2, t1)
 
