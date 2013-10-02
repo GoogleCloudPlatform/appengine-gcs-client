@@ -89,7 +89,8 @@ class RetryParams(object):
                min_retries=2,
                max_retries=5,
                max_retry_period=30.0,
-               urlfetch_timeout=None):
+               urlfetch_timeout=None,
+               save_access_token=False):
     """Init.
 
     This object is unique per request per thread.
@@ -106,8 +107,12 @@ class RetryParams(object):
         capped by max_retries.
       max_retries: max number of times to retry. Set this to 0 for no retry.
       max_retry_period: max total seconds spent on retry. Retry stops when
-       this period passed AND min_retries has been attempted.
+        this period passed AND min_retries has been attempted.
       urlfetch_timeout: timeout for urlfetch in seconds. Could be None.
+      save_access_token: persist access token to datastore to avoid
+        excessive usage of GetAccessToken API. Usually the token is cached
+        in process and in memcache. In some cases, memcache isn't very
+        reliable.
     """
     self.backoff_factor = self._check('backoff_factor', backoff_factor)
     self.initial_delay = self._check('initial_delay', initial_delay)
@@ -121,6 +126,8 @@ class RetryParams(object):
     self.urlfetch_timeout = None
     if urlfetch_timeout is not None:
       self.urlfetch_timeout = self._check('urlfetch_timeout', urlfetch_timeout)
+    self.save_access_token = self._check('save_access_token', save_access_token,
+                                         True, bool)
 
     self._request_id = os.getenv('REQUEST_LOG_ID')
 

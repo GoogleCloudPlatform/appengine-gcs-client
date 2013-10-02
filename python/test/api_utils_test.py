@@ -92,7 +92,9 @@ class RetryParamsTest(unittest.TestCase):
     self.assertRaises(TypeError, api_utils.RetryParams, urlfetch_timeout='foo')
     self.assertRaises(TypeError, api_utils.RetryParams, max_retries=1.1)
     self.assertRaises(ValueError, api_utils.RetryParams, initial_delay=0)
+    self.assertRaises(TypeError, api_utils.RetryParams, save_access_token='')
     api_utils.RetryParams(backoff_factor=1)
+    api_utils.RetryParams(save_access_token=True)
 
   def testNoDelay(self):
     start_time = time.time()
