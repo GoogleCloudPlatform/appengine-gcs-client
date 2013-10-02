@@ -170,7 +170,7 @@ class ReadBuffer(object):
     self._request_next_buffer()
 
     status, headers, _ = self._api.head_object(path)
-    errors.check_status(status, [200])
+    errors.check_status(status, [200], path, resp_headers=headers)
     self._file_size = long(headers['content-length'])
     self._check_etag(headers.get('etag'))
     if self._file_size == 0:
@@ -388,10 +388,10 @@ class ReadBuffer(object):
     end = start + request_size - 1
     content_range = '%d-%d' % (start, end)
     headers = {'Range': 'bytes=' + content_range}
-    status, headers, content = yield self._api.get_object_async(self.name,
-                                                                headers=headers)
-    errors.check_status(status, [200, 206], headers)
-    self._check_etag(headers.get('etag'))
+    status, resp_headers, content = yield self._api.get_object_async(
+        self.name, headers=headers)
+    errors.check_status(status, [200, 206], self.name, headers, resp_headers)
+    self._check_etag(resp_headers.get('etag'))
     raise ndb.Return(content)
 
   def _check_etag(self, etag):
@@ -593,9 +593,9 @@ class StreamingBuffer(object):
       headers['content-type'] = content_type
     if gcs_headers:
       headers.update(gcs_headers)
-    status, headers, _ = self._api.post_object(path, headers=headers)
-    errors.check_status(status, [201], headers)
-    loc = headers.get('location')
+    status, resp_headers, _ = self._api.post_object(path, headers=headers)
+    errors.check_status(status, [201], path, headers, resp_headers)
+    loc = resp_headers.get('location')
     if not loc:
       raise IOError('No location header found in 201 response')
     parsed = urlparse.urlparse(loc)
@@ -762,10 +762,12 @@ class StreamingBuffer(object):
       logging.warning(
           'This upload session for file %s has already been finalized. It is '
           'likely this is an outdated copy of an already closed file handler.'
-          'Request headers: %r\n'
-          'Response headers: %r\n', self.name, headers, response_headers)
+          'Request headers: %r.\n'
+          'Response headers: %r.\n', self.name, headers, response_headers)
     else:
-      errors.check_status(status, [expected], headers)
+      errors.check_status(status, [expected], self.name, headers,
+                          response_headers,
+                          {'upload_path': self._path_with_token})
     self._written += len(data)
 
   def _check_open(self):

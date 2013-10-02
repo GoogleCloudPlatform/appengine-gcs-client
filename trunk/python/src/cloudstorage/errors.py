@@ -71,13 +71,17 @@ class ServerError(TransientError):
   """HTTP >= 500 server side error."""
 
 
-def check_status(status, expected, headers=None):
+def check_status(status, expected, path, headers=None,
+                 resp_headers=None, extras=None):
   """Check HTTP response status is expected.
 
   Args:
     status: HTTP response status. int.
     expected: a list of expected statuses. A list of ints.
-    headers: HTTP response headers.
+    path: filename or a path prefix.
+    headers: HTTP request headers.
+    resp_headers: HTTP response headers.
+    extras: extra info to be logged verbatim if error occurs.
 
   Raises:
     AuthorizationError: if authorization failed.
@@ -89,9 +93,12 @@ def check_status(status, expected, headers=None):
   if status in expected:
     return
 
-  msg = ('Expect status %r from Google Storage. But got status %d. Response '
-         'headers: %r' %
-         (expected, status, headers))
+  msg = ('Expect status %r from Google Storage. But got status %d.\n'
+         'Path: %r.\n'
+         'Request headers: %r.\n'
+         'Response headers: %r.\n'
+         'Extra info: %r.\n' %
+         (expected, status, path, headers, resp_headers, extras))
 
   if status == httplib.UNAUTHORIZED:
     raise AuthorizationError(msg)
