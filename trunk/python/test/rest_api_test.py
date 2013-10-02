@@ -9,6 +9,7 @@ import unittest
 import mock
 
 from google.appengine.ext import ndb
+from google.appengine.api import memcache
 from google.appengine.api import urlfetch
 from google.appengine.ext import testbed
 
@@ -123,6 +124,25 @@ class RestApiTest(unittest.TestCase):
     t3 = api.get_token(refresh=True)
     self.assertNotEqual(t2, t3)
     self.assertEqual(api.token, t3)
+
+  def testTokenSaved(self):
+    retry_params = api_utils.RetryParams(save_access_token=True)
+    api = rest_api._RestApi('scope', retry_params=retry_params)
+    self.assertEqual(api.token, None)
+    t1 = api.get_token()
+    self.assertNotEqual(None, t1)
+    self.assertEqual(api.token, t1)
+
+    api = rest_api._RestApi('scope', retry_params=retry_params)
+    t2 = api.get_token()
+    self.assertEqual(t2, t1)
+
+    memcache.flush_all()
+    ndb.get_context().clear_cache()
+
+    api = rest_api._RestApi('scope', retry_params=retry_params)
+    t3 = api.get_token()
+    self.assertEqual(t3, t1)
 
   def testDifferentServiceAccounts(self):
     api1 = rest_api._RestApi('scope', 123)
