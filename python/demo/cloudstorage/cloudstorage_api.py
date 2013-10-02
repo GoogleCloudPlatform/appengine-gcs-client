@@ -98,8 +98,8 @@ def delete(filename, retry_params=None, _account_id=None):
   api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
   common.validate_file_path(filename)
   filename = api_utils._quote_filename(filename)
-  status, _, _ = api.delete_object(filename)
-  errors.check_status(status, [204])
+  status, resp_headers, _ = api.delete_object(filename)
+  errors.check_status(status, [204], filename, resp_headers=resp_headers)
 
 
 def stat(filename, retry_params=None, _account_id=None):
@@ -121,7 +121,7 @@ def stat(filename, retry_params=None, _account_id=None):
   common.validate_file_path(filename)
   api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
   status, headers, _ = api.head_object(api_utils._quote_filename(filename))
-  errors.check_status(status, [200])
+  errors.check_status(status, [200], filename, resp_headers=headers)
   file_stat = common.GCSFileStat(
       filename=filename,
       st_size=headers.get('content-length'),
@@ -154,11 +154,10 @@ def _copy2(src, dst, retry_params=None):
     return
 
   api = _get_storage_api(retry_params=retry_params)
-  status, headers, _ = api.put_object(
-      api_utils._quote_filename(dst),
-      headers={'x-goog-copy-source': src,
-               'Content-Length': '0'})
-  errors.check_status(status, [200], headers)
+  headers = {'x-goog-copy-source': src, 'Content-Length': '0'}
+  status, resp_headers, _ = api.put_object(
+      api_utils._quote_filename(dst), headers=headers)
+  errors.check_status(status, [200], src, headers, resp_headers)
 
 
 def listbucket(path_prefix, marker=None, prefix=None, max_keys=None,
@@ -294,8 +293,9 @@ class _Bucket(object):
     max_keys = self._options.get('max-keys')
 
     while self._get_bucket_fut:
-      status, _, content = self._get_bucket_fut.get_result()
-      errors.check_status(status, [200])
+      status, resp_headers, content = self._get_bucket_fut.get_result()
+      errors.check_status(status, [200], self._path, resp_headers=resp_headers,
+                          extras=self._options)
 
       if self._should_get_another_batch(content):
         self._get_bucket_fut = self._api.get_bucket_async(
