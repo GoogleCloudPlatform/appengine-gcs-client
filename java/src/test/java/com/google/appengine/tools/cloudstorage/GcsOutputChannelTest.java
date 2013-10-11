@@ -45,7 +45,7 @@ import java.util.Random;
  */
 @RunWith(JUnit4.class)
 public class GcsOutputChannelTest {
-  private static final int BUFFER_SIZE = 2 * 1024 * 1024;
+  private static final int BUFFER_SIZE = 1 * 1024 * 1024;
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
       new LocalTaskQueueTestConfig(), new LocalFileServiceTestConfig(),
       new LocalBlobstoreServiceTestConfig(), new LocalDatastoreServiceTestConfig());

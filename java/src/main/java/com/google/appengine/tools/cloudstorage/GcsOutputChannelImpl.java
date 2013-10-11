@@ -133,9 +133,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
   @VisibleForTesting
   static int getBufferSize(int chunkSize) {
     if (chunkSize <= 256 * 1024) {
-      return 8 * chunkSize;
-    } else if (chunkSize <= 1024 * 1024) {
-      return 2 * chunkSize;
+      return 4 * chunkSize;
     } else {
       return chunkSize;
     }
