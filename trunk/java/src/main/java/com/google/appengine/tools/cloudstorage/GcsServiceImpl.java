@@ -19,7 +19,9 @@ package com.google.appengine.tools.cloudstorage;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken;
-import com.google.apphosting.api.ApiProxy.ApiProxyException;
+import com.google.apphosting.api.ApiProxy.ApiDeadlineExceededException;
+import com.google.apphosting.api.ApiProxy.RPCFailedException;
+import com.google.apphosting.api.ApiProxy.UnknownException;
 import com.google.common.base.Throwables;
 
 import java.io.FileNotFoundException;
@@ -37,7 +39,8 @@ final class GcsServiceImpl implements GcsService {
   private final RawGcsService raw;
   private final RetryParams retryParams;
   static final ExceptionHandler exceptionHandler = new ExceptionHandler.Builder()
-      .retryOn(ApiProxyException.class, IOException.class)
+      .retryOn(UnknownException.class, RPCFailedException.class, ApiDeadlineExceededException.class,
+          IOException.class)
       .abortOn(InterruptedException.class, FileNotFoundException.class,
           MalformedURLException.class, ClosedByInterruptException.class,
           InterruptedIOException.class)
