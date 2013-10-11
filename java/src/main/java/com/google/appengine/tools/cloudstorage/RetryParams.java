@@ -37,7 +37,7 @@ import java.io.Serializable;
  * object.
  *
  * For default {@code RetryParams} use {@link #getDefaultInstance}. Default settings are subject to
- * change release to release. If you require specific settings, explicilty create an instance of
+ * change release to release. If you require specific settings, explicitly create an instance of
  * {@code RetryParams} with the required settings.
  *
  */
@@ -62,19 +62,20 @@ public class RetryParams implements Serializable {
 
   private static final RetryParams DEFAULT_INSTANCE = new RetryParams(new Builder());
 
+
   /**
    * Create a new RetryParams with the parameters from a {@link RetryParams.Builder}
    *
    * @param builder the parameters to use to construct the RetryParams object
    */
   private RetryParams(Builder builder) {
-    this.requestTimeoutMillis = builder.requestTimeoutMillis;
-    this.retryMinAttempts = builder.retryMinAttempts;
-    this.retryMaxAttempts = builder.retryMaxAttempts;
-    this.initialRetryDelayMillis = builder.initialRetryDelayMillis;
-    this.maxRetryDelayMillis = builder.maxRetryDelayMillis;
-    this.retryDelayBackoffFactor = builder.retryDelayBackoffFactor;
-    this.totalRetryPeriodMillis = builder.totalRetryPeriodMillis;
+    requestTimeoutMillis = builder.requestTimeoutMillis;
+    retryMinAttempts = builder.retryMinAttempts;
+    retryMaxAttempts = builder.retryMaxAttempts;
+    initialRetryDelayMillis = builder.initialRetryDelayMillis;
+    maxRetryDelayMillis = builder.maxRetryDelayMillis;
+    retryDelayBackoffFactor = builder.retryDelayBackoffFactor;
+    totalRetryPeriodMillis = builder.totalRetryPeriodMillis;
   }
 
   /**
@@ -85,13 +86,38 @@ public class RetryParams implements Serializable {
   }
 
   public static final class Builder {
-    private long requestTimeoutMillis = DEFAULT_REQUEST_TIMEOUT_MILLIS;
-    private int retryMinAttempts = DEFAULT_RETRY_MIN_ATTEMPTS;
-    private int retryMaxAttempts = DEFAULT_RETRY_MAX_ATTEMPTS;
-    private long initialRetryDelayMillis = DEFAULT_INITIAL_RETRY_DELAY_MILLIS;
-    private long maxRetryDelayMillis = DEFAULT_MAX_RETRY_DELAY_MILLIS;
-    private double retryDelayBackoffFactor = DEFAULT_RETRY_DELAY_BACKOFF_FACTOR;
-    private long totalRetryPeriodMillis = DEFAULT_TOTAL_RETRY_PERIOD_MILLIS;
+
+    private long requestTimeoutMillis;
+    private int retryMinAttempts;
+    private int retryMaxAttempts;
+    private long initialRetryDelayMillis;
+    private long maxRetryDelayMillis;
+    private double retryDelayBackoffFactor;
+    private long totalRetryPeriodMillis;
+
+    public Builder() {
+      this(null);
+    }
+
+    public Builder( RetryParams retryParams) {
+      if (retryParams == null) {
+        requestTimeoutMillis = DEFAULT_REQUEST_TIMEOUT_MILLIS;
+        retryMinAttempts = DEFAULT_RETRY_MIN_ATTEMPTS;
+        retryMaxAttempts = DEFAULT_RETRY_MAX_ATTEMPTS;
+        initialRetryDelayMillis = DEFAULT_INITIAL_RETRY_DELAY_MILLIS;
+        maxRetryDelayMillis = DEFAULT_MAX_RETRY_DELAY_MILLIS;
+        retryDelayBackoffFactor = DEFAULT_RETRY_DELAY_BACKOFF_FACTOR;
+        totalRetryPeriodMillis = DEFAULT_TOTAL_RETRY_PERIOD_MILLIS;
+      } else {
+        requestTimeoutMillis = retryParams.getRequestTimeoutMillis();
+        retryMinAttempts = retryParams.getRetryMinAttempts();
+        retryMaxAttempts = retryParams.getRetryMaxAttempts();
+        initialRetryDelayMillis = retryParams.getInitialRetryDelayMillis();
+        maxRetryDelayMillis = retryParams.getMaxRetryDelayMillis();
+        retryDelayBackoffFactor = retryParams.getRetryDelayBackoffFactor();
+        totalRetryPeriodMillis = retryParams.getTotalRetryPeriodMillis();
+      }
+    }
 
     /**
      * @param retryMinAttempts the retryMinAttempts to set
@@ -199,7 +225,6 @@ public class RetryParams implements Serializable {
   public double getRetryDelayBackoffFactor() {
     return retryDelayBackoffFactor;
   }
-
 
   /**
    * @return the totalRetryPeriodMillis

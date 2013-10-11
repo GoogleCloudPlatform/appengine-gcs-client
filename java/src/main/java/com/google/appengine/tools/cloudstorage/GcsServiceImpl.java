@@ -19,9 +19,15 @@ package com.google.appengine.tools.cloudstorage;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken;
-import com.google.appengine.tools.cloudstorage.RetryHelper.Body;
+import com.google.apphosting.api.ApiProxy.ApiProxyException;
+import com.google.common.base.Throwables;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.net.MalformedURLException;
+import java.nio.channels.ClosedByInterruptException;
+import java.util.concurrent.Callable;
 
 /**
  * Basic implementation of {@link GcsService}. Mostly delegates to {@link RawGcsService}
@@ -30,6 +36,12 @@ final class GcsServiceImpl implements GcsService {
 
   private final RawGcsService raw;
   private final RetryParams retryParams;
+  static final ExceptionHandler exceptionHandler = new ExceptionHandler.Builder()
+      .retryOn(ApiProxyException.class, IOException.class)
+      .abortOn(InterruptedException.class, FileNotFoundException.class,
+          MalformedURLException.class, ClosedByInterruptException.class,
+          InterruptedIOException.class)
+      .build();
 
   GcsServiceImpl(RawGcsService raw, RetryParams retryParams) {
     this.raw = checkNotNull(raw, "Null raw");
@@ -44,13 +56,20 @@ final class GcsServiceImpl implements GcsService {
   @Override
   public GcsOutputChannel createOrReplace(
       final GcsFilename filename, final GcsFileOptions options) throws IOException {
-    RawGcsCreationToken token = RetryHelper.runWithRetries(new Body<RawGcsCreationToken>() {
-      @Override
-      public RawGcsCreationToken run() throws IOException {
-        return raw.beginObjectCreation(filename, options, retryParams.getRequestTimeoutMillis());
-      }
-    }, retryParams);
-    return new GcsOutputChannelImpl(raw, token, retryParams);
+    try {
+      RawGcsCreationToken token = RetryHelper.runWithRetries(new Callable<RawGcsCreationToken>() {
+        @Override
+        public RawGcsCreationToken call() throws IOException {
+          return raw.beginObjectCreation(filename, options, retryParams.getRequestTimeoutMillis());
+        }
+      }, retryParams, exceptionHandler);
+      return new GcsOutputChannelImpl(raw, token, retryParams);
+    } catch (RetryInterruptedException ex) {
+      throw new ClosedByInterruptException();
+    } catch (NonRetriableException e) {
+      Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
+      throw e;
+    }
   }
 
   @Override
@@ -67,21 +86,35 @@ final class GcsServiceImpl implements GcsService {
 
   @Override
   public GcsFileMetadata getMetadata(final GcsFilename filename) throws IOException {
-    return RetryHelper.runWithRetries(new Body<GcsFileMetadata>() {
-      @Override
-      public GcsFileMetadata run() throws IOException {
-        return raw.getObjectMetadata(filename, retryParams.getRequestTimeoutMillis());
-      }
-    }, retryParams);
+    try {
+      return RetryHelper.runWithRetries(new Callable<GcsFileMetadata>() {
+        @Override
+        public GcsFileMetadata call() throws IOException {
+          return raw.getObjectMetadata(filename, retryParams.getRequestTimeoutMillis());
+        }
+      }, retryParams, exceptionHandler);
+    } catch (RetryInterruptedException ex) {
+      throw new ClosedByInterruptException();
+    } catch (NonRetriableException e) {
+      Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
+      throw e;
+    }
   }
 
   @Override
   public boolean delete(final GcsFilename filename) throws IOException {
-    return RetryHelper.runWithRetries(new Body<Boolean>() {
-      @Override
-      public Boolean run() throws IOException {
-        return raw.deleteObject(filename, retryParams.getRequestTimeoutMillis());
-      }
-    }, retryParams);
+    try {
+      return RetryHelper.runWithRetries(new Callable<Boolean>() {
+        @Override
+        public Boolean call() throws IOException {
+          return raw.deleteObject(filename, retryParams.getRequestTimeoutMillis());
+        }
+      }, retryParams, exceptionHandler);
+    } catch (RetryInterruptedException ex) {
+      throw new ClosedByInterruptException();
+    } catch (NonRetriableException e) {
+      Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
+      throw e;
+    }
   }
 }

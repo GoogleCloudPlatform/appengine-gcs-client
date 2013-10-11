@@ -16,15 +16,17 @@
 
 package com.google.appengine.tools.cloudstorage;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-import com.google.apphosting.api.ApiProxy.ApiProxyException;
+import com.google.apphosting.api.AppEngineInternal;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.net.MalformedURLException;
+import java.io.InterruptedIOException;
 import java.nio.channels.ClosedByInterruptException;
+import java.util.concurrent.Callable;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -37,112 +39,93 @@ import java.util.logging.Logger;
  *
  * @param <V> return value of the closure that is being run with retries
  */
-public class RetryHelper<V> {
+@AppEngineInternal
+public class RetryHelper<V>  {
 
   private static final Logger log = Logger.getLogger(RetryHelper.class.getName());
 
-  private static String messageChain(Throwable t) {
-    StringBuilder resultMessage = new StringBuilder("" + t);
-    t = t.getCause();
-    while (t != null) {
-      resultMessage.append("\n -- caused by: " + t);
-      t = t.getCause();
-    }
-    return "" + resultMessage;
-  }
-
-  /** Body to be run and retried if it doesn't succeed. */
-  interface Body<V> {
-    V run() throws IOException;
-  }
-
-  static class RetryInteruptedException extends RuntimeException {
-    private static final long serialVersionUID = 1L;
-    RetryInteruptedException() {
-    }
-  }
-
   private final Stopwatch stopwatch;
-  private int attemptsSoFar = 0;
-  private final Body<V> body;
-  private final RetryParams retryParams;
+  private final Callable<V> callable;
+  private final RetryParams params;
+  private final ExceptionHandler exceptionHandler;
+  private int attemptsSoFar;
 
-  private RetryHelper(Body<V> body, RetryParams parms) {
-    this(body, parms, new Stopwatch());
+  @VisibleForTesting
+  RetryHelper(Callable<V> callable, RetryParams params, ExceptionHandler exceptionHandler,
+      Stopwatch stopwatch) {
+    this.callable = checkNotNull(callable);
+    this.params = checkNotNull(params);
+    this.stopwatch = checkNotNull(stopwatch);
+    this.exceptionHandler = checkNotNull(exceptionHandler);
+    exceptionHandler.verifyCaller(callable);
   }
-
-  private RetryHelper(Body<V> body, RetryParams parms, Stopwatch stopwatch) {
-    this.body = body;
-    this.retryParams = parms;
-    this.stopwatch = stopwatch;
-  }
-
 
   @Override
   public String toString() {
     return getClass().getSimpleName() + "(" + stopwatch + ", " + attemptsSoFar + " attempts, "
-        + body + ")";
+        + callable + ")";
   }
 
-  private V doRetry() throws IOException {
+  private V doRetry() throws RetryHelperException {
     stopwatch.start();
     while (true) {
       attemptsSoFar++;
       Exception exception;
       try {
-        V value = body.run();
+        V value = callable.call();
         if (attemptsSoFar > 1) {
-          log.info(this + ": retry successful");
+          log.info(this + ": attempt #" + (attemptsSoFar) + " succeeded");
         }
         return value;
-      } catch (IOException e) {
-        if (e instanceof FileNotFoundException || e instanceof MalformedURLException
-            || e instanceof ClosedByInterruptException) {
-          throw e;
+      } catch (Exception e) {
+        if (!exceptionHandler.shouldRetry(e)) {
+          if (e instanceof InterruptedException ||
+              e instanceof InterruptedIOException ||
+              e instanceof ClosedByInterruptException) {
+            RetryInterruptedException.propagate();
+          }
+          throw new NonRetriableException(e);
         }
         exception = e;
-      } catch (ApiProxyException e) {
-        exception = e;
       }
-      long sleepDurationMillis = getSleepDuration(retryParams, attemptsSoFar);
+      long sleepDurationMillis = getSleepDuration(params, attemptsSoFar);
+      log.log(Level.WARNING, this + ": Attempt " + attemptsSoFar + " failed, sleeping for "
+          + sleepDurationMillis + " ms", exception);
 
-      log.warning(this + ": Attempt " + attemptsSoFar + " failed, sleeping for "
-          + sleepDurationMillis + " ms: " + messageChain(exception));
-
-      if (attemptsSoFar >= retryParams.getRetryMaxAttempts() || (
-          attemptsSoFar >= retryParams.getRetryMinAttempts()
-          && stopwatch.elapsed(MILLISECONDS) >= retryParams.getTotalRetryPeriodMillis())) {
+      if (attemptsSoFar >= params.getRetryMaxAttempts() || (
+          attemptsSoFar >= params.getRetryMinAttempts()
+          && stopwatch.elapsed(MILLISECONDS) >= params.getTotalRetryPeriodMillis())) {
         throw new RetriesExhaustedException(this + ": Too many failures, giving up", exception);
       }
       try {
         Thread.sleep(sleepDurationMillis);
-      } catch (InterruptedException e2) {
-        Thread.currentThread().interrupt();
-        throw new RetryInteruptedException();
+      } catch (InterruptedException e) {
+        RetryInterruptedException.propagate();
       }
     }
   }
 
+  @VisibleForTesting
   static long getSleepDuration(RetryParams retryParams, int attemptsSoFar) {
     return (long) ((Math.random() / 2.0 + .5) * (Math.min(
         retryParams.getMaxRetryDelayMillis(),
-            Math.pow(retryParams.getRetryDelayBackoffFactor(), attemptsSoFar - 1)
-            * retryParams.getInitialRetryDelayMillis())));
+        Math.pow(retryParams.getRetryDelayBackoffFactor(), attemptsSoFar - 1)
+        * retryParams.getInitialRetryDelayMillis())));
   }
 
-  public static <V> V runWithRetries(Body<V> body) throws IOException {
-    return new RetryHelper<V>(body, RetryParams.getDefaultInstance()).doRetry();
+  public static <V> V runWithRetries(Callable<V> callable) throws RetryHelperException {
+    return runWithRetries(callable, RetryParams.getDefaultInstance(),
+        ExceptionHandler.getDefaultInstance());
   }
 
-  public static <V> V runWithRetries(Body<V> body, RetryParams parms) throws IOException {
-    return new RetryHelper<V>(body, parms).doRetry();
-  }
-  /**
-   * For testing.
-   */
-  static <V> V runWithRetries(Body<V> body, RetryParams parms, Stopwatch stopwatch)
-      throws IOException {
-    return new RetryHelper<V>(body, parms, stopwatch).doRetry();
+  public static <V> V runWithRetries(Callable<V> callable, RetryParams params,
+      ExceptionHandler exceptionHandler) throws RetryHelperException {
+    return runWithRetries(callable, params, exceptionHandler, Stopwatch.createUnstarted());
   }
 
+  @VisibleForTesting
+  static <V> V runWithRetries(Callable<V> callable, RetryParams params,
+      ExceptionHandler exceptionHandler, Stopwatch stopwatch) throws RetryHelperException {
+    return new RetryHelper<V>(callable, params, exceptionHandler, stopwatch).doRetry();
+  }
 }

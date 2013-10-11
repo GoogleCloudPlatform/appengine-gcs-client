@@ -19,9 +19,9 @@ package com.google.appengine.tools.cloudstorage;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken;
-import com.google.appengine.tools.cloudstorage.RetryHelper.Body;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -30,6 +30,7 @@ import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
@@ -80,7 +81,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
   private transient RawGcsService raw;
   private transient OutstandingRequest ongoingWrite;private RawGcsCreationToken token;
   private final GcsFilename filename;
-  private RetryParams retryParams;
+  private final RetryParams retryParams;
 
 
   GcsOutputChannelImpl(RawGcsService raw, RawGcsCreationToken nextToken, RetryParams retryParams) {
@@ -94,12 +95,12 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
   private void readObject(ObjectInputStream aInputStream)
       throws ClassNotFoundException, IOException {
     aInputStream.defaultReadObject();
-    this.lock = new Object();
-    this.raw = GcsServiceFactory.createRawGcsService();
-    if (this.token != null) {
+    lock = new Object();
+    raw = GcsServiceFactory.createRawGcsService();
+    if (token != null) {
       createNewBuffer();
       int length = aInputStream.readInt();
-      if (length > this.buf.capacity()) {
+      if (length > buf.capacity()) {
         throw new IllegalArgumentException(
             "Size of buffer is smaller than initial contents: " + length);
       }
@@ -108,13 +109,13 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
         for (int pos = 0; pos < length;) {
           pos += aInputStream.read(initialBuffer, pos, length - pos);
         }
-        this.buf.put(initialBuffer);
+        buf.put(initialBuffer);
       }
     }
   }
 
   private void createNewBuffer() {
-    this.buf = ByteBuffer.allocate(getBufferSize(this.raw.getChunkSizeBytes()));
+    buf = ByteBuffer.allocate(getBufferSize(raw.getChunkSizeBytes()));
   }
 
   private void writeObject(ObjectOutputStream aOutputStream) throws IOException {
@@ -184,13 +185,19 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
       }
       waitForNextToken();
       final ByteBuffer out = getSliceForWrite();
-      RetryHelper.runWithRetries(new Body<Void>() {
-        @Override
-        public Void run() throws IOException {
-          raw.finishObjectCreation(token, out, retryParams.getRequestTimeoutMillis());
-          return null;
-        }
-      }, retryParams);
+      try {
+        RetryHelper.runWithRetries(new Callable<Void>() {
+          @Override public Void call() throws IOException {
+            raw.finishObjectCreation(token, out, retryParams.getRequestTimeoutMillis());
+            return null;
+          }
+        }, retryParams, GcsServiceImpl.exceptionHandler);
+      } catch (RetryInterruptedException ex) {
+        throw new ClosedByInterruptException();
+      } catch (NonRetriableException e) {
+        Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
+        throw e;
+      }
       token = null;
     }
   }
@@ -208,40 +215,45 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
   /**
    * Waits for the current outstanding request retrying it with exponential backoff if it fails.
    *
-   * @throws IOException In the event of FileNotFoundException, MalformedURLException,
-   *         RetriesExhaustedException, or ClosedByInterruptException
+   * @throws ClosedByInterruptException if request was interrupted
+   * @throws IOException In the event of FileNotFoundException, MalformedURLException
+   * @throws RetriesExhaustedException if exceeding the number of retries
    */
   private void waitForNextToken() throws IOException {
     if (ongoingWrite == null) {
       return;
     }
-    RetryHelper.runWithRetries(new Body<Void>() {
-      boolean failed = false;
-      @Override
-      public Void run() throws IOException {
-        if (failed) {
-          retryWrite();
-        }
-        try {
-          token = ongoingWrite.nextToken.get();
-          ongoingWrite = null;
-          return null;
-        } catch (ExecutionException e) {
-          failed = true;
-          Throwable cause = e.getCause();
-          if (cause instanceof IOException) {
-            log.log(Level.WARNING, this + ": IOException writing block", cause);
-            throw (IOException) cause;
-          } else {
-            throw new RuntimeException(this + ": Unexpected cause of ExecutionException", cause);
+    try {
+      RetryHelper.runWithRetries(new Callable<Void>() {
+        boolean failed = false;
+        @Override
+        public Void call() throws IOException, InterruptedException {
+          if (failed) {
+            retryWrite();
           }
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          token = null;
-          throw new ClosedByInterruptException();
+          try {
+            token = ongoingWrite.nextToken.get();
+            ongoingWrite = null;
+            return null;
+          } catch (ExecutionException e) {
+            failed = true;
+            Throwable cause = e.getCause();
+            if (cause instanceof IOException) {
+              log.log(Level.WARNING, this + ": IOException writing block", cause);
+              throw (IOException) cause;
+            } else {
+              throw new RuntimeException(this + ": Unexpected cause of ExecutionException", cause);
+            }
+          }
         }
-      }
-    }, retryParams);
+      }, retryParams, GcsServiceImpl.exceptionHandler);
+    } catch (RetryInterruptedException ex) {
+      token = null;
+      throw new ClosedByInterruptException();
+    } catch (NonRetriableException e) {
+      Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
+      throw e;
+    }
   }
 
   private void retryWrite() throws IOException {
@@ -297,5 +309,4 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
       }
     }
   }
-
 }
