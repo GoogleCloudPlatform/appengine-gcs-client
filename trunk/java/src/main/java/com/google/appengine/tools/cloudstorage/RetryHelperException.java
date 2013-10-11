@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Google Inc. All Rights Reserved.
+ * Copyright 2013 Google Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,18 +18,24 @@ package com.google.appengine.tools.cloudstorage;
 
 
 /**
- * Thrown when a RetryHelper has attempted the maximum number of attempts allowed by RetryParams
- * and was not successful.
+ * Thrown when a RetryHelper has failed to complete successfully.
  */
-public final class RetriesExhaustedException extends RetryHelperException {
+public class RetryHelperException extends RuntimeException {
 
-  private static final long serialVersionUID = 780199686075408083L;
+  private static final long serialVersionUID = -2907061015610448235L;
 
-  RetriesExhaustedException(String message) {
+  RetryHelperException() {
+  }
+
+  RetryHelperException(String message) {
     super(message);
   }
 
-  RetriesExhaustedException(String message, Throwable cause) {
+  RetryHelperException(Throwable cause) {
+    super(cause);
+  }
+
+  RetryHelperException(String message, Throwable cause) {
     super(message, cause);
   }
 }

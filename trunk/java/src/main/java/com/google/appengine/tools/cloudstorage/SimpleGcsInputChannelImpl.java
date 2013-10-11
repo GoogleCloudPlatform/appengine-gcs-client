@@ -19,15 +19,15 @@ package com.google.appengine.tools.cloudstorage;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.tools.cloudstorage.RetryHelper.Body;
-import com.google.appengine.tools.cloudstorage.RetryHelper.RetryInteruptedException;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
 final class SimpleGcsInputChannelImpl implements GcsInputChannel {
@@ -78,9 +78,9 @@ final class SimpleGcsInputChannelImpl implements GcsInputChannel {
       }
       Preconditions.checkArgument(dst.remaining() > 0, "Requested to read data into a full buffer");
       try {
-        return RetryHelper.runWithRetries(new Body<Integer>() {
+        return RetryHelper.runWithRetries(new Callable<Integer>() {
           @Override
-          public Integer run() throws IOException {
+          public Integer call() throws IOException, InterruptedException {
             try {
               int n = dst.remaining();
               GcsFileMetadata gcsFileMetadata = raw.readObjectAsync(
@@ -98,19 +98,18 @@ final class SimpleGcsInputChannelImpl implements GcsInputChannel {
               } else if (e.getCause() instanceof IOException) {
                 throw (IOException) e.getCause();
               } else {
-                throw new RuntimeException(this + ": Unexpected cause of ExecutionException", e);
+                throw new RuntimeException(this + ": Unexpected cause of ExecutionException",
+                    e.getCause());
               }
-            } catch (InterruptedException e) {
-              Thread.currentThread().interrupt();
-              closed = true;
-              throw new ClosedByInterruptException();
             }
           }
-        }, retryParams);
-      } catch (RetryInteruptedException e) {
-        Thread.currentThread().interrupt();
+        }, retryParams, GcsServiceImpl.exceptionHandler);
+      } catch (RetryInterruptedException e) {
         closed = true;
         throw new ClosedByInterruptException();
+      } catch (RetryHelperException e) {
+        Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
+        throw e;
       }
     }
   }

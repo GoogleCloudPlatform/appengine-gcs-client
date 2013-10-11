@@ -16,11 +16,11 @@
 
 package com.google.appengine.tools.cloudstorage;
 
+import static java.util.concurrent.Executors.callable;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.google.appengine.tools.cloudstorage.RetryHelper.Body;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Ticker;
 
@@ -29,6 +29,9 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -41,18 +44,60 @@ import java.util.concurrent.atomic.AtomicLong;
 public class RetryHelperTest {
 
   @Test
-  public void testTriesAtLeastMinTimes() throws IOException {
+  public void testTriesWithExceptionHandling() {
+    RetryParams params =
+        new RetryParams.Builder().initialRetryDelayMillis(0).retryMaxAttempts(3).build();
+    ExceptionHandler handler = new ExceptionHandler.Builder()
+        .retryOn(IOException.class).abortOn(RuntimeException.class).build();
+    final AtomicInteger count = new AtomicInteger(2);
+    try {
+      RetryHelper.runWithRetries(new Callable<Void>() {
+        @Override public Void call() throws IOException, NullPointerException {
+          if (count.decrementAndGet() == 2) {
+            throw new IOException("should be retried");
+          }
+          throw new NullPointerException("Boo!");
+        }
+      }, params, handler);
+      fail("Exception should have been thrown");
+    } catch (NonRetriableException ex) {
+      assertEquals("Boo!", ex.getCause().getMessage());
+      assertEquals(1, count.intValue());
+    }
+
+    class E1 extends Exception {}
+    class E2 extends E1 {}
+    class E3 extends E1 {}
+    class E4 extends E2 {}
+
+    params = new RetryParams.Builder().initialRetryDelayMillis(0).retryMaxAttempts(5).build();
+    handler = new ExceptionHandler.Builder().retryOn(E1.class, E4.class).abortOn(E3.class).build();
+    final Iterator<? extends E1> exceptions =
+        Arrays.asList(new E1(), new E2(), new E4(), new E3()).iterator();
+    try {
+      RetryHelper.runWithRetries(new Callable<Void>() {
+        @Override public Void call() throws E1 {
+          E1 exception = exceptions.next();
+          throw exception;
+        }
+      }, params, handler);
+      fail("Exception should have been thrown");
+    } catch (NonRetriableException ex) {
+      assertTrue(ex.getCause() instanceof E3);
+    }
+  }
+
+  @Test
+  public void testTriesAtLeastMinTimes() {
     RetryParams params = new RetryParams.Builder().initialRetryDelayMillis(0)
         .totalRetryPeriodMillis(60000)
         .retryMinAttempts(5)
         .retryMaxAttempts(10)
         .build();
     final int timesToFail = 7;
-    int attempted = RetryHelper.runWithRetries(new Body<Integer>() {
+    int attempted = RetryHelper.runWithRetries(new Callable<Integer>() {
       int timesCalled = 0;
-
-      @Override
-      public Integer run() throws IOException {
+      @Override public Integer call() throws IOException {
         timesCalled++;
         if (timesCalled <= timesToFail) {
           throw new IOException();
@@ -60,12 +105,12 @@ public class RetryHelperTest {
           return timesCalled;
         }
       }
-    }, params);
+    }, params, ExceptionHandler.getDefaultInstance());
     assertEquals(timesToFail + 1, attempted);
   }
 
   @Test
-  public void testTriesNoMoreThanMaxTimes() throws IOException {
+  public void testTriesNoMoreThanMaxTimes() {
     final int maxAttempts = 10;
     RetryParams params = new RetryParams.Builder().initialRetryDelayMillis(0)
         .totalRetryPeriodMillis(60000)
@@ -74,16 +119,14 @@ public class RetryHelperTest {
         .build();
     final AtomicInteger timesCalled = new AtomicInteger(0);
     try {
-      RetryHelper.runWithRetries(new Body<Void>() {
-        @Override
-        public Void run() throws IOException {
+      RetryHelper.runWithRetries(callable(new Runnable() {
+        @Override public void run() {
           if (timesCalled.incrementAndGet() <= maxAttempts) {
-            throw new IOException();
+            throw new RuntimeException();
           }
           fail("Body was executed too many times: " + timesCalled.get());
-          return null;
         }
-      }, params);
+      }), params, new ExceptionHandler.Builder().retryOn(RuntimeException.class).build());
       fail("Should not have succeeded, expected all attempts to fail and give up.");
     } catch (RetriesExhaustedException expected) {
       assertEquals(maxAttempts, timesCalled.get());
@@ -111,27 +154,28 @@ public class RetryHelperTest {
   }
 
   @Test
-  public void testTriesNoMoreLongerThanTotalRetryPeriod() throws IOException {
+  public void testTriesNoMoreLongerThanTotalRetryPeriod() {
     final FakeTicker ticker = new FakeTicker();
-    Stopwatch stopwatch = new Stopwatch(ticker);
+    Stopwatch stopwatch = Stopwatch.createUnstarted(ticker);
     RetryParams params = new RetryParams.Builder().initialRetryDelayMillis(0)
         .totalRetryPeriodMillis(999)
         .retryMinAttempts(5)
         .retryMaxAttempts(10)
         .build();
+    ExceptionHandler handler =
+        new ExceptionHandler.Builder().retryOn(RuntimeException.class).build();
     final int sleepOnAttempt = 8;
     final AtomicInteger timesCalled = new AtomicInteger(0);
     try {
-      RetryHelper.runWithRetries(new Body<Void>() {
-        @Override
-        public Void run() throws IOException {
+      RetryHelper.runWithRetries(callable(new Runnable() {
+        @Override public void run() {
           timesCalled.incrementAndGet();
           if (timesCalled.get() == sleepOnAttempt) {
             ticker.advance(1000, TimeUnit.MILLISECONDS);
           }
-          throw new IOException();
+          throw new RuntimeException();
         }
-      }, params, stopwatch);
+      }), params, handler, stopwatch);
       fail();
     } catch (RetriesExhaustedException e) {
       assertEquals(sleepOnAttempt, timesCalled.get());
@@ -146,7 +190,6 @@ public class RetryHelperTest {
         .retryMinAttempts(0)
         .retryMaxAttempts(100)
         .build();
-    final int timesToFail = 200;
     long sleepDuration = RetryHelper.getSleepDuration(params, 1);
     assertTrue("" + sleepDuration, sleepDuration < 10 && sleepDuration >= 5);
     sleepDuration = RetryHelper.getSleepDuration(params, 2);

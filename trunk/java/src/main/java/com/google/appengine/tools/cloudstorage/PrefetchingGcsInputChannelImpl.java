@@ -19,9 +19,8 @@ package com.google.appengine.tools.cloudstorage;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.tools.cloudstorage.RetryHelper.Body;
-import com.google.appengine.tools.cloudstorage.RetryHelper.RetryInteruptedException;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -29,6 +28,7 @@ import java.io.ObjectInputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
@@ -90,14 +90,14 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
   private void readObject(ObjectInputStream aInputStream)
       throws ClassNotFoundException, IOException {
     aInputStream.defaultReadObject();
-    this.lock = new Object();
-    this.raw = GcsServiceFactory.createRawGcsService();
-    this.fetchPosition = readPosition;
-    this.current = EMPTY_BUFFER;
-    this.eofHit = length != -1 && readPosition >= length;
+    lock = new Object();
+    raw = GcsServiceFactory.createRawGcsService();
+    fetchPosition = readPosition;
+    current = EMPTY_BUFFER;
+    eofHit = length != -1 && readPosition >= length;
     if (!closed) {
-      this.next = ByteBuffer.allocate(blockSizeBytes);
-      this.pendingFetch =
+      next = ByteBuffer.allocate(blockSizeBytes);
+      pendingFetch =
           raw.readObjectAsync(next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
     }
   }
@@ -126,19 +126,21 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
 
   private void waitForFetchWithRetry() throws IOException {
     try {
-      RetryHelper.runWithRetries(new Body<Void>() {
-        @Override
-        public Void run() throws IOException {
+      RetryHelper.runWithRetries(new Callable<Void>() {
+        @Override public Void call() throws IOException, InterruptedException {
           waitForFetch();
           return null;
-        }}, retryParams);
-    } catch (RetryInteruptedException e) {
+        }}, retryParams, GcsServiceImpl.exceptionHandler);
+    } catch (RetryInterruptedException e) {
       closed = true;
       throw new ClosedByInterruptException();
+    } catch (NonRetriableException e) {
+      Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
+      throw e;
     }
   }
 
-  private void waitForFetch() throws IOException {
+  private void waitForFetch() throws IOException, InterruptedException {
     Preconditions.checkState(pendingFetch != null, "%s: no fetch pending", this);
     Preconditions.checkState(!current.hasRemaining(), "%s: current has remaining", this);
     try {
@@ -159,14 +161,10 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
         next = ByteBuffer.allocate(blockSizeBytes);
         pendingFetch = raw.readObjectAsync(
             next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
-        throw new IOException(this + ": Prefetch failed, prefetching again", e);
+        throw new IOException(this + ": Prefetch failed, prefetching again", e.getCause());
       } else {
-        throw new RuntimeException(this + ": Unexpected cause of ExecutionException", e);
+        throw new RuntimeException(this + ": Unknown cause of ExecutionException", e.getCause());
       }
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      closed = true;
-      throw new ClosedByInterruptException();
     }
   }
 
@@ -231,5 +229,4 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
       }
     }
   }
-
 }

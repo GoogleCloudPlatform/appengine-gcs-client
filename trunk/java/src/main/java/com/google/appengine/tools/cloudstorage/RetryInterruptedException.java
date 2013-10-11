@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Google Inc. All Rights Reserved.
+ * Copyright 2013 Google Inc. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.google.appengine.tools.cloudstorage;
 
 
 /**
- * Thrown when a RetryHelper has attempted the maximum number of attempts allowed by RetryParams
- * and was not successful.
+ * Thrown when a RetryHelper failed to complete its work due to interruption.
+ * Throwing this exception also sets the thread interrupt flag.
  */
-public final class RetriesExhaustedException extends RetryHelperException {
+public final class RetryInterruptedException extends RetryHelperException {
 
-  private static final long serialVersionUID = 780199686075408083L;
+  private static final long serialVersionUID = 1678966737697204885L;
 
-  RetriesExhaustedException(String message) {
-    super(message);
+  RetryInterruptedException() {
   }
 
-  RetriesExhaustedException(String message, Throwable cause) {
-    super(message, cause);
+  /**
+   * Sets the caller thread interrupt flag and throws {@code RetryInteruptedException}.
+   */
+  static void propagate() throws RetryInterruptedException {
+    Thread.currentThread().interrupt();
+    throw new RetryInterruptedException();
   }
 }
