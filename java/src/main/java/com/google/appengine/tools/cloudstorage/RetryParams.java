@@ -44,7 +44,7 @@ import java.io.Serializable;
 public class RetryParams implements Serializable {
   private static final long serialVersionUID = -8492751576749007700L;
 
-  public static final long DEFAULT_REQUEST_TIMEOUT_MILLIS = 5000;
+  public static final long DEFAULT_REQUEST_TIMEOUT_MILLIS = 10000;
   public static final int DEFAULT_RETRY_MIN_ATTEMPTS = 3;
   public static final int DEFAULT_RETRY_MAX_ATTEMPTS = 6;
   public static final long DEFAULT_INITIAL_RETRY_DELAY_MILLIS = 100;
