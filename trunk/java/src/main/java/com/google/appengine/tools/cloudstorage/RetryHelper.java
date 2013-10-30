@@ -19,7 +19,6 @@ package com.google.appengine.tools.cloudstorage;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-import com.google.apphosting.api.AppEngineInternal;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 
@@ -35,11 +34,12 @@ import java.util.logging.Logger;
  *
  * If the request is never successful, a {@link RetriesExhaustedException} will be thrown.
  *
+ * For internal use only. User code cannot safely depend on this class.
+ *
  * @author ohler@google.com (Christian Ohler)
  *
  * @param <V> return value of the closure that is being run with retries
  */
-@AppEngineInternal
 public class RetryHelper<V>  {
 
   private static final Logger log = Logger.getLogger(RetryHelper.class.getName());
