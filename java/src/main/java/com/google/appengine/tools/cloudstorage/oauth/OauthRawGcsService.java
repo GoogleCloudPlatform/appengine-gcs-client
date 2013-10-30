@@ -32,7 +32,7 @@ import com.google.appengine.tools.cloudstorage.RawGcsService;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
-
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
@@ -321,9 +321,8 @@ final class OauthRawGcsService implements RawGcsService {
     final HTTPRequest req = createPutRequest(token, chunk, isFinalChunk, timeoutMillis, length);
     return new FutureWrapper<HTTPResponse, RawGcsCreationToken>(urlfetch.fetchAsync(req)) {
       @Override
-      protected IOException convertException(Throwable e) {
-        return new IOException(
-            "URLFetch threw IOException; request: " + URLFetchUtils.describeRequest(req), e);
+      protected Throwable convertException(Throwable e) {
+        return OauthRawGcsService.convertException(e, req);
       }
 
       @Override
@@ -407,6 +406,8 @@ final class OauthRawGcsService implements RawGcsService {
           case 206:
             totalLength = getLengthFromContentRange(resp);
             break;
+          case 404:
+            throw new FileNotFoundException("Cound not find: " + filename);
           case 416:
             throw new BadRangeException("Requested Range not satisfiable; perhaps read past EOF? "
                 + URLFetchUtils.describeRequestAndResponse(req, resp, true));
@@ -422,14 +423,18 @@ final class OauthRawGcsService implements RawGcsService {
 
       @Override
       protected Throwable convertException(Throwable e) {
-        if (e instanceof IOException || e instanceof BadRangeException) {
-          return e;
-        } else {
-          return new IOException(
-              "URLFetch threw IOException; request: " + URLFetchUtils.describeRequest(req), e);
-        }
+        return OauthRawGcsService.convertException(e, req);
       }
     };
+  }
+
+  private static Throwable convertException(Throwable e, HTTPRequest req) {
+    if (e instanceof IOException || e instanceof RuntimeException) {
+      return e;
+    } else {
+      return new IOException(
+          "URLFetch threw IOException; request: " + URLFetchUtils.describeRequest(req), e);
+    }
   }
 
   @Override
