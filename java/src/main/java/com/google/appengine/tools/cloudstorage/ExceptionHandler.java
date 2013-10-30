@@ -18,7 +18,6 @@ package com.google.appengine.tools.cloudstorage;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.apphosting.api.AppEngineInternal;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
@@ -32,8 +31,9 @@ import java.util.concurrent.Callable;
 /**
  * Exception handling used by {@link RetryHelper}.
  *
+ * For internal use only. User code cannot safely depend on this class.
+ *
  */
-@AppEngineInternal
 public final class ExceptionHandler implements Serializable {
 
   private static final long serialVersionUID = -2460707015779532919L;
