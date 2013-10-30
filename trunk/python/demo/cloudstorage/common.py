@@ -9,7 +9,8 @@
 __all__ = ['CS_XML_NS',
            'CSFileStat',
            'dt_str_to_posix',
-           'LOCAL_API_HOST',
+           'local_api_url',
+           'LOCAL_GCS_ENDPOINT',
            'local_run',
            'get_access_token',
            'get_metadata',
@@ -50,7 +51,7 @@ _GCS_METADATA = ['x-goog-meta-',
                  'content-encoding']
 _GCS_OPTIONS = _GCS_METADATA + ['x-goog-acl']
 CS_XML_NS = 'http://doc.s3.amazonaws.com/2006-03-01'
-LOCAL_API_HOST = 'gcs-magicstring.appspot.com'
+LOCAL_GCS_ENDPOINT = '/_ah/gcs'
 _access_token = ''
 
 
@@ -361,6 +362,11 @@ def local_run():
   if server_software.startswith(('Development', 'testutil')):
     return True
   return False
+
+
+def local_api_url():
+  """Return URL for GCS emulation on dev appserver."""
+  return 'http://%s%s' % (os.environ.get('HTTP_HOST'), LOCAL_GCS_ENDPOINT)
 
 
 def memory_usage(method):

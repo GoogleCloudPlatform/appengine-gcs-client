@@ -444,7 +444,7 @@ def _get_storage_api(retry_params, account_id=None):
                                 service_account_id=account_id,
                                 retry_params=retry_params)
   if common.local_run() and not common.get_access_token():
-    api.api_url = 'http://' + common.LOCAL_API_HOST
+    api.api_url = common.local_api_url()
   if common.get_access_token():
     api.token = common.get_access_token()
   return api
