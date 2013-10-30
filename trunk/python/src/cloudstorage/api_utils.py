@@ -108,7 +108,8 @@ class RetryParams(object):
       max_retries: max number of times to retry. Set this to 0 for no retry.
       max_retry_period: max total seconds spent on retry. Retry stops when
         this period passed AND min_retries has been attempted.
-      urlfetch_timeout: timeout for urlfetch in seconds. Could be None.
+      urlfetch_timeout: timeout for urlfetch in seconds. Could be None,
+        in which case the value will be chosen by urlfetch module.
       save_access_token: persist access token to datastore to avoid
         excessive usage of GetAccessToken API. Usually the token is cached
         in process and in memcache. In some cases, memcache isn't very
@@ -219,9 +220,11 @@ def _retry_fetch(url, retry_params, **kwds):
   if delay <= 0:
     return
 
+  logging.info('Will retry request to %s.', url)
   while delay > 0:
     resp = None
     try:
+      logging.info('Retry in %s seconds.', delay)
       time.sleep(delay)
       resp = urlfetch.fetch(url, **kwds)
     except runtime.DeadlineExceededError:
@@ -238,18 +241,15 @@ def _retry_fetch(url, retry_params, **kwds):
       break
     elif resp:
       logging.info(
-          'Got status %s from GCS when fetching with url %s. '
-          'Will retry in %s seconds.',
-          resp.status_code, url, delay)
+          'Got status %s from GCS.', resp.status_code)
     else:
       logging.info(
-          'Got exception "%r" while contacting GCS. Will retry in %s seconds.',
-          e, delay)
+          'Got exception "%r" while contacting GCS.', e)
 
   if resp:
     return resp
 
-  logging.info('Urlfetch retry %s failed after %s seconds total',
+  logging.info('Urlfetch failed after %s retries and %s seconds in total.',
                n - 1, time.time() - start_time)
   raise
 
