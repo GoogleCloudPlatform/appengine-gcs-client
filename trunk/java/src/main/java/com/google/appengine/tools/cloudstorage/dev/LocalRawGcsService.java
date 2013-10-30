@@ -18,6 +18,7 @@ package com.google.appengine.tools.cloudstorage.dev;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.appengine.api.ThreadManager;
 import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
@@ -168,7 +169,14 @@ final class LocalRawGcsService implements RawGcsService {
     return new Token(t.filename, t.options, t.offset + n, t.file);
   }
 
-  private static final ScheduledThreadPoolExecutor writePool = new ScheduledThreadPoolExecutor(1);
+  private static ScheduledThreadPoolExecutor writePool;
+  static {
+    try {
+      writePool = new ScheduledThreadPoolExecutor(1, ThreadManager.backgroundThreadFactory());
+    } catch (Exception e) {
+      writePool = new ScheduledThreadPoolExecutor(1);
+    }
+  }
 
   /**
    * Runs calls in a background thread so that the results will actually be asyncronus.
