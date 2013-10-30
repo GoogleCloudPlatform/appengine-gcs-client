@@ -1,17 +1,15 @@
 /*
  * Copyright 2012 Google Inc. All Rights Reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 
 package com.google.appengine.tools.cloudstorage.oauth;
@@ -19,10 +17,15 @@ package com.google.appengine.tools.cloudstorage.oauth;
 import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
+
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -30,7 +33,22 @@ import java.util.List;
  */
 final class URLFetchUtils {
 
+  @VisibleForTesting
+  static final DateTimeFormatter DATE_FORMAT =
+      DateTimeFormat.forPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'").withZoneUTC();
+
   private URLFetchUtils() {}
+
+  /**
+   * Parses the date or returns null if it fails to do so.
+   */
+  static Date parseDate(String dateString) {
+    try {
+      return DATE_FORMAT.parseDateTime(dateString).toDate();
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+  }
 
   static String describeRequest(HTTPRequest req) {
     StringBuilder b = new StringBuilder(req.getMethod() + " " + req.getURL());
@@ -47,8 +65,8 @@ final class URLFetchUtils {
   }
 
   static String describeResponse(HTTPResponse resp, boolean includeBody) {
-    StringBuilder b = new StringBuilder(resp.getResponseCode()
-        + " with " + resp.getContent().length + " bytes of content");
+    StringBuilder b = new StringBuilder(
+        resp.getResponseCode() + " with " + resp.getContent().length + " bytes of content");
     for (HTTPHeader h : resp.getHeadersUncombined()) {
       b.append("\n" + h.getName() + ": " + h.getValue());
     }
@@ -62,8 +80,8 @@ final class URLFetchUtils {
 
   static String describeRequestAndResponse(HTTPRequest req, HTTPResponse resp,
       boolean includeResponseBody) {
-    return "Request: " + describeRequest(req)
-        + "\nResponse: " + describeResponse(resp, includeResponseBody);
+    return "Request: " + describeRequest(req) + "\nResponse: "
+        + describeResponse(resp, includeResponseBody);
   }
 
   /** Gets the values of all headers with the name {@code headerName}. */
@@ -78,8 +96,7 @@ final class URLFetchUtils {
   }
 
   /**
-   * Checks that exactly one header named {@code headerName} is present and
-   * returns its value.
+   * Checks that exactly one header named {@code headerName} is present and returns its value.
    */
   static String getSingleHeader(HTTPResponse resp, String headerName) {
     return Iterables.getOnlyElement(getHeaders(resp, headerName));
