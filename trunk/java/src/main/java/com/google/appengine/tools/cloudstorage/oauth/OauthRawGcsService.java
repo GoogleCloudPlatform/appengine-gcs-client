@@ -32,12 +32,17 @@ import com.google.appengine.tools.cloudstorage.RawGcsService;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
+
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.ByteBuffer;
+import java.util.Date;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.Future;
@@ -57,7 +62,10 @@ final class OauthRawGcsService implements RawGcsService {
   private static final String CONTENT_DISPOSITION = "Content-Disposition";
   private static final String CONTENT_TYPE = "Content-Type";
   private static final String ETAG = "ETag";
+  private static final String LAST_MODIFIED = "Last-Modified";
   private final HTTPHeader versionHeader = new HTTPHeader("x-goog-api-version", "2");
+  private static final DateTimeFormatter DATE_FORMAT =
+      DateTimeFormat.forPattern("EEE, dd MMM yyyy HH:mm:ss z");
 
   private static final Logger log = Logger.getLogger(OauthRawGcsService.class.getName());
 
@@ -456,6 +464,7 @@ final class OauthRawGcsService implements RawGcsService {
     List<HTTPHeader> headers = resp.getHeaders();
     GcsFileOptions.Builder optionsBuilder = new GcsFileOptions.Builder();
     String etag = null;
+    Date lastModified = null;
     for (HTTPHeader header : headers) {
       if (header.getName().startsWith("x-goog-meta-")) {
         String key = header.getName().replaceFirst("x-goog-meta-", "");
@@ -480,10 +489,21 @@ final class OauthRawGcsService implements RawGcsService {
       if (header.getName().equals(ETAG)) {
         etag = header.getValue();
       }
+      if (header.getName().equals(LAST_MODIFIED)) {
+        lastModified = parseDate(header.getValue());
+      }
     }
     GcsFileOptions options = optionsBuilder.build();
 
-    return new GcsFileMetadata(filename, options, etag, length);
+    return new GcsFileMetadata(filename, options, etag, length, lastModified);
+  }
+
+  /**
+   * Parses the date or returns null if it fails to do so.
+   */
+  Date parseDate(String dateString) {
+    DateTime time = DATE_FORMAT.parseDateTime(dateString);
+    return time == null ? null : time.toDate();
   }
 
   @Override

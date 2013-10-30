@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
+import java.util.Date;
 import java.util.Random;
 
 /**
@@ -180,6 +181,7 @@ public class GcsServiceTest {
 
   @Test
   public void testReadMetadata() throws IOException {
+    Date start = new Date(System.currentTimeMillis()-1000);
     byte[] content = new byte[1 * 1024 * 1024 + 1];
     Random r = new Random();
     r.nextBytes(content);
@@ -197,6 +199,9 @@ public class GcsServiceTest {
     assertEquals(filename, metadata.getFilename());
     assertEquals(content.length, metadata.getLength());
     assertEquals(options, metadata.getOptions());
+    assertNotNull(metadata.getLastModified());
+    assertTrue(metadata.getLastModified().before(new Date()));
+    assertTrue(metadata.getLastModified().after(start));
   }
 
   @Test

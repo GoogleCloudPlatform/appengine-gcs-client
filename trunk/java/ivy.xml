@@ -21,5 +21,7 @@
     <dependency org="org.hamcrest" name="hamcrest-core" rev="1.1" conf="${test}->default"/>
 
     <dependency org="javax.servlet" name="servlet-api" rev="2.5" conf="${war}->default"/>
+    <dependency org="joda-time" name="joda-time" rev="2.3" conf="${thirdparty}->default"/>
+
   </dependencies>
 </ivy-module>
