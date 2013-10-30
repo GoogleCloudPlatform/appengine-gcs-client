@@ -52,6 +52,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
+import java.util.Date;
 import java.util.Map.Entry;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
@@ -71,6 +72,7 @@ final class LocalRawGcsService implements RawGcsService {
 
   private static final String ENTITY_KIND_PREFIX = "_ah_FakeCloudStorage__";
   private static final String OPTIONS_PROP = "options";
+  private static final String CREATION_TIME_PROP = "time";
 
   static final class Token implements RawGcsCreationToken {
     private static final long serialVersionUID = 954846981243798905L;
@@ -203,6 +205,7 @@ final class LocalRawGcsService implements RawGcsService {
     oout.writeObject(t.options);
     oout.close();
     e.setUnindexedProperty(OPTIONS_PROP, new Blob(bout.toByteArray()));
+    e.setUnindexedProperty(CREATION_TIME_PROP, System.currentTimeMillis());
     DATASTORE.put(null, e);
   }
 
@@ -232,8 +235,12 @@ final class LocalRawGcsService implements RawGcsService {
     } finally {
       in.close();
     }
+    Date creationTime = null;
+    if (e.getProperty(CREATION_TIME_PROP) != null) {
+      creationTime = new Date((Long) e.getProperty(CREATION_TIME_PROP));
+    }
     FileStat stat = FILES.stat(file);
-    return new GcsFileMetadata(filename, options, null, FILES.stat(file).getLength());
+    return new GcsFileMetadata(filename, options, null, FILES.stat(file).getLength(), creationTime);
   }
 
   @Override

@@ -21,6 +21,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
+import java.util.Date;
+
 /**
  * Contains metadata about a Google Cloud Storage Object.
  */
@@ -28,14 +30,16 @@ public final class GcsFileMetadata {
 
   private final GcsFilename filename;
   private final GcsFileOptions options; private final String etag;
-  private final long length;
+  private final long length; private final Date lastModified;
 
-  public GcsFileMetadata(GcsFilename filename, GcsFileOptions options, String etag, long length) {
+  public GcsFileMetadata(
+      GcsFilename filename, GcsFileOptions options, String etag, long length, Date lastModified) {
     Preconditions.checkArgument(length >= 0, "Length must be positive");
     this.filename = checkNotNull(filename, "Null filename");
     this.options = checkNotNull(options, "Null options");
     this.etag = etag;
     this.length = length;
+    this.lastModified = lastModified;
   }
 
   public GcsFilename getFilename() {
@@ -54,10 +58,14 @@ public final class GcsFileMetadata {
     return length;
   }
 
+  public Date getLastModified() {
+    return lastModified;
+  }
+
   @Override
   public String toString() {
     return getClass().getSimpleName() + "(" + filename + ", " + length + ", " + etag + ", "
-        + options + ")";
+        + options + ", " + String.valueOf(lastModified) + ")";
   }
 
   @Override
@@ -77,6 +85,5 @@ public final class GcsFileMetadata {
   public final int hashCode() {
     return Objects.hashCode(filename, options, etag, length);
   }
-
 
 }
