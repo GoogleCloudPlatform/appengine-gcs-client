@@ -28,6 +28,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.MalformedURLException;
+import java.net.SocketTimeoutException;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.concurrent.Callable;
 
@@ -40,7 +41,7 @@ final class GcsServiceImpl implements GcsService {
   private final RetryParams retryParams;
   static final ExceptionHandler exceptionHandler = new ExceptionHandler.Builder()
       .retryOn(UnknownException.class, RPCFailedException.class, ApiDeadlineExceededException.class,
-          IOException.class)
+          IOException.class, SocketTimeoutException.class)
       .abortOn(InterruptedException.class, FileNotFoundException.class,
           MalformedURLException.class, ClosedByInterruptException.class,
           InterruptedIOException.class)
