@@ -19,7 +19,6 @@ package com.google.appengine.tools.cloudstorage;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 
@@ -60,7 +59,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
    * the request, as well as the future for its completion.
    */
   private class OutstandingRequest {
-    private RawGcsCreationToken requestToken;
+    private final RawGcsCreationToken requestToken;
     /** buffer that is associated with the on outstanding request */
     private final ByteBuffer ongoingRequestBuf;
     private final Future<RawGcsCreationToken> nextToken;
@@ -98,24 +97,27 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
     lock = new Object();
     raw = GcsServiceFactory.createRawGcsService();
     if (token != null) {
-      createNewBuffer();
       int length = aInputStream.readInt();
-      if (length > buf.capacity()) {
-        throw new IllegalArgumentException(
-            "Size of buffer is smaller than initial contents: " + length);
+      int bufferSize = getBufferSizeBytes();
+      if (length > bufferSize) {
+        throw new IllegalStateException(
+            "Size of buffer " + bufferSize + " is smaller than initial contents: " + length);
       }
       if (length > 0) {
-        byte[] initialBuffer = new byte[length];
+        byte[] initialBuffer = new byte[bufferSize];
         for (int pos = 0; pos < length;) {
           pos += aInputStream.read(initialBuffer, pos, length - pos);
         }
-        buf.put(initialBuffer);
+        buf = ByteBuffer.wrap(initialBuffer);
+        buf.position(length);
+      } else {
+        buf = ByteBuffer.allocate(0);
       }
     }
   }
 
   private void createNewBuffer() {
-    buf = ByteBuffer.allocate(getBufferSize(raw.getChunkSizeBytes()));
+    buf = ByteBuffer.allocate(getBufferSizeBytes());
   }
 
   private void writeObject(ObjectOutputStream aOutputStream) throws IOException {
@@ -130,21 +132,14 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
     }
   }
 
-  @VisibleForTesting
-  static int getBufferSize(int chunkSize) {
+  @Override
+  public int getBufferSizeBytes() {
+    int chunkSize = raw.getChunkSizeBytes();
     if (chunkSize <= 256 * 1024) {
       return 4 * chunkSize;
     } else {
       return chunkSize;
     }
-  }
-
-  @Override
-  public int getBufferSizeBytes() {
-    if (buf == null) {
-      return getBufferSize(raw.getChunkSizeBytes());
-    }
-    return buf.capacity();
   }
 
   @Override
@@ -205,8 +200,10 @@ final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
       waitForNextToken();
       ByteBuffer toWrite = getSliceForWrite();
       createNewBuffer();
-      ongoingWrite = new OutstandingRequest(token, toWrite,
-          raw.continueObjectCreationAsync(token, toWrite, retryParams.getRequestTimeoutMillis()));
+      if (toWrite.remaining() > 0) {
+        ongoingWrite = new OutstandingRequest(token, toWrite,
+            raw.continueObjectCreationAsync(token, toWrite, retryParams.getRequestTimeoutMillis()));
+      }
     }
   }
 

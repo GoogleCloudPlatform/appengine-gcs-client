@@ -239,11 +239,14 @@ public class GcsOutputChannelTest {
   /**
    * The other tests in this file assume a buffer size of 2mb. If this is changed this test will
    * fail. Before fixing it update the other tests.
+   * @throws IOException
    */
   @Test
-  public void testBufferSize() {
-    RawGcsService rawService = GcsServiceFactory.createRawGcsService();
-    int bufferSize = GcsOutputChannelImpl.getBufferSize(rawService.getChunkSizeBytes());
-    assertEquals(BUFFER_SIZE, bufferSize);
+  public void testBufferSize() throws IOException {
+    GcsService gcsService = GcsServiceFactory.createGcsService();
+    GcsFilename filename = new GcsFilename("GcsOutputChannelTestBucket", "testBufferSize");
+    GcsOutputChannel outputChannel =
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
+    assertEquals(BUFFER_SIZE, outputChannel.getBufferSizeBytes());
   }
 }
