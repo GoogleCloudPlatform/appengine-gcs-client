@@ -41,6 +41,14 @@ class FatalError(Error):
   """FatalError shouldn't be retried."""
 
 
+class FileClosedError(FatalError):
+  """File is already closed.
+
+  This can happen when the upload has finished but 'write' is called on
+  a stale upload handle.
+  """
+
+
 class NotFoundError(FatalError):
   """HTTP 404 resource not found."""
 
@@ -110,6 +118,9 @@ def check_status(status, expected, path, headers=None,
     raise TimeoutError(msg)
   elif status == httplib.REQUESTED_RANGE_NOT_SATISFIABLE:
     raise InvalidRange(msg)
+  elif (status == httplib.OK and 308 in expected and
+        httplib.OK not in expected):
+    raise FileClosedError(msg)
   elif status >= 500:
     raise ServerError(msg)
   else:
