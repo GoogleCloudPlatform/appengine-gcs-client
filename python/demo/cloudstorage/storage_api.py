@@ -16,6 +16,7 @@ import os
 import urlparse
 
 from . import api_utils
+from . import common
 from . import errors
 from . import rest_api
 
@@ -26,6 +27,32 @@ except ImportError:
   from google.appengine.api import urlfetch
   from google.appengine.ext import ndb
 
+
+
+def _get_storage_api(retry_params, account_id=None):
+  """Returns storage_api instance for API methods.
+
+  Args:
+    retry_params: An instance of api_utils.RetryParams. If none,
+     thread's default will be used.
+    account_id: Internal-use only.
+
+  Returns:
+    A storage_api instance to handle urlfetch work to GCS.
+    On dev appserver, this instance by default will talk to a local stub
+    unless common.ACCESS_TOKEN is set. That token will be used to talk
+    to the real GCS.
+  """
+
+
+  api = _StorageApi(_StorageApi.full_control_scope,
+                    service_account_id=account_id,
+                    retry_params=retry_params)
+  if common.local_run() and not common.get_access_token():
+    api.api_url = common.local_api_url()
+  if common.get_access_token():
+    api.token = common.get_access_token()
+  return api
 
 
 class _StorageApi(rest_api._RestApi):
@@ -700,7 +727,6 @@ class StreamingBuffer(object):
     the file with finish=True.
     """
     flush_len = 0 if finish else self._blocksize
-    last = False
 
     while self._buffered >= flush_len:
       buffer = []
@@ -734,30 +760,40 @@ class StreamingBuffer(object):
           buffer.append(head)
           buffered += len(head)
 
-      if finish:
-        last = not self._buffered
-      self._send_data(''.join(buffer), last)
-      if last:
+      data = ''.join(buffer)
+      file_len = '*'
+      if finish and not self._buffered:
+        file_len = self._written + len(data)
+      self._send_data(data, self._written, file_len)
+      self._written += len(data)
+      if file_len != '*':
         break
 
-  def _send_data(self, data, last):
-    """Send the block to the storage service and update self._written."""
+  def _send_data(self, data, start_offset, file_len):
+    """Send the block to the storage service.
+
+    This is a utility method that does not modify self.
+
+    Args:
+      data: data to send in str.
+      start_offset: start offset of the data in relation to the file.
+      file_len: an int if this is the last data to append to the file.
+        Otherwise '*'.
+    """
     headers = {}
-    length = self._written + len(data)
+    end_offset = start_offset + len(data) - 1
 
     if data:
       headers['content-range'] = ('bytes %d-%d/%s' %
-                                  (self._written, length-1,
-                                   length if last else '*'))
+                                  (start_offset, end_offset, file_len))
     else:
-      headers['content-range'] = ('bytes */%s' %
-                                  length if last else '*')
+      headers['content-range'] = ('bytes */%s' % file_len)
     status, response_headers, _ = self._api.put_object(
         self._path_with_token, payload=data, headers=headers)
-    if last:
-      expected = 200
-    else:
+    if file_len == '*':
       expected = 308
+    else:
+      expected = 200
     if expected == 308 and status == 200:
       logging.warning(
           'This upload session for file %s has already been finalized. It is '
@@ -768,7 +804,41 @@ class StreamingBuffer(object):
       errors.check_status(status, [expected], self.name, headers,
                           response_headers,
                           {'upload_path': self._path_with_token})
-    self._written += len(data)
+
+  def _get_offset_from_gcs(self):
+    """Get the last offset that has been written to GCS.
+
+    This is a utility method that does not modify self.
+
+    Returns:
+      an int of the last offset written to GCS by this upload.
+    """
+    headers = {'content-range': 'bytes */*'}
+    status, response_headers, _ = self._api.put_object(
+        self._path_with_token, headers=headers)
+    errors.check_status(status, [308], self.name, headers,
+                        response_headers,
+                        {'upload_path': self._path_with_token})
+    val = response_headers.get('range')
+    if val is None:
+      return 0
+    _, offset = val.rsplit('-', 1)
+    return int(offset)
+
+  def _force_close(self, data=''):
+    """Close this buffer on what has been uploaded.
+
+    Finalize the upload immediately with what has been uploaded. Contents
+    that are still in memory will not be uploaded.
+    Additional data maybe appended via the data argument.
+
+    This is a utility method that does not modify self.
+
+    Args:
+      data: optional data to append.
+    """
+    start_offset = self._get_offset_from_gcs() + 1
+    self._send_data(data, start_offset, start_offset + len(data))
 
   def _check_open(self):
     if self.closed:

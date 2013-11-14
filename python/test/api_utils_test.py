@@ -7,7 +7,6 @@ import os
 import threading
 import time
 import unittest
-import urllib
 
 import mock
 
