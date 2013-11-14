@@ -82,9 +82,7 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
     checkArgument(startPosition >= 0, "Start position cannot be negitive");
     this.readPosition = startPosition;
     this.fetchPosition = startPosition;
-    this.next = ByteBuffer.allocate(blockSizeBytes);
-    this.pendingFetch =
-        raw.readObjectAsync(next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
+    requestBlock();
   }
 
   private void readObject(ObjectInputStream aInputStream)
@@ -95,11 +93,15 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
     fetchPosition = readPosition;
     current = EMPTY_BUFFER;
     eofHit = length != -1 && readPosition >= length;
-    if (!closed) {
-      next = ByteBuffer.allocate(blockSizeBytes);
-      pendingFetch =
-          raw.readObjectAsync(next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
-    }
+  }
+
+  /**
+   * Allocates a new next buffer and pending fetch.
+   */
+  private void requestBlock() {
+    next = ByteBuffer.allocate(blockSizeBytes);
+    pendingFetch =
+        raw.readObjectAsync(next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
   }
 
   @Override
@@ -158,9 +160,7 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
         throw toThrow;
       } else if (e.getCause() instanceof IOException) {
         log.log(Level.WARNING, this + ": IOException fetching block", e);
-        next = ByteBuffer.allocate(blockSizeBytes);
-        pendingFetch = raw.readObjectAsync(
-            next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
+        requestBlock();
         throw new IOException(this + ": Prefetch failed, prefetching again", e.getCause());
       } else {
         throw new RuntimeException(this + ": Unknown cause of ExecutionException", e.getCause());
@@ -188,9 +188,7 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
       next = null;
       pendingFetch = null;
     } else {
-      next = ByteBuffer.allocate(blockSizeBytes);
-      pendingFetch =
-          raw.readObjectAsync(next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
+      requestBlock();
     }
   }
 
@@ -205,6 +203,9 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
       }
       Preconditions.checkArgument(dst.remaining() > 0, "Requested to read data into a full buffer");
       if (!current.hasRemaining()) {
+        if (pendingFetch == null) {
+          requestBlock();
+        }
         waitForFetchWithRetry();
         if (eofHit && !current.hasRemaining()) {
           return -1;
