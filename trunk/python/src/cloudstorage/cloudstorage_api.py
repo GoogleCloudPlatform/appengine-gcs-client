@@ -66,7 +66,8 @@ def open(filename,
       in reading mode.
   """
   common.validate_file_path(filename)
-  api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
+  api = storage_api._get_storage_api(retry_params=retry_params,
+                                     account_id=_account_id)
   filename = api_utils._quote_filename(filename)
 
   if mode == 'w':
@@ -95,7 +96,8 @@ def delete(filename, retry_params=None, _account_id=None):
   Raises:
     errors.NotFoundError: if the file doesn't exist prior to deletion.
   """
-  api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
+  api = storage_api._get_storage_api(retry_params=retry_params,
+                                     account_id=_account_id)
   common.validate_file_path(filename)
   filename = api_utils._quote_filename(filename)
   status, resp_headers, _ = api.delete_object(filename)
@@ -119,7 +121,8 @@ def stat(filename, retry_params=None, _account_id=None):
     errors.NotFoundError: if an object that's expected to exist doesn't.
   """
   common.validate_file_path(filename)
-  api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
+  api = storage_api._get_storage_api(retry_params=retry_params,
+                                     account_id=_account_id)
   status, headers, _ = api.head_object(api_utils._quote_filename(filename))
   errors.check_status(status, [200], filename, resp_headers=headers)
   file_stat = common.GCSFileStat(
@@ -153,7 +156,7 @@ def _copy2(src, dst, retry_params=None):
   if src == dst:
     return
 
-  api = _get_storage_api(retry_params=retry_params)
+  api = storage_api._get_storage_api(retry_params=retry_params)
   headers = {'x-goog-copy-source': src, 'Content-Length': '0'}
   status, resp_headers, _ = api.put_object(
       api_utils._quote_filename(dst), headers=headers)
@@ -233,7 +236,8 @@ def listbucket(path_prefix, marker=None, prefix=None, max_keys=None,
   if marker and marker.startswith(bucket):
     marker = marker[len(bucket) + 1:]
 
-  api = _get_storage_api(retry_params=retry_params, account_id=_account_id)
+  api = storage_api._get_storage_api(retry_params=retry_params,
+                                     account_id=_account_id)
   options = {}
   if marker:
     options['marker'] = marker
@@ -423,28 +427,3 @@ class _Bucket(object):
         element_mapping[e.tag] = e.text
         elements.remove(e.tag)
     return element_mapping
-
-
-def _get_storage_api(retry_params, account_id=None):
-  """Returns storage_api instance for API methods.
-
-  Args:
-    retry_params: An instance of api_utils.RetryParams.
-    account_id: Internal-use only.
-
-  Returns:
-    A storage_api instance to handle urlfetch work to GCS.
-    On dev appserver, this instance by default will talk to a local stub
-    unless common.ACCESS_TOKEN is set. That token will be used to talk
-    to the real GCS.
-  """
-
-
-  api = storage_api._StorageApi(storage_api._StorageApi.full_control_scope,
-                                service_account_id=account_id,
-                                retry_params=retry_params)
-  if common.local_run() and not common.get_access_token():
-    api.api_url = common.local_api_url()
-  if common.get_access_token():
-    api.token = common.get_access_token()
-  return api

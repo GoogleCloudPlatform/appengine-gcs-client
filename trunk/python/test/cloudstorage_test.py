@@ -454,5 +454,6 @@ class CloudStorageTest(unittest.TestCase):
         break
     self.assertEqual(expected, result)
 
+
 if __name__ == '__main__':
   unittest.main()
