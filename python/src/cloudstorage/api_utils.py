@@ -269,7 +269,7 @@ def _run_until_rpc():
   when the dependent future fulfills. If the value if a RPC, set up a
   callback _on_rpc_complete to invoke _help_tasklet_along when the RPC fulfills.
   Thus _help_tasklet_along drills down
-  the the chain of futures until some future is blocked by RPC. El runs
+  the chain of futures until some future is blocked by RPC. El runs
   all callbacks and constantly check pending RPC status.
   """
   el = eventloop.get_event_loop()
