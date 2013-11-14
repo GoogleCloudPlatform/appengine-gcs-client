@@ -178,6 +178,7 @@ class CloudStorageTest(unittest.TestCase):
 
     src_stat = cloudstorage.stat(TESTFILE)
     dst_stat = cloudstorage.stat(dst)
+    self.assertEqual(src_stat.st_ctime, dst_stat.st_ctime)
     self.assertEqual(src_stat.st_size, dst_stat.st_size)
     self.assertEqual(src_stat.etag, dst_stat.etag)
     self.assertEqual(src_stat.content_type, dst_stat.content_type)
@@ -186,8 +187,27 @@ class CloudStorageTest(unittest.TestCase):
     with cloudstorage.open(dst) as f:
       self.assertEqual('abcde', f.read())
 
-    cloudstorage.delete(dst)
-    cloudstorage.delete(TESTFILE)
+  def testCopy2ReplacesMetadata(self):
+    with cloudstorage.open(TESTFILE, 'w',
+                           'text/foo', {'x-goog-meta-foo': 'foo'}) as f:
+      f.write('abcde')
+    src_stat = cloudstorage.stat(TESTFILE)
+
+    cloudstorage_api._copy2(TESTFILE, TESTFILE,
+                            metadata={'x-goog-meta-foo': 'bar',
+                                      'content-type': 'text/bar'})
+
+    dst_stat = cloudstorage.stat(TESTFILE)
+    self.assertEqual(src_stat.st_size, dst_stat.st_size)
+    self.assertEqual(src_stat.etag, dst_stat.etag)
+    self.assertEqual(src_stat.st_ctime, dst_stat.st_ctime)
+    self.assertEqual('text/foo', src_stat.content_type)
+    self.assertEqual('text/bar', dst_stat.content_type)
+    self.assertEqual('foo', src_stat.metadata['x-goog-meta-foo'])
+    self.assertEqual('bar', dst_stat.metadata['x-goog-meta-foo'])
+
+    with cloudstorage.open(TESTFILE) as f:
+      self.assertEqual('abcde', f.read())
 
   def testDelete(self):
     self.assertRaises(errors.NotFoundError, cloudstorage.delete, TESTFILE)

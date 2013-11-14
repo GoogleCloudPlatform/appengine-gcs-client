@@ -136,14 +136,16 @@ def stat(filename, retry_params=None, _account_id=None):
   return file_stat
 
 
-def _copy2(src, dst, retry_params=None):
-  """Copy the file content and metadata from src to dst.
+def _copy2(src, dst, metadata=None, retry_params=None):
+  """Copy the file content from src to dst.
 
   Internal use only!
 
   Args:
     src: /bucket/filename
     dst: /bucket/filename
+    metadata: a dict of metadata for this copy. If None, old metadata is copied.
+      For example, {'x-goog-meta-foo': 'bar'}.
     retry_params: An api_utils.RetryParams for this call to GCS. If None,
       the default one is used.
 
@@ -153,14 +155,20 @@ def _copy2(src, dst, retry_params=None):
   """
   common.validate_file_path(src)
   common.validate_file_path(dst)
-  if src == dst:
-    return
+
+  if metadata is None:
+    metadata = {}
+    copy_meta = 'COPY'
+  else:
+    copy_meta = 'REPLACE'
+  metadata.update({'x-goog-copy-source': src,
+                   'Content-Length': '0',
+                   'x-goog-metadata-directive': copy_meta})
 
   api = storage_api._get_storage_api(retry_params=retry_params)
-  headers = {'x-goog-copy-source': src, 'Content-Length': '0'}
   status, resp_headers, _ = api.put_object(
-      api_utils._quote_filename(dst), headers=headers)
-  errors.check_status(status, [200], src, headers, resp_headers)
+      api_utils._quote_filename(dst), headers=metadata)
+  errors.check_status(status, [200], src, metadata, resp_headers)
 
 
 def listbucket(path_prefix, marker=None, prefix=None, max_keys=None,
