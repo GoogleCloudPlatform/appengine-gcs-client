@@ -788,22 +788,16 @@ class StreamingBuffer(object):
                                   (start_offset, end_offset, file_len))
     else:
       headers['content-range'] = ('bytes */%s' % file_len)
+
     status, response_headers, _ = self._api.put_object(
         self._path_with_token, payload=data, headers=headers)
     if file_len == '*':
       expected = 308
     else:
       expected = 200
-    if expected == 308 and status == 200:
-      logging.warning(
-          'This upload session for file %s has already been finalized. It is '
-          'likely this is an outdated copy of an already closed file handler.'
-          'Request headers: %r.\n'
-          'Response headers: %r.\n', self.name, headers, response_headers)
-    else:
-      errors.check_status(status, [expected], self.name, headers,
-                          response_headers,
-                          {'upload_path': self._path_with_token})
+    errors.check_status(status, [expected], self.name, headers,
+                        response_headers,
+                        {'upload_path': self._path_with_token})
 
   def _get_offset_from_gcs(self):
     """Get the last offset that has been written to GCS.

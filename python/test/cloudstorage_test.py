@@ -66,16 +66,12 @@ class IrregularPatternTest(unittest.TestCase):
     f.write('a'*(256+50)*1024)
     f2 = pickle.loads(pickle.dumps(f))
     f.write('b'*(50)*1024)
-    f3 = pickle.loads(pickle.dumps(f))
     f.close()
 
     self.assertRaises(IOError, f.write, 'foo')
-    f2.write('c'*256*1024)
-    f3.write('c'*256*1024)
-
     f.close()
-    f2.close()
-    f3.close()
+
+    self.assertRaises(errors.FileClosedError, f2.write, 'c'*256*1024)
 
     a, b = 0, 0
     f = cloudstorage.open(TESTFILE)
