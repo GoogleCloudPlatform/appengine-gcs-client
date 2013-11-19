@@ -162,7 +162,6 @@ def _copy2(src, dst, metadata=None, retry_params=None):
   else:
     copy_meta = 'REPLACE'
   metadata.update({'x-goog-copy-source': src,
-                   'Content-Length': '0',
                    'x-goog-metadata-directive': copy_meta})
 
   api = storage_api._get_storage_api(retry_params=retry_params)

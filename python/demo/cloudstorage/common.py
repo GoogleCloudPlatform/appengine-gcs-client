@@ -276,7 +276,7 @@ def validate_options(options):
       raise ValueError('option %s is not supported.' % k)
     if not isinstance(v, basestring):
       raise TypeError('value %r for option %s should be of type basestring.' %
-                      v, k)
+                      (v, k))
 
 
 def http_time_to_posix(http_time):

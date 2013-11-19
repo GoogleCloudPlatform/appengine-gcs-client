@@ -699,7 +699,6 @@ class StreamingBuffer(object):
 
     (There is no seek() method.)
     """
-    self._check_open()
     return self._offset
 
   def close(self):
@@ -805,7 +804,8 @@ class StreamingBuffer(object):
     This is a utility method that does not modify self.
 
     Returns:
-      an int of the last offset written to GCS by this upload.
+      an int of the last offset written to GCS by this upload, inclusive.
+      -1 means nothing has been written.
     """
     headers = {'content-range': 'bytes */*'}
     status, response_headers, _ = self._api.put_object(
@@ -815,24 +815,25 @@ class StreamingBuffer(object):
                         {'upload_path': self._path_with_token})
     val = response_headers.get('range')
     if val is None:
-      return 0
+      return -1
     _, offset = val.rsplit('-', 1)
     return int(offset)
 
-  def _force_close(self, data=''):
-    """Close this buffer on what has been uploaded.
+  def _force_close(self, file_length=None):
+    """Close this buffer on file_length.
 
-    Finalize the upload immediately with what has been uploaded. Contents
-    that are still in memory will not be uploaded.
-    Additional data maybe appended via the data argument.
+    Finalize this upload immediately on file_length.
+    Contents that are still in memory will not be uploaded.
 
     This is a utility method that does not modify self.
 
     Args:
-      data: optional data to append.
+      file_length: file length. Must match what has been uploaded. If None,
+        it will be queried from GCS.
     """
-    start_offset = self._get_offset_from_gcs() + 1
-    self._send_data(data, start_offset, start_offset + len(data))
+    if file_length is None:
+      file_length = self._get_offset_from_gcs() + 1
+    self._send_data('', 0, file_length)
 
   def _check_open(self):
     if self.closed:
