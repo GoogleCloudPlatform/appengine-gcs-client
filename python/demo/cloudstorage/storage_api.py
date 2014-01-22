@@ -177,14 +177,15 @@ class ReadBuffer(object):
 
     Args:
       api: A StorageApi instance.
-      path: Path to the object, e.g. '/mybucket/myfile'.
+      path: Quoted/escaped path to the object, e.g. /mybucket/myfile
       buffer_size: buffer size. The ReadBuffer keeps
         one buffer. But there may be a pending future that contains
         a second buffer. This size must be less than max_request_size.
       max_request_size: Max bytes to request in one urlfetch.
     """
     self._api = api
-    self.name = path
+    self._path = path
+    self.name = api_utils._unquote_filename(path)
     self.closed = False
 
     assert buffer_size <= max_request_size
@@ -215,7 +216,7 @@ class ReadBuffer(object):
       A dictionary with the state of this object
     """
     return {'api': self._api,
-            'name': self.name,
+            'path': self._path,
             'buffer_size': self._buffer_size,
             'request_size': self._max_request_size,
             'etag': self._etag,
@@ -232,7 +233,8 @@ class ReadBuffer(object):
     Along with restoring the state, pre-fetch the next read buffer.
     """
     self._api = state['api']
-    self.name = state['name']
+    self._path = state['path']
+    self.name = api_utils._unquote_filename(self._path)
     self._buffer_size = state['buffer_size']
     self._max_request_size = state['request_size']
     self._etag = state['etag']
@@ -416,8 +418,8 @@ class ReadBuffer(object):
     content_range = '%d-%d' % (start, end)
     headers = {'Range': 'bytes=' + content_range}
     status, resp_headers, content = yield self._api.get_object_async(
-        self.name, headers=headers)
-    errors.check_status(status, [200, 206], self.name, headers, resp_headers)
+        self._path, headers=headers)
+    errors.check_status(status, [200, 206], self._path, headers, resp_headers)
     self._check_etag(resp_headers.get('etag'))
     raise ndb.Return(content)
 
@@ -597,7 +599,7 @@ class StreamingBuffer(object):
 
     Args:
       api: A StorageApi instance.
-      path: Path to the object, e.g. '/mybucket/myfile'.
+      path: Quoted/escaped path to the object, e.g. /mybucket/myfile
       content_type: Optional content-type; Default value is
         delegate to Google Cloud Storage.
       gcs_headers: additional gs headers as a str->str dict, e.g
@@ -607,7 +609,8 @@ class StreamingBuffer(object):
     assert self._maxrequestsize % self._blocksize == 0
 
     self._api = api
-    self.name = path
+    self._path = path
+    self.name = api_utils._unquote_filename(path)
     self.closed = False
 
     self._buffer = collections.deque()
@@ -626,7 +629,7 @@ class StreamingBuffer(object):
     if not loc:
       raise IOError('No location header found in 201 response')
     parsed = urlparse.urlparse(loc)
-    self._path_with_token = '%s?%s' % (self.name, parsed.query)
+    self._path_with_token = '%s?%s' % (self._path, parsed.query)
 
   def __getstate__(self):
     """Store state as part of serialization/pickling.
@@ -641,7 +644,7 @@ class StreamingBuffer(object):
 
     """
     return {'api': self._api,
-            'name': self.name,
+            'path': self._path,
             'path_token': self._path_with_token,
             'buffer': self._buffer,
             'buffered': self._buffered,
@@ -662,7 +665,8 @@ class StreamingBuffer(object):
     self._written = state['written']
     self._offset = state['offset']
     self.closed = state['closed']
-    self.name = state['name']
+    self._path = state['path']
+    self.name = api_utils._unquote_filename(self._path)
 
   def write(self, data):
     """Write some bytes.
@@ -794,7 +798,7 @@ class StreamingBuffer(object):
       expected = 308
     else:
       expected = 200
-    errors.check_status(status, [expected], self.name, headers,
+    errors.check_status(status, [expected], self._path, headers,
                         response_headers,
                         {'upload_path': self._path_with_token})
 
@@ -810,7 +814,7 @@ class StreamingBuffer(object):
     headers = {'content-range': 'bytes */*'}
     status, response_headers, _ = self._api.put_object(
         self._path_with_token, headers=headers)
-    errors.check_status(status, [308], self.name, headers,
+    errors.check_status(status, [308], self._path, headers,
                         response_headers,
                         {'upload_path': self._path_with_token})
     val = response_headers.get('range')

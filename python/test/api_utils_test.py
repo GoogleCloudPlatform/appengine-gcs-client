@@ -69,18 +69,17 @@ class EagerTaskletTest(unittest.TestCase):
 
 
 class FilenameEscapingTest(unittest.TestCase):
-  """Tests for _quote_filename."""
+  """Tests for _quote_filename and _unquote_filename."""
 
   def testEscaping(self):
-    filename = '/bucket/foo'
-    self.assertEqual(filename, api_utils._quote_filename(filename))
+    def EscapeUnescapeFilename(unescaped, escaped):
+      self.assertEqual(escaped, api_utils._quote_filename(unescaped))
+      self.assertEqual(unescaped, api_utils._unquote_filename(escaped))
 
-    filename = '/bucket._-bucket/foo'
-    self.assertEqual(filename, api_utils._quote_filename(filename))
-
-    filename = '/bucket/a ;/?:@&=+$,'
-    self.assertEqual('/bucket/a%20%3B/%3F%3A%40%26%3D%2B%24%2C',
-                     api_utils._quote_filename(filename))
+    EscapeUnescapeFilename('/bucket/foo', '/bucket/foo')
+    EscapeUnescapeFilename('/bucket._-bucket/foo', '/bucket._-bucket/foo')
+    EscapeUnescapeFilename('/bucket/a ;/?:@&=+$,',
+                           '/bucket/a%20%3B/%3F%3A%40%26%3D%2B%24%2C')
 
 
 class RetryParamsTest(unittest.TestCase):
