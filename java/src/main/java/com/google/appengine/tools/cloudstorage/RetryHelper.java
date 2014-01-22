@@ -107,7 +107,7 @@ public class RetryHelper<V>  {
 
   @VisibleForTesting
   static long getSleepDuration(RetryParams retryParams, int attemptsSoFar) {
-    return (long) ((Math.random() / 2.0 + .5) * (Math.min(
+    return (long) ((Math.random() / 2.0 + .75) * (Math.min(
         retryParams.getMaxRetryDelayMillis(),
         Math.pow(retryParams.getRetryDelayBackoffFactor(), attemptsSoFar - 1)
         * retryParams.getInitialRetryDelayMillis())));

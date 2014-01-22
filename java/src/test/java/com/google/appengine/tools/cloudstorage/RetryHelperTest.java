@@ -191,29 +191,29 @@ public class RetryHelperTest {
         .retryMaxAttempts(100)
         .build();
     long sleepDuration = RetryHelper.getSleepDuration(params, 1);
-    assertTrue("" + sleepDuration, sleepDuration < 10 && sleepDuration >= 5);
+    assertTrue("" + sleepDuration, sleepDuration < 13 && sleepDuration >= 7);
     sleepDuration = RetryHelper.getSleepDuration(params, 2);
-    assertTrue("" + sleepDuration, sleepDuration < 20 && sleepDuration >= 10);
+    assertTrue("" + sleepDuration, sleepDuration < 25 && sleepDuration >= 15);
     sleepDuration = RetryHelper.getSleepDuration(params, 3);
-    assertTrue("" + sleepDuration, sleepDuration < 40 && sleepDuration >= 20);
+    assertTrue("" + sleepDuration, sleepDuration < 50 && sleepDuration >= 30);
     sleepDuration = RetryHelper.getSleepDuration(params, 4);
-    assertTrue("" + sleepDuration, sleepDuration < 80 && sleepDuration >= 40);
+    assertTrue("" + sleepDuration, sleepDuration < 100 && sleepDuration >= 60);
     sleepDuration = RetryHelper.getSleepDuration(params, 5);
-    assertTrue("" + sleepDuration, sleepDuration < 160 && sleepDuration >= 80);
+    assertTrue("" + sleepDuration, sleepDuration < 200 && sleepDuration >= 120);
     sleepDuration = RetryHelper.getSleepDuration(params, 6);
-    assertTrue("" + sleepDuration, sleepDuration < 320 && sleepDuration >= 160);
+    assertTrue("" + sleepDuration, sleepDuration < 400 && sleepDuration >= 240);
     sleepDuration = RetryHelper.getSleepDuration(params, 7);
-    assertTrue("" + sleepDuration, sleepDuration < 640 && sleepDuration >= 320);
+    assertTrue("" + sleepDuration, sleepDuration < 800 && sleepDuration >= 480);
     sleepDuration = RetryHelper.getSleepDuration(params, 8);
-    assertTrue("" + sleepDuration, sleepDuration < 1280 && sleepDuration >= 640);
+    assertTrue("" + sleepDuration, sleepDuration < 1600 && sleepDuration >= 960);
     sleepDuration = RetryHelper.getSleepDuration(params, 9);
-    assertTrue("" + sleepDuration, sleepDuration < 2560 && sleepDuration >= 1280);
+    assertTrue("" + sleepDuration, sleepDuration < 3200 && sleepDuration >= 1920);
     sleepDuration = RetryHelper.getSleepDuration(params, 10);
-    assertTrue("" + sleepDuration, sleepDuration < 5120 && sleepDuration >= 2560);
+    assertTrue("" + sleepDuration, sleepDuration < 6400 && sleepDuration >= 3840);
     sleepDuration = RetryHelper.getSleepDuration(params, 11);
-    assertTrue("" + sleepDuration, sleepDuration < 10240 && sleepDuration >= 5120);
+    assertTrue("" + sleepDuration, sleepDuration < 12800 && sleepDuration >= 7680);
     sleepDuration = RetryHelper.getSleepDuration(params, 12);
-    assertTrue("" + sleepDuration, sleepDuration < 20480 && sleepDuration >= 10240);
+    assertTrue("" + sleepDuration, sleepDuration < 25600 && sleepDuration >= 15360);
   }
 
 }
