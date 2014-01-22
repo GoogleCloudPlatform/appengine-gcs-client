@@ -71,6 +71,20 @@ def _quote_filename(filename):
   return urllib.quote(filename)
 
 
+def _unquote_filename(filename):
+  """Unquotes a valid URI path back to its filename.
+
+  This is the opposite of _quote_filename.
+
+  Args:
+    filename: a quoted filename. /bucket/some%20filename.
+
+  Returns:
+    The filename unquoted.
+  """
+  return urllib.unquote(filename)
+
+
 def _should_retry(resp):
   """Given a urlfetch response, decide whether to retry that request."""
   return (resp.status_code == httplib.REQUEST_TIMEOUT or
