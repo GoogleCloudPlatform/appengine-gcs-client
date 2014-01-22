@@ -9,6 +9,7 @@
 __all__ = ['add_sync_methods']
 
 import httplib
+import random
 import time
 
 from . import api_utils
@@ -100,6 +101,8 @@ class _RestApi(object):
   WARNING: Do NOT directly use this api. It's an implementation detail
   and is subject to change at any release.
   """
+
+  _TOKEN_EXPIRATION_HEADROOM = random.randint(60, 600)
 
   def __init__(self, scopes, service_account_id=None, token_maker=None,
                retry_params=None):
@@ -200,12 +203,11 @@ class _RestApi(object):
     if self.token is not None and not refresh:
       raise ndb.Return(self.token)
     key = '%s,%s' % (self.service_account_id, ','.join(self.scopes))
-    ts = None
-    if not refresh:
-      ts = yield _AE_TokenStorage_.get_by_id_async(
-          key, use_cache=True, use_memcache=True,
-          use_datastore=self.retry_params.save_access_token)
-    if ts is None or ts.expires < (time.time() + 60):
+    ts = yield _AE_TokenStorage_.get_by_id_async(
+        key, use_cache=True, use_memcache=True,
+        use_datastore=self.retry_params.save_access_token)
+    if ts is None or ts.expires < (time.time() +
+                                   self._TOKEN_EXPIRATION_HEADROOM):
       token, expires_at = yield self.make_token_async(
           self.scopes, self.service_account_id)
       timeout = int(expires_at - time.time())
