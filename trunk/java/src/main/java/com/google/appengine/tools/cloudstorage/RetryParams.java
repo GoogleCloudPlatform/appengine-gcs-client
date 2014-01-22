@@ -47,7 +47,7 @@ public class RetryParams implements Serializable {
   public static final long DEFAULT_REQUEST_TIMEOUT_MILLIS = 10000;
   public static final int DEFAULT_RETRY_MIN_ATTEMPTS = 3;
   public static final int DEFAULT_RETRY_MAX_ATTEMPTS = 6;
-  public static final long DEFAULT_INITIAL_RETRY_DELAY_MILLIS = 100;
+  public static final long DEFAULT_INITIAL_RETRY_DELAY_MILLIS = 250;
   public static final long DEFAULT_MAX_RETRY_DELAY_MILLIS = 10 * 1000;
   public static final double DEFAULT_RETRY_DELAY_BACKOFF_FACTOR = 2;
   public static final long DEFAULT_TOTAL_RETRY_PERIOD_MILLIS = 30 * 1000;
