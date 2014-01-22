@@ -74,7 +74,7 @@ public class RetryHelper<V>  {
       try {
         V value = callable.call();
         if (attemptsSoFar > 1) {
-          log.info(this + ": attempt #" + (attemptsSoFar) + " succeeded");
+          log.info(this + ": attempt #" + attemptsSoFar + " succeeded");
         }
         return value;
       } catch (Exception e) {
@@ -88,15 +88,14 @@ public class RetryHelper<V>  {
         }
         exception = e;
       }
-      long sleepDurationMillis = getSleepDuration(params, attemptsSoFar);
-      log.log(Level.WARNING, this + ": Attempt " + attemptsSoFar + " failed, sleeping for "
-          + sleepDurationMillis + " ms", exception);
-
       if (attemptsSoFar >= params.getRetryMaxAttempts() || (
           attemptsSoFar >= params.getRetryMinAttempts()
           && stopwatch.elapsed(MILLISECONDS) >= params.getTotalRetryPeriodMillis())) {
         throw new RetriesExhaustedException(this + ": Too many failures, giving up", exception);
       }
+      long sleepDurationMillis = getSleepDuration(params, attemptsSoFar);
+      log.info(this + ": Attempt #" + attemptsSoFar + " failed [" + exception + "], sleeping for "
+          + sleepDurationMillis + " ms");
       try {
         Thread.sleep(sleepDurationMillis);
       } catch (InterruptedException e) {
