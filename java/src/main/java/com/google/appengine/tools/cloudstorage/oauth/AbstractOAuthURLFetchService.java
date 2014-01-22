@@ -16,40 +16,70 @@
 
 package com.google.appengine.tools.cloudstorage.oauth;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
 import com.google.appengine.api.urlfetch.URLFetchService;
-import com.google.appengine.api.urlfetch.URLFetchServiceFactory;
+import com.google.appengine.tools.cloudstorage.ExceptionHandler;
+import com.google.appengine.tools.cloudstorage.RetryHelper;
+import com.google.appengine.tools.cloudstorage.RetryHelperException;
+import com.google.appengine.tools.cloudstorage.RetryParams;
+import com.google.apphosting.api.ApiProxy.ApiDeadlineExceededException;
+import com.google.apphosting.api.ApiProxy.RPCFailedException;
+import com.google.apphosting.api.ApiProxy.UnknownException;
+import com.google.common.util.concurrent.Futures;
 
 import java.io.IOException;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 
 /**
  * An OAuthURLFetchService decorator that adds the authorization header to the http request.
+ *
  */
 abstract class AbstractOAuthURLFetchService implements OAuthURLFetchService {
 
-  private static final URLFetchService URLFETCH = URLFetchServiceFactory.getURLFetchService();
+  private final URLFetchService urlFetch;
 
-  AbstractOAuthURLFetchService() {}
+  private static final ExceptionHandler EXCEPTION_HANDLER = new ExceptionHandler.Builder().retryOn(
+      UnknownException.class, RPCFailedException.class, ApiDeadlineExceededException.class).build();
 
-  protected abstract String getAuthorization();
+  private static final RetryParams RETRY_PARAMS =
+      new RetryParams.Builder().initialRetryDelayMillis(10).totalRetryPeriodMillis(10000).build();
 
-  private HTTPRequest authorizeRequest(HTTPRequest req) {
-    req = URLFetchUtils.copyRequest(req);
-    req.setHeader(new HTTPHeader("Authorization", getAuthorization()));
-    return req;
+  AbstractOAuthURLFetchService(URLFetchService urlFetch) {
+    this.urlFetch = checkNotNull(urlFetch);
+  }
+
+  protected abstract String getToken();
+
+  private HTTPRequest authorizeRequest(final HTTPRequest req) {
+    return RetryHelper.runWithRetries(new Callable<HTTPRequest>() {
+      @Override
+      public HTTPRequest call() {
+        HTTPRequest request = URLFetchUtils.copyRequest(req);
+        request.setHeader(new HTTPHeader("Authorization", "Bearer " + getToken()));
+        return request;
+      }
+    }, RETRY_PARAMS, EXCEPTION_HANDLER);
   }
 
   @Override
   public HTTPResponse fetch(HTTPRequest req) throws IOException {
-    return URLFETCH.fetch(authorizeRequest(req));
+    return urlFetch.fetch(authorizeRequest(req));
   }
 
   @Override
   public Future<HTTPResponse> fetchAsync(HTTPRequest req) {
-    return URLFETCH.fetchAsync(authorizeRequest(req));
+    HTTPRequest authorizedRequest;
+    try {
+      authorizedRequest = authorizeRequest(req);
+    } catch (RetryHelperException e) {
+      return Futures.immediateFailedCheckedFuture(e);
+    }
+    return urlFetch.fetchAsync(authorizedRequest);
   }
 
 
