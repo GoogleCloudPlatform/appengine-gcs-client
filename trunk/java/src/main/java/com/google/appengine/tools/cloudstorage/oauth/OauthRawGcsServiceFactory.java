@@ -16,10 +16,14 @@
 
 package com.google.appengine.tools.cloudstorage.oauth;
 
+import com.google.appengine.api.urlfetch.URLFetchService;
+import com.google.appengine.api.urlfetch.URLFetchServiceFactory;
 import com.google.appengine.tools.cloudstorage.RawGcsService;
 
 
 public final class OauthRawGcsServiceFactory {
+
+  private final static URLFetchService urlFetch = URLFetchServiceFactory.getURLFetchService();
 
   private OauthRawGcsServiceFactory() {}
 
@@ -28,7 +32,7 @@ public final class OauthRawGcsServiceFactory {
    */
   public static RawGcsService createOauthRawGcsService() {
     return new OauthRawGcsService(
-        new AppIdentityOAuthURLFetchService(OauthRawGcsService.OAUTH_SCOPES));
+        new AppIdentityOAuthURLFetchService(urlFetch, OauthRawGcsService.OAUTH_SCOPES));
   }
 
 }

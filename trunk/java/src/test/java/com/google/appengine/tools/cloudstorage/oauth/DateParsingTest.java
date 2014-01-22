@@ -18,7 +18,6 @@ import java.util.Date;
 @RunWith(JUnit4.class)
 public class DateParsingTest {
 
-  final
   @Test
   public void testRoundtrip() {
     Date now = new Date((System.currentTimeMillis() / 1000) * 1000);

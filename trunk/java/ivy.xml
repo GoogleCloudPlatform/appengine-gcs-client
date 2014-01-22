@@ -22,6 +22,6 @@
 
     <dependency org="javax.servlet" name="servlet-api" rev="2.5" conf="${war}->default"/>
     <dependency org="joda-time" name="joda-time" rev="2.3" conf="${thirdparty}->default"/>
-
+    <dependency org="org.mockito" name="mockito-all" rev="1.8.4" conf="${test}->default"/>
   </dependencies>
 </ivy-module>
