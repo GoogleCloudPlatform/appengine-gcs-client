@@ -121,10 +121,6 @@ class RestApiTest(unittest.TestCase):
     t2 = api.get_token()
     self.assertEqual(t2, t1)
 
-    t3 = api.get_token(refresh=True)
-    self.assertNotEqual(t2, t3)
-    self.assertEqual(api.token, t3)
-
   def testTokenSaved(self):
     retry_params = api_utils.RetryParams(save_access_token=True)
     api = rest_api._RestApi('scope', retry_params=retry_params)
