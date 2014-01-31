@@ -16,6 +16,7 @@
 
 package com.google.appengine.tools.cloudstorage;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.*;
 
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
@@ -23,7 +24,6 @@ import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestC
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
-import com.google.common.base.Charsets;
 
 import org.hamcrest.CoreMatchers;
 import org.junit.After;
@@ -72,7 +72,7 @@ public class GcsInputChannelTest {
   public void setUp() throws Exception {
     helper.setUp();
 
-    Charset utf8 = Charsets.UTF_8;
+    Charset utf8 = UTF_8;
     GcsService gcsService = GcsServiceFactory.createGcsService();
     for (TestFile file : TestFile.values()) {
       StringBuffer contents = new StringBuffer(file.contentSize);
@@ -133,7 +133,7 @@ public class GcsInputChannelTest {
     try {
       final ByteBuffer buffer = ByteBuffer.allocateDirect(readSize);
       int read = 0;
-      final CharsetDecoder decoder = Charsets.UTF_8.newDecoder();
+      final CharsetDecoder decoder = UTF_8.newDecoder();
       while (read >= 0) {
         read = channel.read(buffer);
         buffer.flip();

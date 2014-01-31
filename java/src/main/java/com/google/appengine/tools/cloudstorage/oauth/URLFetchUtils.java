@@ -14,11 +14,12 @@
 
 package com.google.appengine.tools.cloudstorage.oauth;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 
@@ -71,7 +72,7 @@ final class URLFetchUtils {
       b.append("\n" + h.getName() + ": " + h.getValue());
     }
     if (includeBody) {
-      b.append("\n" + new String(resp.getContent(), Charsets.UTF_8));
+      b.append("\n" + new String(resp.getContent(), UTF_8));
     } else {
       b.append("\n<content elided>");
     }
