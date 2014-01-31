@@ -42,7 +42,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
-import java.nio.charset.Charset;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -74,16 +73,15 @@ public class LocalRawGcsServiceTest {
     rawGcsService = LocalRawGcsServiceFactory.createLocalRawGcsService();
     GcsService gcsService = new GcsServiceImpl(rawGcsService, RetryParams.getDefaultInstance());
 
-    Charset utf8 = UTF_8;
     for (TestFile file : TestFile.values()) {
       StringBuffer contents = new StringBuffer(file.contentSize);
       for (int i = 0; i < file.contentSize; i++) {
         contents.append(i % 10);
       }
-      GcsOutputChannel outputChannel =
-          gcsService.createOrReplace(file.filename, GcsFileOptions.getDefaultInstance());
-      outputChannel.write(utf8.encode(CharBuffer.wrap(contents.toString())));
-      outputChannel.close();
+      try (GcsOutputChannel outputChannel =
+          gcsService.createOrReplace(file.filename, GcsFileOptions.getDefaultInstance())) {
+        outputChannel.write(UTF_8.encode(CharBuffer.wrap(contents.toString())));
+      }
     }
   }
 
@@ -96,10 +94,10 @@ public class LocalRawGcsServiceTest {
   public void testDeleteExistingFile() throws IOException, InterruptedException {
     GcsFilename filename = new GcsFilename("unit-tests", "testDelete");
     GcsService gcsService = new GcsServiceImpl(rawGcsService, RetryParams.getDefaultInstance());
-    GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
-    outputChannel.write(ByteBuffer.wrap(new byte[] {0, 1, 2, 3, 4}));
-    outputChannel.close();
+    try (GcsOutputChannel outputChannel =
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance())) {
+      outputChannel.write(ByteBuffer.wrap(new byte[] {0, 1, 2, 3, 4}));
+    }
     GcsFileMetadata metadata = rawGcsService.getObjectMetadata(filename, 1000);
     assertNotNull(metadata);
     assertEquals(5, metadata.getLength());

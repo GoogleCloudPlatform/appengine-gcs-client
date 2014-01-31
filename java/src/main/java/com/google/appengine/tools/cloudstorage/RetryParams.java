@@ -85,6 +85,9 @@ public class RetryParams implements Serializable {
     return DEFAULT_INSTANCE;
   }
 
+  /**
+   * RetryParams builder.
+   */
   public static final class Builder {
 
     private long requestTimeoutMillis;

@@ -65,10 +65,10 @@ public class RetryHelperTest {
       assertEquals(1, count.intValue());
     }
 
-    class E1 extends Exception {}
-    class E2 extends E1 {}
-    class E3 extends E1 {}
-    class E4 extends E2 {}
+    @SuppressWarnings("serial") class E1 extends Exception {}
+    @SuppressWarnings("serial") class E2 extends E1 {}
+    @SuppressWarnings("serial") class E3 extends E1 {}
+    @SuppressWarnings("serial") class E4 extends E2 {}
 
     params = new RetryParams.Builder().initialRetryDelayMillis(0).retryMaxAttempts(5).build();
     handler = new ExceptionHandler.Builder().retryOn(E1.class, E4.class).abortOn(E3.class).build();

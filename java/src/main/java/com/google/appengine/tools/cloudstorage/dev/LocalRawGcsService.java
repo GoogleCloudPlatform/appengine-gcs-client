@@ -158,15 +158,12 @@ final class LocalRawGcsService implements RawGcsService {
 
   private Token append(RawGcsCreationToken token, ByteBuffer chunk) throws IOException {
     Token t = (Token) token;
-    FileWriteChannel ch = FILES.openWriteChannel(t.file, false);
-    int n = chunk.remaining();
-    try {
+    try (FileWriteChannel ch = FILES.openWriteChannel(t.file, false)) {
+      int n = chunk.remaining();
       int r = ch.write(chunk);
       Preconditions.checkState(r == n, "%s: Bad write: %s != %s", this, r, n);
-    } finally {
-      ch.close();
+      return new Token(t.filename, t.options, t.offset + n, t.file);
     }
-    return new Token(t.filename, t.options, t.offset + n, t.file);
   }
 
   private static ScheduledThreadPoolExecutor writePool;
@@ -179,14 +176,15 @@ final class LocalRawGcsService implements RawGcsService {
   }
 
   /**
-   * Runs calls in a background thread so that the results will actually be asyncronus.
+   * Runs calls in a background thread so that the results will actually be asynchronous.
    *
-   * @see com.google.appengine.tools.cloudstorage.RawGcsService#continueObjectCreationAsync(com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken,
-   *      java.nio.ByteBuffer, long)
+   * @see com.google.appengine.tools.cloudstorage.RawGcsService#continueObjectCreationAsync(
+   *        com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken,
+   *        java.nio.ByteBuffer, long)
    */
   @Override
   public Future<RawGcsCreationToken> continueObjectCreationAsync(final RawGcsCreationToken token,
-      final ByteBuffer chunk, long timeoutMillis) throws IOException {
+      final ByteBuffer chunk, long timeoutMillis) {
     final Environment environment = ApiProxy.getCurrentEnvironment();
     return writePool.schedule(new Callable<RawGcsCreationToken>() {
       @Override
@@ -209,9 +207,9 @@ final class LocalRawGcsService implements RawGcsService {
     FILES.openWriteChannel(t.file, true).closeFinally();
     Entity e = new Entity(makeKey(t.filename));
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
-    ObjectOutputStream oout = new ObjectOutputStream(bout);
-    oout.writeObject(t.options);
-    oout.close();
+    try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
+      oout.writeObject(t.options);
+    }
     e.setUnindexedProperty(OPTIONS_PROP, new Blob(bout.toByteArray()));
     e.setUnindexedProperty(CREATION_TIME_PROP, System.currentTimeMillis());
     DATASTORE.put(null, e);
@@ -233,22 +231,19 @@ final class LocalRawGcsService implements RawGcsService {
       return null;
     }
     AppEngineFile file = nameToAppEngineFile(filename);
-    ObjectInputStream in = new ObjectInputStream(
-        new ByteArrayInputStream(((Blob) e.getProperty(OPTIONS_PROP)).getBytes()));
     GcsFileOptions options;
-    try {
+    try (ObjectInputStream in = new ObjectInputStream(
+        new ByteArrayInputStream(((Blob) e.getProperty(OPTIONS_PROP)).getBytes()))) {
       options = (GcsFileOptions) in.readObject();
     } catch (ClassNotFoundException e1) {
       throw new RuntimeException(e1);
-    } finally {
-      in.close();
     }
     Date creationTime = null;
     if (e.getProperty(CREATION_TIME_PROP) != null) {
       creationTime = new Date((Long) e.getProperty(CREATION_TIME_PROP));
     }
     FileStat stat = FILES.stat(file);
-    return new GcsFileMetadata(filename, options, null, FILES.stat(file).getLength(), creationTime);
+    return new GcsFileMetadata(filename, options, null, stat.getLength(), creationTime);
   }
 
   @Override
@@ -267,11 +262,12 @@ final class LocalRawGcsService implements RawGcsService {
             + Long.toString(offset + dst.remaining()) + " the file is only " + meta.getLength()));
       }
       AppEngineFile file = nameToAppEngineFile(filename);
-      FileReadChannel readChannel = FILES.openReadChannel(file, false);
-      readChannel.position(offset);
-      int read = 0;
-      while (read != -1 && dst.hasRemaining()) {
-        read = readChannel.read(dst);
+      try (FileReadChannel readChannel = FILES.openReadChannel(file, false)) {
+        readChannel.position(offset);
+        int read = 0;
+        while (read != -1 && dst.hasRemaining()) {
+          read = readChannel.read(dst);
+        }
       }
       return Futures.immediateFuture(meta);
     } catch (IOException e) {

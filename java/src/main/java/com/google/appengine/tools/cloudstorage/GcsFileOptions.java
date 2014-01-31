@@ -148,7 +148,7 @@ private String mimeType;private String acl;private String cacheControl;private S
     private final Map<String, String> userMetadata;
 
     public Builder() {
-      this.userMetadata = new HashMap<String, String>();
+      this.userMetadata = new HashMap<>();
     }
 
     /**

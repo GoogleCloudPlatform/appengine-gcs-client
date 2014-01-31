@@ -25,7 +25,6 @@ import com.google.common.base.Throwables;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
@@ -47,15 +46,14 @@ import java.util.logging.Logger;
  *
  * @see GcsOutputChannel
  */
-final class GcsOutputChannelImpl implements GcsOutputChannel, Serializable {
+final class GcsOutputChannelImpl implements GcsOutputChannel {
 
   private static final long serialVersionUID = 3011935384698648440L;
 
-  @SuppressWarnings("unused")
   private static final Logger log = Logger.getLogger(GcsOutputChannelImpl.class.getName());
 
   /**
-   * Represents a request that is currently inflight. Contains all the information needed to retry
+   * Represents a request that is currently in-flight. Contains all the information needed to retry
    * the request, as well as the future for its completion.
    */
   private class OutstandingRequest {

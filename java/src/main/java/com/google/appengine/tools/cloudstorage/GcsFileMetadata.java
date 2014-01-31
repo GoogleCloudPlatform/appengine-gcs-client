@@ -78,7 +78,7 @@ public final class GcsFileMetadata {
     }
     GcsFileMetadata other = (GcsFileMetadata) o;
     return length == other.length && Objects.equal(filename, other.filename)
-      && Objects.equal(etag,other.etag) && Objects.equal(options, other.options);
+      && Objects.equal(etag, other.etag) && Objects.equal(options, other.options);
   }
 
   @Override

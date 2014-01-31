@@ -62,9 +62,12 @@ public class LocalExample {
    * See below for why.
    */
   private void writeObjectToFile(GcsFilename fileName, Object content) throws IOException {
+    @SuppressWarnings("resource")
     GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(fileName, GcsFileOptions.getDefaultInstance());
-    ObjectOutputStream oout = new ObjectOutputStream(Channels.newOutputStream(outputChannel));
+    gcsService.createOrReplace(fileName, GcsFileOptions.getDefaultInstance());
+    @SuppressWarnings("resource")
+    ObjectOutputStream oout =
+        new ObjectOutputStream(Channels.newOutputStream(outputChannel));
     oout.writeObject(content);
     oout.close();
   }
@@ -76,6 +79,7 @@ public class LocalExample {
    * need to worry about cleaning up partly written files)
    */
   private void writeToFile(GcsFilename fileName, byte[] content) throws IOException {
+    @SuppressWarnings("resource")
     GcsOutputChannel outputChannel =
         gcsService.createOrReplace(fileName, GcsFileOptions.getDefaultInstance());
     outputChannel.write(ByteBuffer.wrap(content));
@@ -94,11 +98,8 @@ public class LocalExample {
   private Object readObjectFromFile(GcsFilename fileName)
       throws IOException, ClassNotFoundException {
     GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(fileName, 0, 1024 * 1024);
-    ObjectInputStream oin = new ObjectInputStream(Channels.newInputStream(readChannel));
-    try {
+    try (ObjectInputStream oin = new ObjectInputStream(Channels.newInputStream(readChannel))) {
       return oin.readObject();
-    } finally {
-      oin.close();
     }
   }
 
@@ -114,11 +115,8 @@ public class LocalExample {
   private byte[] readFromFile(GcsFilename fileName) throws IOException {
     int fileSize = (int) gcsService.getMetadata(fileName).getLength();
     ByteBuffer result = ByteBuffer.allocate(fileSize);
-    GcsInputChannel readChannel = gcsService.openReadChannel(fileName, 0);
-    try {
+    try (GcsInputChannel readChannel = gcsService.openReadChannel(fileName, 0)) {
       readChannel.read(result);
-    } finally {
-      readChannel.close();
     }
     return result.array();
   }
@@ -134,7 +132,7 @@ public class LocalExample {
     try {
       /** Write and read back a map */
       GcsFilename filename = new GcsFilename("MyBucket", "foo");
-      Map<String, String> mapContent = new HashMap<String, String>();
+      Map<String, String> mapContent = new HashMap<>();
       mapContent.put("foo", "bar");
 
       example.writeObjectToFile(filename, mapContent);
@@ -148,10 +146,8 @@ public class LocalExample {
 
       System.out.println("Wrote " + Arrays.toString(byteContent) + " read: "
           + Arrays.toString(example.readFromFile(filename)));
-
     } finally {
       example.helper.tearDown();
     }
   }
-
 }

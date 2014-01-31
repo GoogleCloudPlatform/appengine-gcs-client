@@ -219,7 +219,7 @@ final class OauthRawGcsService implements RawGcsService {
 
   @Override
   public Future<RawGcsCreationToken> continueObjectCreationAsync(
-      RawGcsCreationToken x, ByteBuffer chunk, long timeoutMillis) throws IOException {
+      RawGcsCreationToken x, ByteBuffer chunk, long timeoutMillis) {
     GcsRestCreationToken token = (GcsRestCreationToken) x;
     return putAsync(token, chunk, false, timeoutMillis);
   }
