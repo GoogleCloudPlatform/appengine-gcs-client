@@ -4,7 +4,7 @@
   <description>
     A Google Cloud Storage client library for App Engine.
   </description>
-
+  
   <!-- Ivy Configurations -->
   <property name="thirdparty" value="thirdparty"/>
   <property name="sdk" value="sdk"/>
@@ -126,7 +126,15 @@
     <copy todir="${build}">
       <fileset dir="${src}"/>
     </copy>
-    <jar jarfile="${dist}/appengine-gcs-client.jar" basedir="${build}"/>
+    <jar jarfile="${dist}/appengine-gcs-client.jar" basedir="${build}">
+       <manifest>
+         <section name="com/google/appengine/tools/cloudstorage">
+           <attribute name="Specification-Vendor" value="Google"/>
+           <attribute name="Implementation-Vendor" value="Google"/>
+           <attribute name="Implementation-Vendor-Id" value="com.google"/>
+         </section>
+       </manifest>
+    </jar>
     <copy todir="${dist}">
       <fileset dir="${lib_thirdparty}"/>
     </copy>
