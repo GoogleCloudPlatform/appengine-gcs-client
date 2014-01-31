@@ -16,6 +16,7 @@
 
 package com.google.appengine.tools.cloudstorage;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -27,7 +28,6 @@ import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestC
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
-import com.google.common.base.Charsets;
 
 import org.junit.After;
 import org.junit.Before;
@@ -66,7 +66,7 @@ public class GcsServiceTest {
 
   @Test
   public void testReadWrittenData() throws IOException {
-    Charset utf8 = Charsets.UTF_8;
+    Charset utf8 = UTF_8;
     String content = "FooBar";
     GcsFilename filename = new GcsFilename("testReadWrittenDataBucket", "testReadWrittenDataFile");
 
