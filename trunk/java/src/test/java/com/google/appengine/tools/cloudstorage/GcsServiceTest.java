@@ -71,20 +71,19 @@ public class GcsServiceTest {
     GcsFilename filename = new GcsFilename("testReadWrittenDataBucket", "testReadWrittenDataFile");
 
     GcsService gcsService = GcsServiceFactory.createGcsService();
-    GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
+    try (GcsOutputChannel outputChannel =
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance())) {
+      outputChannel.write(utf8.encode(CharBuffer.wrap(content)));
+    }
 
-    outputChannel.write(utf8.encode(CharBuffer.wrap(content)));
-    outputChannel.close();
-
-    GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0);
-    ByteBuffer result = ByteBuffer.allocate(7);
-    int read = readChannel.read(result);
-    result.limit(read);
-
-    assertEquals(6, read);
-    result.rewind();
-    assertEquals(content, utf8.decode(result).toString());
+    try (GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0)) {
+      ByteBuffer result = ByteBuffer.allocate(7);
+      int read = readChannel.read(result);
+      result.limit(read);
+      assertEquals(6, read);
+      result.rewind();
+      assertEquals(content, utf8.decode(result).toString());
+    }
     gcsService.delete(filename);
   }
 
@@ -181,7 +180,7 @@ public class GcsServiceTest {
 
   @Test
   public void testReadMetadata() throws IOException {
-    Date start = new Date(System.currentTimeMillis()-1000);
+    Date start = new Date(System.currentTimeMillis() - 1000);
     byte[] content = new byte[1 * 1024 * 1024 + 1];
     Random r = new Random();
     r.nextBytes(content);

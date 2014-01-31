@@ -21,6 +21,9 @@ import static com.google.appengine.api.urlfetch.URLFetchServiceFactory.getURLFet
 import com.google.appengine.tools.cloudstorage.RawGcsService;
 
 
+/**
+ * Factory for RawGcsService using OAuth for authorization.
+ */
 public final class OauthRawGcsServiceFactory {
 
   private static final AppIdentityOAuthURLFetchService appIdFetchService =
@@ -34,5 +37,4 @@ public final class OauthRawGcsServiceFactory {
   public static RawGcsService createOauthRawGcsService() {
     return new OauthRawGcsService(appIdFetchService);
   }
-
 }

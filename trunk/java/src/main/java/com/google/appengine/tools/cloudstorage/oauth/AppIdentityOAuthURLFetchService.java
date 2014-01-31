@@ -49,8 +49,7 @@ final class AppIdentityOAuthURLFetchService extends AbstractOAuthURLFetchService
 
   private final List<String> oauthScopes;
 
-  private final AtomicReference<GetAccessTokenResult> accessToken =
-      new AtomicReference<GetAccessTokenResult>();
+  private final AtomicReference<GetAccessTokenResult> accessToken = new AtomicReference<>();
 
   private final AtomicInteger cacheExpirationHeadroom =
       new AtomicInteger(getNextCacheExpirationHeadroom());

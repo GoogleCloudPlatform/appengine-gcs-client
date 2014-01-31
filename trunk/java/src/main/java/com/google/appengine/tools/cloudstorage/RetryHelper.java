@@ -25,7 +25,6 @@ import com.google.common.base.Stopwatch;
 import java.io.InterruptedIOException;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.concurrent.Callable;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -125,6 +124,6 @@ public class RetryHelper<V>  {
   @VisibleForTesting
   static <V> V runWithRetries(Callable<V> callable, RetryParams params,
       ExceptionHandler exceptionHandler, Stopwatch stopwatch) throws RetryHelperException {
-    return new RetryHelper<V>(callable, params, exceptionHandler, stopwatch).doRetry();
+    return new RetryHelper<>(callable, params, exceptionHandler, stopwatch).doRetry();
   }
 }

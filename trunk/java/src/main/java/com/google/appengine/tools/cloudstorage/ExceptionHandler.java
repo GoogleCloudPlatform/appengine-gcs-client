@@ -45,12 +45,15 @@ public final class ExceptionHandler implements Serializable {
   private final ImmutableSet<Class<? extends Exception>> nonRetriableExceptions;
   private final Set<RetryInfo> retryInfos = Sets.newHashSet();
 
+  /**
+   * ExceptionHandler builder.
+   */
   public static class Builder {
 
     private final ImmutableSet.Builder<Class<? extends Exception>> retriableExceptions =
-        new ImmutableSet.Builder<Class<? extends Exception>>();
+        new ImmutableSet.Builder<>();
     private final ImmutableSet.Builder<Class<? extends Exception>> nonRetriableExceptions =
-        new ImmutableSet.Builder<Class<? extends Exception>>();
+        new ImmutableSet.Builder<>();
 
     /**
      * @param exceptions retry should continue when such exceptions are thrown
@@ -148,7 +151,7 @@ public final class ExceptionHandler implements Serializable {
     for (RetryInfo current : retryInfos) {
       if (current.exception.isAssignableFrom(exception)) {
         RetryInfo  match = findMostSpecificRetryInfo(current.children, exception);
-        return match == null ? current: match;
+        return match == null ? current : match;
       }
     }
     return null;
