@@ -60,7 +60,7 @@ public class GcsExampleServlet extends HttpServlet {
 
   /**
    * Retrieves a file from GCS and returns it in the http response.
-   * If a get comes in for request path /gcs/Foo/Bar this will be interpreted as
+   * If the request path is /gcs/Foo/Bar this will be interpreted as
    * a request to read the GCS file named Bar in the bucket Foo.
    */
   @Override
@@ -79,7 +79,7 @@ public class GcsExampleServlet extends HttpServlet {
 
   /**
    * Writes the payload of the incoming post as the contents of a file to GCS.
-   * If the post is to request path is /gcs/Foo/Bar this will be interpreted as
+   * If the request path is /gcs/Foo/Bar this will be interpreted as
    * a request to create a GCS file named Bar in bucket Foo.
    */
   @Override
@@ -114,6 +114,4 @@ public class GcsExampleServlet extends HttpServlet {
       output.close();
     }
   }
-
-
 }
