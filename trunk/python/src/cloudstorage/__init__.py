@@ -1,3 +1,5 @@
+# Copyright 2014 Google Inc. All Rights Reserved.
+
 """Client Library for Google Cloud Storage."""
 
 
