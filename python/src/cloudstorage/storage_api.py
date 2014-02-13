@@ -23,7 +23,6 @@ __all__ = ['ReadBuffer',
           ]
 
 import collections
-import logging
 import os
 import urlparse
 
@@ -209,8 +208,8 @@ class ReadBuffer(object):
 
     self._request_next_buffer()
 
-    status, headers, _ = self._api.head_object(path)
-    errors.check_status(status, [200], path, resp_headers=headers)
+    status, headers, content = self._api.head_object(path)
+    errors.check_status(status, [200], path, resp_headers=headers, body=content)
     self._file_size = long(headers['content-length'])
     self._check_etag(headers.get('etag'))
     if self._file_size == 0:
@@ -431,7 +430,8 @@ class ReadBuffer(object):
     headers = {'Range': 'bytes=' + content_range}
     status, resp_headers, content = yield self._api.get_object_async(
         self._path, headers=headers)
-    errors.check_status(status, [200, 206], self._path, headers, resp_headers)
+    errors.check_status(status, [200, 206], self._path, headers, resp_headers,
+                        body=content)
     self._check_etag(resp_headers.get('etag'))
     raise ndb.Return(content)
 
@@ -616,6 +616,8 @@ class StreamingBuffer(object):
         delegate to Google Cloud Storage.
       gcs_headers: additional gs headers as a str->str dict, e.g
         {'x-goog-acl': 'private', 'x-goog-meta-foo': 'foo'}.
+    Raises:
+      IOError: When this location can not be found.
     """
     assert self._maxrequestsize > self._blocksize
     assert self._maxrequestsize % self._blocksize == 0
@@ -635,8 +637,9 @@ class StreamingBuffer(object):
       headers['content-type'] = content_type
     if gcs_headers:
       headers.update(gcs_headers)
-    status, resp_headers, _ = self._api.post_object(path, headers=headers)
-    errors.check_status(status, [201], path, headers, resp_headers)
+    status, resp_headers, content = self._api.post_object(path, headers=headers)
+    errors.check_status(status, [201], path, headers, resp_headers,
+                        body=content)
     loc = resp_headers.get('location')
     if not loc:
       raise IOError('No location header found in 201 response')
@@ -804,14 +807,14 @@ class StreamingBuffer(object):
     else:
       headers['content-range'] = ('bytes */%s' % file_len)
 
-    status, response_headers, _ = self._api.put_object(
+    status, response_headers, content = self._api.put_object(
         self._path_with_token, payload=data, headers=headers)
     if file_len == '*':
       expected = 308
     else:
       expected = 200
     errors.check_status(status, [expected], self._path, headers,
-                        response_headers,
+                        response_headers, content,
                         {'upload_path': self._path_with_token})
 
   def _get_offset_from_gcs(self):
@@ -824,10 +827,10 @@ class StreamingBuffer(object):
       -1 means nothing has been written.
     """
     headers = {'content-range': 'bytes */*'}
-    status, response_headers, _ = self._api.put_object(
+    status, response_headers, content = self._api.put_object(
         self._path_with_token, headers=headers)
     errors.check_status(status, [308], self._path, headers,
-                        response_headers,
+                        response_headers, content,
                         {'upload_path': self._path_with_token})
     val = response_headers.get('range')
     if val is None:

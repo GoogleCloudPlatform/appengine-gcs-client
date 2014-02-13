@@ -24,6 +24,7 @@ __all__ = ['AuthorizationError',
            'FatalError',
            'FileClosedError',
            'ForbiddenError',
+           'InvalidRange',
            'NotFoundError',
            'ServerError',
            'TimeoutError',
@@ -93,7 +94,7 @@ class ServerError(TransientError):
 
 
 def check_status(status, expected, path, headers=None,
-                 resp_headers=None, extras=None):
+                 resp_headers=None, body=None, extras=None):
   """Check HTTP response status is expected.
 
   Args:
@@ -102,6 +103,7 @@ def check_status(status, expected, path, headers=None,
     path: filename or a path prefix.
     headers: HTTP request headers.
     resp_headers: HTTP response headers.
+    body: HTTP response body.
     extras: extra info to be logged verbatim if error occurs.
 
   Raises:
@@ -118,8 +120,9 @@ def check_status(status, expected, path, headers=None,
          'Path: %r.\n'
          'Request headers: %r.\n'
          'Response headers: %r.\n'
+         'Body: %r.\n'
          'Extra info: %r.\n' %
-         (expected, status, path, headers, resp_headers, extras))
+         (expected, status, path, headers, resp_headers, body, extras))
 
   if status == httplib.UNAUTHORIZED:
     raise AuthorizationError(msg)
