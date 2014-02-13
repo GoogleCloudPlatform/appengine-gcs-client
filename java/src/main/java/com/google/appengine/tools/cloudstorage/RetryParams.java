@@ -242,4 +242,13 @@ public class RetryParams implements Serializable {
   public long getRequestTimeoutMillis() {
     return requestTimeoutMillis;
   }
+
+  @Override
+  public String toString() {
+    return getClass().getSimpleName() + " [requestTimeoutMillis=" + requestTimeoutMillis
+        + ", retryMinAttempts=" + retryMinAttempts + ", retryMaxAttempts=" + retryMaxAttempts
+        + ", initialRetryDelayMillis=" + initialRetryDelayMillis + ", maxRetryDelayMillis="
+        + maxRetryDelayMillis + ", retryDelayBackoffFactor=" + retryDelayBackoffFactor
+        + ", totalRetryPeriodMillis=" + totalRetryPeriodMillis + "]";
+  }
 }
