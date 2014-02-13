@@ -3,6 +3,7 @@
 
 """A sample app that uses GCS client to operate on bucket and file."""
 
+import logging
 import os
 import cloudstorage as gcs
 import webapp2
@@ -13,34 +14,48 @@ my_default_retry_params = gcs.RetryParams(initial_delay=0.2,
                                           max_retry_period=15)
 gcs.set_default_retry_params(my_default_retry_params)
 
-BUCKET = '/yey-cloud-storage-trial'
-
 
 class MainPage(webapp2.RequestHandler):
+  """Main page for GCS demo application."""
 
   def get(self):
-    filename = BUCKET + '/demo-testfile'
-
     self.response.headers['Content-Type'] = 'text/plain'
+    self.response.write('Demo GCS Application Version: '
+                        + os.environ['CURRENT_VERSION_ID'] + '\n')
+    self.response.write('Using bucket: ' + os.environ['BUCKET'] + '\n\n')
+
+    bucket = '/' + os.environ['BUCKET']
+    filename = bucket + '/demo-testfile'
     self.tmp_filenames_to_clean_up = []
 
-    self.create_file(filename)
-    self.response.write('\n\n')
+    try:
+      self.create_file(filename)
+      self.response.write('\n\n')
 
-    self.read_file(filename)
-    self.response.write('\n\n')
+      self.read_file(filename)
+      self.response.write('\n\n')
 
-    self.stat_file(filename)
-    self.response.write('\n\n')
+      self.stat_file(filename)
+      self.response.write('\n\n')
 
-    self.create_files_for_list_bucket(BUCKET)
-    self.list_bucket(BUCKET)
-    self.response.write('\n\n')
+      self.create_files_for_list_bucket(bucket)
+      self.response.write('\n\n')
 
-    self.list_bucket_directory_mode(BUCKET)
-    self.response.write('\n\n')
+      self.list_bucket(bucket)
+      self.response.write('\n\n')
 
-    self.delete_files()
+      self.list_bucket_directory_mode(bucket)
+      self.response.write('\n\n')
+
+    except Exception, e:
+      logging.error(e)
+      self.delete_files()
+      self.response.write('\n\nThere was an error running the demo! '
+                          'Please check the logs for more details.\n')
+
+    else:
+      self.delete_files()
+      self.response.write('\n\nThe demo ran successfully!\n')
 
   def create_file(self, filename):
     """Create a file.
@@ -86,7 +101,6 @@ class MainPage(webapp2.RequestHandler):
                                       '/bar/2', '/boo/']]
     for f in filenames:
       self.create_file(f)
-    self.tmp_filenames_to_clean_up.extend(filenames)
 
   def list_bucket(self, bucket):
     """Create several files and paginate through them.
@@ -96,7 +110,7 @@ class MainPage(webapp2.RequestHandler):
     Args:
       bucket: bucket.
     """
-    self.response.write('\nListbucket result:\n')
+    self.response.write('Listbucket result:\n')
 
     page_size = 1
     stats = gcs.listbucket(bucket + '/foo', max_keys=page_size)
@@ -113,7 +127,7 @@ class MainPage(webapp2.RequestHandler):
                              marker=stat.filename)
 
   def list_bucket_directory_mode(self, bucket):
-    self.response.write('\nListbucket directory mode result:\n')
+    self.response.write('Listbucket directory mode result:\n')
     for stat in gcs.listbucket(bucket + '/b', delimiter='/'):
       self.response.write('%r' % stat)
       self.response.write('\n')
@@ -125,6 +139,7 @@ class MainPage(webapp2.RequestHandler):
   def delete_files(self):
     self.response.write('Deleting files...\n')
     for filename in self.tmp_filenames_to_clean_up:
+      self.response.write('Deleting file %s\n' % filename)
       try:
         gcs.delete(filename)
       except gcs.NotFoundError:
