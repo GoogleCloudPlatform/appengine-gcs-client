@@ -48,7 +48,7 @@ final class GcsServiceImpl implements GcsService {
           InterruptedIOException.class)
       .build();
 
-  private static final int REQUEST_MAX_SIZE_MB = 32 * 1024 * 1024;
+  private static final int REQUEST_MAX_SIZE_MB = 10_000_000;
 
   GcsServiceImpl(RawGcsService raw, RetryParams retryParams) {
     this.raw = checkNotNull(raw, "Null raw");
