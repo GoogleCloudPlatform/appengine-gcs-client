@@ -17,6 +17,7 @@
 package com.google.appengine.tools.cloudstorage;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * Allows creating and accessing files in Google Cloud Storage.
@@ -36,9 +37,18 @@ public interface GcsService {
   /**
    * Creates a new object.
    *
-   * Closing the channel will finalize the file.
+   * The content of the file will only be available after the channel was closed.
    */
   GcsOutputChannel createOrReplace(GcsFilename filename, GcsFileOptions options)
+      throws IOException;
+
+  /**
+   * Creates, writes and closes a new object with a given content.
+   * This is equivalent to calling {@link #createOrReplace(GcsFilename, GcsFileOptions)}
+   * and then {@link GcsOutputChannel#write(ByteBuffer)} and {@link GcsOutputChannel#close()}
+   * but will try to minimize the underling RPC calls.
+   */
+  void createOrReplace(GcsFilename filename, GcsFileOptions options, ByteBuffer src)
       throws IOException;
 
 

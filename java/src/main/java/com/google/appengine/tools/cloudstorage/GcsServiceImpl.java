@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.MalformedURLException;
 import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.concurrent.Callable;
 
@@ -46,6 +47,8 @@ final class GcsServiceImpl implements GcsService {
           MalformedURLException.class, ClosedByInterruptException.class,
           InterruptedIOException.class)
       .build();
+
+  private static final int REQUEST_MAX_SIZE_MB = 32 * 1024 * 1024;
 
   GcsServiceImpl(RawGcsService raw, RetryParams retryParams) {
     this.raw = checkNotNull(raw, "Null raw");
@@ -68,6 +71,41 @@ final class GcsServiceImpl implements GcsService {
         }
       }, retryParams, exceptionHandler);
       return new GcsOutputChannelImpl(raw, token, retryParams);
+    } catch (RetryInterruptedException ex) {
+      throw new ClosedByInterruptException();
+    } catch (NonRetriableException e) {
+      Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
+      throw e;
+    }
+  }
+
+  @Override
+  public void createOrReplace(final GcsFilename filename, final GcsFileOptions options,
+      final ByteBuffer src) throws IOException {
+    if (src.remaining() > REQUEST_MAX_SIZE_MB) {
+      @SuppressWarnings("resource")
+      GcsOutputChannel channel = createOrReplace(filename, options);
+      channel.write(src);
+      channel.close();
+      return;
+    }
+
+    try {
+      final RawGcsCreationToken token =
+          RetryHelper.runWithRetries(new Callable<RawGcsCreationToken>() {
+            @Override
+            public RawGcsCreationToken call() throws IOException {
+              return raw.beginObjectCreation(filename, options,
+                  retryParams.getRequestTimeoutMillis());
+            }
+          }, retryParams, exceptionHandler);
+      RetryHelper.runWithRetries(new Callable<Void>() {
+        @Override
+        public Void call() throws IOException {
+          raw.finishObjectCreation(token, src, retryParams.getRequestTimeoutMillis());
+          return null;
+        }
+      }, retryParams, exceptionHandler);
     } catch (RetryInterruptedException ex) {
       throw new ClosedByInterruptException();
     } catch (NonRetriableException e) {
