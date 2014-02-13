@@ -65,6 +65,24 @@ public class GcsServiceTest {
   }
 
   @Test
+  public void testCreateWithBuffer() throws IOException {
+    String content = "FooBar";
+    ByteBuffer src = UTF_8.encode(CharBuffer.wrap(content));
+    GcsFilename filename = new GcsFilename("testCreateWithBuffer", "testCreateWithBuffer");
+    GcsService gcsService = GcsServiceFactory.createGcsService();
+    gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance(), src);
+    try (GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0)) {
+      ByteBuffer result = ByteBuffer.allocate(7);
+      int read = readChannel.read(result);
+      result.limit(read);
+      assertEquals(6, read);
+      result.rewind();
+      assertEquals(content, UTF_8.decode(result).toString());
+    }
+    gcsService.delete(filename);
+  }
+
+  @Test
   public void testReadWrittenData() throws IOException {
     Charset utf8 = UTF_8;
     String content = "FooBar";
