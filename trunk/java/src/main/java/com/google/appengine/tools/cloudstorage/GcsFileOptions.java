@@ -21,7 +21,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -41,18 +40,23 @@ import java.util.Map;
  */
 public final class GcsFileOptions implements Serializable {
   private static final long serialVersionUID = -7350111525144535653L;
-private final String mimeType;private final String acl;private final String cacheControl;private final String contentEncoding;private final String contentDisposition;
+
+  private final String mimeType;
+  private final String acl;
+  private final String cacheControl;
+  private final String contentEncoding;
+  private final String contentDisposition;
   private final ImmutableMap<String, String> userMetadata;
 
-  private static final GcsFileOptions DEFAULT_INSTANCE = new GcsFileOptions(new Builder());
+  private static final GcsFileOptions DEFAULT_INSTANCE = new Builder().build();
 
   private GcsFileOptions(Builder builder) {
-    this.mimeType = builder.mimeType;
-    this.acl = builder.acl;
-    this.cacheControl = builder.cacheControl;
-    this.contentEncoding = builder.contentEncoding;
-    this.contentDisposition = builder.contentDisposition;
-    this.userMetadata = ImmutableMap.copyOf(builder.userMetadata);
+    mimeType = builder.mimeType;
+    acl = builder.acl;
+    cacheControl = builder.cacheControl;
+    contentEncoding = builder.contentEncoding;
+    contentDisposition = builder.contentDisposition;
+    userMetadata = builder.userMetadata.build();
   }
 
   /**
@@ -144,12 +148,13 @@ private final String mimeType;private final String acl;private final String cach
    * A builder of GcsFileOptions.
    */
   public static final class Builder {
-private String mimeType;private String acl;private String cacheControl;private String contentEncoding;private String contentDisposition;
-    private final Map<String, String> userMetadata;
 
-    public Builder() {
-      this.userMetadata = new HashMap<>();
-    }
+    private String mimeType;
+    private String acl;
+    private String cacheControl;
+    private String contentEncoding;
+    private String contentDisposition;
+    private final ImmutableMap.Builder<String, String> userMetadata = ImmutableMap.builder();
 
     /**
      * Sets the mime type of the object. If not set, default Google Storage mime type is used when

@@ -18,6 +18,7 @@ package com.google.appengine.tools.cloudstorage.oauth;
 
 import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
+import com.google.appengine.tools.cloudstorage.RetryHelperException;
 
 import java.io.IOException;
 import java.util.concurrent.Future;
@@ -30,7 +31,7 @@ import java.util.concurrent.Future;
  */
 interface OAuthURLFetchService {
 
-  HTTPResponse fetch(HTTPRequest req) throws IOException;
-  Future<HTTPResponse> fetchAsync(HTTPRequest request);
+  HTTPResponse fetch(HTTPRequest req) throws IOException, RetryHelperException;
 
+  Future<HTTPResponse> fetchAsync(HTTPRequest request);
 }
