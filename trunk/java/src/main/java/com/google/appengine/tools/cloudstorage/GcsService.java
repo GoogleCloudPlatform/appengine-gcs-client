@@ -46,7 +46,7 @@ public interface GcsService {
    * Creates, writes and closes a new object with a given content.
    * This is equivalent to calling {@link #createOrReplace(GcsFilename, GcsFileOptions)}
    * and then {@link GcsOutputChannel#write(ByteBuffer)} and {@link GcsOutputChannel#close()}
-   * but will try to minimize the underling RPC calls.
+   * but will try to minimize the underlying RPC calls.
    */
   void createOrReplace(GcsFilename filename, GcsFileOptions options, ByteBuffer src)
       throws IOException;
