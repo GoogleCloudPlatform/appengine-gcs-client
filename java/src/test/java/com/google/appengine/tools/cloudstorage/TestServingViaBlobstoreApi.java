@@ -56,6 +56,7 @@ public class TestServingViaBlobstoreApi {
   public void testFoundUrl() throws IOException {
     GcsFilename gcsFilename =
         new GcsFilename(TestServingViaBlobstoreApi.class.getName(), "testFoundUrl");
+    @SuppressWarnings("resource")
     GcsOutputChannel channel = GCS_SERVICE.createOrReplace(
         gcsFilename, new GcsFileOptions.Builder().mimeType("image/png").build());
     byte[] bytes = BaseEncoding.base64().decode(PNG);

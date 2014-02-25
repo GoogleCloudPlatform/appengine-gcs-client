@@ -18,6 +18,7 @@ package com.google.appengine.tools.cloudstorage;
 
 import static java.util.concurrent.Executors.callable;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -45,17 +46,20 @@ public class RetryHelperTest {
 
   @Test
   public void testTriesWithExceptionHandling() {
+    assertNull(RetryHelper.getContext());
     RetryParams params =
         new RetryParams.Builder().initialRetryDelayMillis(0).retryMaxAttempts(3).build();
     ExceptionHandler handler = new ExceptionHandler.Builder()
         .retryOn(IOException.class).abortOn(RuntimeException.class).build();
-    final AtomicInteger count = new AtomicInteger(2);
+    final AtomicInteger count = new AtomicInteger(3);
     try {
       RetryHelper.runWithRetries(new Callable<Void>() {
         @Override public Void call() throws IOException, NullPointerException {
           if (count.decrementAndGet() == 2) {
+            assertEquals(1, RetryHelper.getContext().getAttemptsSoFar());
             throw new IOException("should be retried");
           }
+          assertEquals(2, RetryHelper.getContext().getAttemptsSoFar());
           throw new NullPointerException("Boo!");
         }
       }, params, handler);
@@ -64,6 +68,7 @@ public class RetryHelperTest {
       assertEquals("Boo!", ex.getCause().getMessage());
       assertEquals(1, count.intValue());
     }
+    assertNull(RetryHelper.getContext());
 
     @SuppressWarnings("serial") class E1 extends Exception {}
     @SuppressWarnings("serial") class E2 extends E1 {}
@@ -85,6 +90,7 @@ public class RetryHelperTest {
     } catch (NonRetriableException ex) {
       assertTrue(ex.getCause() instanceof E3);
     }
+    assertNull(RetryHelper.getContext());
   }
 
   @Test
@@ -95,10 +101,13 @@ public class RetryHelperTest {
         .retryMaxAttempts(10)
         .build();
     final int timesToFail = 7;
+    assertNull(RetryHelper.getContext());
     int attempted = RetryHelper.runWithRetries(new Callable<Integer>() {
       int timesCalled = 0;
       @Override public Integer call() throws IOException {
         timesCalled++;
+        assertEquals(timesCalled, RetryHelper.getContext().getAttemptsSoFar());
+        assertEquals(10, RetryHelper.getContext().getRetryParams().getRetryMaxAttempts());
         if (timesCalled <= timesToFail) {
           throw new IOException();
         } else {
@@ -107,6 +116,7 @@ public class RetryHelperTest {
       }
     }, params, ExceptionHandler.getDefaultInstance());
     assertEquals(timesToFail + 1, attempted);
+    assertNull(RetryHelper.getContext());
   }
 
   @Test
@@ -184,9 +194,11 @@ public class RetryHelperTest {
 
   @Test
   public void testBackoffIsExponential() {
-    RetryParams params = new RetryParams.Builder().initialRetryDelayMillis(10)
-        .maxRetryDelayMillis(10000000)
-        .totalRetryPeriodMillis(60000)
+    RetryParams params = new RetryParams.Builder()
+        .initialRetryDelayMillis(10)
+        .maxRetryDelayMillis(10_000_000)
+        .retryDelayBackoffFactor(2)
+        .totalRetryPeriodMillis(60_000)
         .retryMinAttempts(0)
         .retryMaxAttempts(100)
         .build();
@@ -215,5 +227,4 @@ public class RetryHelperTest {
     sleepDuration = RetryHelper.getSleepDuration(params, 12);
     assertTrue("" + sleepDuration, sleepDuration < 25600 && sleepDuration >= 15360);
   }
-
 }

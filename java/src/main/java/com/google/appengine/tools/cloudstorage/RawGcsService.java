@@ -35,7 +35,7 @@ import java.util.concurrent.Future;
 public interface RawGcsService {
 
   /**
-   * Calls to {@link #continueObjectCreation(RawGcsCreationToken, ByteBuffer, long)}
+   * Calls to {@link #continueObjectCreationAsync(RawGcsCreationToken, ByteBuffer, long)}
    * need to pass fixed size chunks.
    *
    * This returns the size expected by the implementation.
@@ -134,5 +134,4 @@ public interface RawGcsService {
    * Returns true if deleted, false if not found.
    */
   boolean deleteObject(GcsFilename filename, long timeoutMillis) throws IOException;
-
 }

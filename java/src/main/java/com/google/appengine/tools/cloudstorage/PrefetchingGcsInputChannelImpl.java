@@ -100,8 +100,8 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
    */
   private void requestBlock() {
     next = ByteBuffer.allocate(blockSizeBytes);
-    pendingFetch =
-        raw.readObjectAsync(next, filename, fetchPosition, retryParams.getRequestTimeoutMillis());
+    long requestTimeout = retryParams.getRequestTimeoutMillisForCurrentAttempt();
+    pendingFetch = raw.readObjectAsync(next, filename, fetchPosition, requestTimeout);
   }
 
   @Override

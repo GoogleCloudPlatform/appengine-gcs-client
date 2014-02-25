@@ -52,7 +52,7 @@ final class GcsServiceImpl implements GcsService {
 
   GcsServiceImpl(RawGcsService raw, RetryParams retryParams) {
     this.raw = checkNotNull(raw, "Null raw");
-    this.retryParams = retryParams;
+    this.retryParams = new RetryParams.Builder(retryParams).requestTimeoutRetryFactor(1.2).build();
   }
 
   @Override
@@ -67,7 +67,8 @@ final class GcsServiceImpl implements GcsService {
       RawGcsCreationToken token = RetryHelper.runWithRetries(new Callable<RawGcsCreationToken>() {
         @Override
         public RawGcsCreationToken call() throws IOException {
-          return raw.beginObjectCreation(filename, options, retryParams.getRequestTimeoutMillis());
+          return raw.beginObjectCreation(
+              filename, options, retryParams.getRequestTimeoutMillisForCurrentAttempt());
         }
       }, retryParams, exceptionHandler);
       return new GcsOutputChannelImpl(raw, token, retryParams);
@@ -95,14 +96,15 @@ final class GcsServiceImpl implements GcsService {
           RetryHelper.runWithRetries(new Callable<RawGcsCreationToken>() {
             @Override
             public RawGcsCreationToken call() throws IOException {
-              return raw.beginObjectCreation(filename, options,
-                  retryParams.getRequestTimeoutMillis());
+              return raw.beginObjectCreation(
+                  filename, options, retryParams.getRequestTimeoutMillisForCurrentAttempt());
             }
           }, retryParams, exceptionHandler);
       RetryHelper.runWithRetries(new Callable<Void>() {
         @Override
         public Void call() throws IOException {
-          raw.finishObjectCreation(token, src, retryParams.getRequestTimeoutMillis());
+          raw.finishObjectCreation(
+              token, src, retryParams.getRequestTimeoutMillisForCurrentAttempt());
           return null;
         }
       }, retryParams, exceptionHandler);
@@ -132,7 +134,8 @@ final class GcsServiceImpl implements GcsService {
       return RetryHelper.runWithRetries(new Callable<GcsFileMetadata>() {
         @Override
         public GcsFileMetadata call() throws IOException {
-          return raw.getObjectMetadata(filename, retryParams.getRequestTimeoutMillis());
+          return raw.getObjectMetadata(
+              filename, retryParams.getRequestTimeoutMillisForCurrentAttempt());
         }
       }, retryParams, exceptionHandler);
     } catch (RetryInterruptedException ex) {
@@ -149,7 +152,7 @@ final class GcsServiceImpl implements GcsService {
       return RetryHelper.runWithRetries(new Callable<Boolean>() {
         @Override
         public Boolean call() throws IOException {
-          return raw.deleteObject(filename, retryParams.getRequestTimeoutMillis());
+          return raw.deleteObject(filename, retryParams.getRequestTimeoutMillisForCurrentAttempt());
         }
       }, retryParams, exceptionHandler);
     } catch (RetryInterruptedException ex) {

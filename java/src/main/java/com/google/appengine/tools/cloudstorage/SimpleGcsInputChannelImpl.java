@@ -83,8 +83,9 @@ final class SimpleGcsInputChannelImpl implements GcsInputChannel {
           public Integer call() throws IOException, InterruptedException {
             try {
               int n = dst.remaining();
-              GcsFileMetadata gcsFileMetadata = raw.readObjectAsync(
-                  dst, filename, position, retryParams.getRequestTimeoutMillis()).get();
+              long requestTimeout = retryParams.getRequestTimeoutMillisForCurrentAttempt();
+              GcsFileMetadata gcsFileMetadata =
+                  raw.readObjectAsync(dst, filename, position, requestTimeout).get();
               int r = n - dst.remaining();
               position += r;
               if (position >= gcsFileMetadata.getLength()) {

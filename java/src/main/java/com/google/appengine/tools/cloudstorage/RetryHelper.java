@@ -16,6 +16,7 @@
 
 package com.google.appengine.tools.cloudstorage;
 
+import static com.google.appengine.tools.cloudstorage.RetryParams.getExponentialValue;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
@@ -48,6 +49,40 @@ public class RetryHelper<V>  {
   private final RetryParams params;
   private final ExceptionHandler exceptionHandler;
   private int attemptsSoFar;
+
+
+  private static final ThreadLocal<Context> context = new ThreadLocal<>();
+
+  static class Context {
+
+    private final RetryHelper<?> helper;
+
+    Context(RetryHelper<?> helper) {
+      this.helper = helper;
+    }
+
+    public RetryParams getRetryParams() {
+      return helper.params;
+    }
+
+    public int getAttemptsSoFar() {
+      return helper.attemptsSoFar;
+    }
+  }
+
+  @VisibleForTesting
+  static final void setContext(Context ctx) {
+    context.set(ctx);
+  }
+
+  @VisibleForTesting
+  static final void clearContext() {
+    context.remove();
+  }
+
+  static final Context getContext() {
+    return context.get();
+  }
 
   @VisibleForTesting
   RetryHelper(Callable<V> callable, RetryParams params, ExceptionHandler exceptionHandler,
@@ -105,10 +140,11 @@ public class RetryHelper<V>  {
 
   @VisibleForTesting
   static long getSleepDuration(RetryParams retryParams, int attemptsSoFar) {
-    return (long) ((Math.random() / 2.0 + .75) * (Math.min(
-        retryParams.getMaxRetryDelayMillis(),
-        Math.pow(retryParams.getRetryDelayBackoffFactor(), attemptsSoFar - 1)
-        * retryParams.getInitialRetryDelayMillis())));
+    long initialDelay = retryParams.getInitialRetryDelayMillis();
+    double backoff = retryParams.getRetryDelayBackoffFactor();
+    long maxDelay = retryParams.getMaxRetryDelayMillis();
+    long retryDelay = getExponentialValue(initialDelay, backoff, maxDelay, attemptsSoFar);
+    return (long) ((Math.random() / 2.0 + .75) * retryDelay);
   }
 
   public static <V> V runWithRetries(Callable<V> callable) throws RetryHelperException {
@@ -124,6 +160,12 @@ public class RetryHelper<V>  {
   @VisibleForTesting
   static <V> V runWithRetries(Callable<V> callable, RetryParams params,
       ExceptionHandler exceptionHandler, Stopwatch stopwatch) throws RetryHelperException {
-    return new RetryHelper<>(callable, params, exceptionHandler, stopwatch).doRetry();
+    RetryHelper<V> retryHelper = new RetryHelper<>(callable, params, exceptionHandler, stopwatch);
+    try {
+      setContext(new Context(retryHelper));
+      return retryHelper.doRetry();
+    } finally {
+      clearContext();
+    }
   }
 }
