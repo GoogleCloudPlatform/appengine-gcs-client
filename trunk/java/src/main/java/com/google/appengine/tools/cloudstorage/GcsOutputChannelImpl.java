@@ -179,7 +179,8 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
       try {
         RetryHelper.runWithRetries(new Callable<Void>() {
           @Override public Void call() throws IOException {
-            raw.finishObjectCreation(token, out, retryParams.getRequestTimeoutMillis());
+            raw.finishObjectCreation(
+                token, out, retryParams.getRequestTimeoutMillisForCurrentAttempt());
             return null;
           }
         }, retryParams, GcsServiceImpl.exceptionHandler);
@@ -200,7 +201,8 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
       createNewBuffer();
       if (toWrite.remaining() > 0) {
         ongoingWrite = new OutstandingRequest(token, toWrite,
-            raw.continueObjectCreationAsync(token, toWrite, retryParams.getRequestTimeoutMillis()));
+            raw.continueObjectCreationAsync(
+                token, toWrite, retryParams.getRequestTimeoutMillisForCurrentAttempt()));
       }
     }
   }
@@ -253,7 +255,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
     ongoingWrite = new OutstandingRequest(ongoingWrite.requestToken,
         ongoingWrite.ongoingRequestBuf, raw.continueObjectCreationAsync(
             ongoingWrite.requestToken, ongoingWrite.ongoingRequestBuf,
-            retryParams.getRequestTimeoutMillis()));
+            retryParams.getRequestTimeoutMillisForCurrentAttempt()));
   }
 
   @Override
@@ -292,7 +294,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
         ByteBuffer outputBuffer = getSliceForWrite();
         outputBuffer.limit(bytesToWrite);
         ongoingWrite = new OutstandingRequest(token, outputBuffer, raw.continueObjectCreationAsync(
-            token, outputBuffer, retryParams.getRequestTimeoutMillis()));
+            token, outputBuffer, retryParams.getRequestTimeoutMillisForCurrentAttempt()));
         waitForNextToken();
         buf.position(bytesToWrite);
         buf.limit(position);

@@ -16,6 +16,8 @@
 
 package com.google.appengine.tools.cloudstorage;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import java.io.Serializable;
 
 /**
@@ -41,18 +43,22 @@ import java.io.Serializable;
  * {@code RetryParams} with the required settings.
  *
  */
-public class RetryParams implements Serializable {
+public final class RetryParams implements Serializable {
   private static final long serialVersionUID = -8492751576749007700L;
 
-  public static final long DEFAULT_REQUEST_TIMEOUT_MILLIS = 10000;
+  public static final long DEFAULT_REQUEST_TIMEOUT_MILLIS = 30_000L;
+  public static final double DEFAULT_REQUEST_TIMEOUT_RETRY_FACTOR = 1;
+  public static final long DEFAULT_MAX_REQUEST_TIMEOUT = 2L * DEFAULT_REQUEST_TIMEOUT_MILLIS;
   public static final int DEFAULT_RETRY_MIN_ATTEMPTS = 3;
   public static final int DEFAULT_RETRY_MAX_ATTEMPTS = 6;
-  public static final long DEFAULT_INITIAL_RETRY_DELAY_MILLIS = 250;
-  public static final long DEFAULT_MAX_RETRY_DELAY_MILLIS = 10 * 1000;
-  public static final double DEFAULT_RETRY_DELAY_BACKOFF_FACTOR = 2;
-  public static final long DEFAULT_TOTAL_RETRY_PERIOD_MILLIS = 30 * 1000;
+  public static final long DEFAULT_INITIAL_RETRY_DELAY_MILLIS = 250L;
+  public static final long DEFAULT_MAX_RETRY_DELAY_MILLIS = 10_000L;
+  public static final double DEFAULT_RETRY_DELAY_BACKOFF_FACTOR = 2.0;
+  public static final long DEFAULT_TOTAL_RETRY_PERIOD_MILLIS = 50_000L;
 
   private final long requestTimeoutMillis;
+  private final double requestTimeoutRetryFactor;
+  private final long maxRequestTimeout;
   private final int retryMinAttempts;
   private final int retryMaxAttempts;
   private final long initialRetryDelayMillis;
@@ -70,12 +76,26 @@ public class RetryParams implements Serializable {
    */
   private RetryParams(Builder builder) {
     requestTimeoutMillis = builder.requestTimeoutMillis;
+    requestTimeoutRetryFactor = builder.requestTimeoutRetryFactor;
+    maxRequestTimeout = builder.maxRequestTimeout;
     retryMinAttempts = builder.retryMinAttempts;
     retryMaxAttempts = builder.retryMaxAttempts;
     initialRetryDelayMillis = builder.initialRetryDelayMillis;
     maxRetryDelayMillis = builder.maxRetryDelayMillis;
     retryDelayBackoffFactor = builder.retryDelayBackoffFactor;
     totalRetryPeriodMillis = builder.totalRetryPeriodMillis;
+    checkArgument(requestTimeoutMillis >= 0, "requestTimeoutMillis must not be negative");
+    checkArgument(requestTimeoutRetryFactor >= 0, "requestTimeoutRetryFactor must not be negative");
+    checkArgument(maxRequestTimeout >= requestTimeoutMillis,
+        "maxRequestTimeout must not be smaller than requestTimeoutMillis");
+    checkArgument(retryMinAttempts >= 0, "retryMinAttempts must not be negative");
+    checkArgument(retryMaxAttempts >= retryMinAttempts,
+        "retryMaxAttempts must not be smaller than retryMinAttempts");
+    checkArgument(initialRetryDelayMillis >= 0, "initialRetryDelayMillis must not be negative");
+    checkArgument(maxRetryDelayMillis >= initialRetryDelayMillis,
+        "maxRetryDelayMillis must not be smaller than initialRetryDelayMillis");
+    checkArgument(retryDelayBackoffFactor >= 0, "retryDelayBackoffFactor must not be negative");
+    checkArgument(totalRetryPeriodMillis >= 0, "totalRetryPeriodMillis must not be negative");
   }
 
   /**
@@ -91,6 +111,8 @@ public class RetryParams implements Serializable {
   public static final class Builder {
 
     private long requestTimeoutMillis;
+    private double requestTimeoutRetryFactor;
+    private long maxRequestTimeout;
     private int retryMinAttempts;
     private int retryMaxAttempts;
     private long initialRetryDelayMillis;
@@ -105,6 +127,8 @@ public class RetryParams implements Serializable {
     public Builder( RetryParams retryParams) {
       if (retryParams == null) {
         requestTimeoutMillis = DEFAULT_REQUEST_TIMEOUT_MILLIS;
+        requestTimeoutRetryFactor = DEFAULT_REQUEST_TIMEOUT_RETRY_FACTOR;
+        maxRequestTimeout = DEFAULT_MAX_REQUEST_TIMEOUT;
         retryMinAttempts = DEFAULT_RETRY_MIN_ATTEMPTS;
         retryMaxAttempts = DEFAULT_RETRY_MAX_ATTEMPTS;
         initialRetryDelayMillis = DEFAULT_INITIAL_RETRY_DELAY_MILLIS;
@@ -113,6 +137,8 @@ public class RetryParams implements Serializable {
         totalRetryPeriodMillis = DEFAULT_TOTAL_RETRY_PERIOD_MILLIS;
       } else {
         requestTimeoutMillis = retryParams.getRequestTimeoutMillis();
+        requestTimeoutRetryFactor = retryParams.getRequestTimeoutRetryFactor();
+        maxRequestTimeout = retryParams.getMaxRequestTimeout();
         retryMinAttempts = retryParams.getRetryMinAttempts();
         retryMaxAttempts = retryParams.getRetryMaxAttempts();
         initialRetryDelayMillis = retryParams.getInitialRetryDelayMillis();
@@ -186,6 +212,24 @@ public class RetryParams implements Serializable {
     }
 
     /**
+     * @param requestTimeoutRetryFactor the requestTimeoutRetryFactor to set
+     * @return the Builder for chaining
+     */
+    Builder requestTimeoutRetryFactor(double requestTimeoutRetryFactor) {
+      this.requestTimeoutRetryFactor = requestTimeoutRetryFactor;
+      return this;
+    }
+
+    /**
+     * @param maxRequestTimeout the maxRequestTimeout to set
+     * @return the Builder for chaining
+     */
+    Builder maxRequestTimeout(long maxRequestTimeout) {
+      this.maxRequestTimeout = maxRequestTimeout;
+      return this;
+    }
+
+    /**
      * Create an instance of RetryParams with the parameters set in this builder
      * @return a new instance of RetryParams
      */
@@ -241,6 +285,44 @@ public class RetryParams implements Serializable {
    */
   public long getRequestTimeoutMillis() {
     return requestTimeoutMillis;
+  }
+
+  /**
+   * Returns a request-timeout in milliseconds for the current attempt.
+   * The returned value is based on the initial-value * back-off ^ (attempt -1)
+   * but bounded by the max-value. Identical to {@link #getRequestTimeoutMillis}
+   * if {@link RetryHelper.Context} is not available.
+   */
+  long getRequestTimeoutMillisForCurrentAttempt() {
+    RetryHelper.Context context = RetryHelper.getContext();
+    if (context == null) {
+      return getRequestTimeoutMillis();
+    }
+    int attempt = context.getAttemptsSoFar();
+    return getExponentialValue(
+        requestTimeoutMillis, requestTimeoutRetryFactor, maxRequestTimeout, attempt);
+  }
+
+  static long getExponentialValue(long initialValue, double factorValue, long maxValue,
+      int attemptsSoFar) {
+    if (attemptsSoFar <= 1) {
+      attemptsSoFar = 1;
+    }
+    return (long) Math.min(maxValue, Math.pow(factorValue, attemptsSoFar - 1) * initialValue);
+  }
+
+  /**
+   * @return the requestTimeoutRetryFactor
+   */
+  double getRequestTimeoutRetryFactor() {
+    return requestTimeoutRetryFactor;
+  }
+
+  /**
+   * @return the maxRequestTimeout
+   */
+  long getMaxRequestTimeout() {
+    return maxRequestTimeout;
   }
 
   @Override
