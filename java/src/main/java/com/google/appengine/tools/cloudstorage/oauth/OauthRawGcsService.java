@@ -24,6 +24,7 @@ import com.google.appengine.api.urlfetch.HTTPMethod;
 import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
 import com.google.appengine.api.utils.FutureWrapper;
+import com.google.appengine.repackaged.com.google.common.base.Splitter;
 import com.google.appengine.tools.cloudstorage.BadRangeException;
 import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
@@ -39,8 +40,10 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
@@ -58,9 +61,16 @@ final class OauthRawGcsService implements RawGcsService {
   private static final String CONTENT_ENCODING = "Content-Encoding";
   private static final String CONTENT_DISPOSITION = "Content-Disposition";
   private static final String CONTENT_TYPE = "Content-Type";
+  private static final String CONTENT_RANGE = "Content-Range";
+  private static final String CONTENT_LENGTH = "Content-Length";
   private static final String ETAG = "ETag";
   private static final String LAST_MODIFIED = "Last-Modified";
-  private final HTTPHeader versionHeader = new HTTPHeader("x-goog-api-version", "2");
+  private static final String LOCATION = "Location";
+  private static final String RANGE = "Range";
+  private static final String UPLOAD_ID = "upload_id";
+  private static final String X_GOOG_META = "x-goog-meta-";
+  private static final String STORAGE_API_HOSTNAME = "storage.googleapis.com";
+  private static final HTTPHeader RESUMABLE_HEADER = new HTTPHeader("x-goog-resumable", "start");
 
   private static final Logger log = Logger.getLogger(OauthRawGcsService.class.getName());
 
@@ -68,12 +78,10 @@ final class OauthRawGcsService implements RawGcsService {
       ImmutableList.of("https://www.googleapis.com/auth/devstorage.read_write");
 
   private static final int READ_LIMIT_BYTES = 8 * 1024 * 1024;
-
-  static final int CHUNK_ALIGNMENT_BYTES = 256 * 1024;
+  private static final int CHUNK_ALIGNMENT_BYTES = 256 * 1024;
 
   /**
    * Token used during file creation.
-   *
    */
   public static class GcsRestCreationToken implements RawGcsCreationToken {
     private static final long serialVersionUID = 975106845036199413L;
@@ -82,8 +90,7 @@ final class OauthRawGcsService implements RawGcsService {
     private final String uploadId;
     private final long offset;
 
-    GcsRestCreationToken(GcsFilename filename,
-        String uploadId, long offset) {
+    GcsRestCreationToken(GcsFilename filename, String uploadId, long offset) {
       this.filename = checkNotNull(filename, "Null filename");
       this.uploadId = checkNotNull(uploadId, "Null uploadId");
       this.offset = offset;
@@ -111,23 +118,27 @@ final class OauthRawGcsService implements RawGcsService {
     this.urlfetch = checkNotNull(urlfetch, "Null urlfetch");
   }
 
-  @Override public String toString() {
+  @Override
+  public String toString() {
     return getClass().getSimpleName() + "(" + urlfetch + ")";
   }
 
   private static URL makeUrl(GcsFilename filename, String uploadId) {
-    String encodedFileName;
+    StringBuilder path =
+        new StringBuilder().append('/').append(filename.getBucketName()).append('/');
     try {
-      encodedFileName = URLEncoder.encode(filename.getObjectName(), "UTF-8");
+      path.append(URLEncoder.encode(filename.getObjectName(), StandardCharsets.UTF_8.name()));
     } catch (UnsupportedEncodingException e) {
-      throw new RuntimeException(e);
+      throw new RuntimeException("Failed to encode object name for " + filename , e);
     }
-    String s = "https://storage.googleapis.com/" + filename.getBucketName() + "/" + encodedFileName
-        + (uploadId == null ? "" : ("?upload_id=" + uploadId));
+    if (uploadId != null) {
+      path.append('?').append(UPLOAD_ID).append('=').append(uploadId);
+    }
     try {
-      return new URL(s);
+      return new URL("https", STORAGE_API_HOSTNAME, path.toString());
     } catch (MalformedURLException e) {
-      throw new RuntimeException("Internal error: " + s, e);
+      throw new RuntimeException(
+          "Could not create a URL for " + filename + " with uploadId " + uploadId, e);
     }
   }
 
@@ -153,6 +164,12 @@ final class OauthRawGcsService implements RawGcsService {
         throw new RuntimeException(
             "Server replied with 403, check that ACLs are set correctly on the object and bucket: "
             + URLFetchUtils.describeRequestAndResponse(req, resp, true));
+      case 404:
+        throw new RuntimeException("Server replied with 404, probably no such bucket: "
+            + URLFetchUtils.describeRequestAndResponse(req, resp, true));
+      case 412:
+        throw new RuntimeException("Server replied with 412, precondition failure: "
+            + URLFetchUtils.describeRequestAndResponse(req, resp, true));
       default:
         if (responseCode >= 500 && responseCode < 600) {
           throw new IOException("Response code " + resp.getResponseCode() + ", retryable: "
@@ -167,30 +184,33 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public RawGcsCreationToken beginObjectCreation(
       GcsFilename filename, GcsFileOptions options, long timeoutMillis) throws IOException {
-    HTTPRequest req = makeRequest(filename, null,
-        HTTPMethod.POST, timeoutMillis);
-    req.setHeader(new HTTPHeader("x-goog-resumable", "start"));
-    req.setHeader(versionHeader);
+    HTTPRequest req = makeRequest(filename, null, HTTPMethod.POST, timeoutMillis);
+    req.setHeader(RESUMABLE_HEADER);
     addOptionsHeaders(req, options);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw new IOException("URLFetch threw IOException; request: "
-          + URLFetchUtils.describeRequest(req),
-          e);
+      throw createIOException(req, e);
     }
     if (resp.getResponseCode() == 201) {
-      String location = URLFetchUtils.getSingleHeader(resp, "location");
-      String marker = "?upload_id=";
-      Preconditions.checkState(location.contains(marker),
-          "bad location without upload_id: %s", location);
-      Preconditions.checkState(!location.contains("&"), "bad location with &: %s", location);
-      String uploadId = location.substring(location.indexOf(marker) + marker.length());
-      return new GcsRestCreationToken(filename, uploadId, 0);
+      String location = URLFetchUtils.getSingleHeader(resp, LOCATION);
+      String queryString = new URL(location).getQuery();
+      Preconditions.checkState(
+          queryString != null, LOCATION + " header," + location + ", witout a query string");
+      Map<String, String> params = Splitter.on('&').withKeyValueSeparator('=').split(queryString);
+      Preconditions.checkState(params.containsKey(UPLOAD_ID),
+          LOCATION + " header," + location + ", has a query string without " + UPLOAD_ID);
+      return new GcsRestCreationToken(filename, params.get(UPLOAD_ID), 0);
     } else {
       throw handleError(req, resp);
     }
+  }
+
+  private static IOException createIOException(HTTPRequest req, Throwable ex) {
+    StringBuilder stBuilder = new StringBuilder("URLFetch threw IOException; request: ");
+    URLFetchUtils.appendRequest(req, stBuilder);
+    return new IOException(stBuilder.toString(), ex);
   }
 
   private void addOptionsHeaders(HTTPRequest req, GcsFileOptions options) {
@@ -213,22 +233,38 @@ final class OauthRawGcsService implements RawGcsService {
       req.setHeader(new HTTPHeader(CONTENT_ENCODING, options.getContentEncoding()));
     }
     for (Entry<String, String> entry : options.getUserMetadata().entrySet()) {
-      req.setHeader(new HTTPHeader("x-goog-meta-" + entry.getKey(), entry.getValue()));
+      req.setHeader(new HTTPHeader(X_GOOG_META + entry.getKey(), entry.getValue()));
     }
   }
 
   @Override
   public Future<RawGcsCreationToken> continueObjectCreationAsync(
-      RawGcsCreationToken x, ByteBuffer chunk, long timeoutMillis) {
-    GcsRestCreationToken token = (GcsRestCreationToken) x;
-    return putAsync(token, chunk, false, timeoutMillis);
+      RawGcsCreationToken token, ByteBuffer chunk, long timeoutMillis) {
+    return putAsync((GcsRestCreationToken) token, chunk, false, timeoutMillis);
   }
 
   @Override
-  public void finishObjectCreation(RawGcsCreationToken x, ByteBuffer chunk, long timeoutMillis)
+  public void finishObjectCreation(RawGcsCreationToken token, ByteBuffer chunk, long timeoutMillis)
       throws IOException {
-    GcsRestCreationToken token = (GcsRestCreationToken) x;
-    put(token, chunk, true, timeoutMillis);
+    put((GcsRestCreationToken) token, chunk, true, timeoutMillis);
+  }
+
+  @Override
+  public void putObject(GcsFilename filename, GcsFileOptions options, ByteBuffer content,
+      long timeoutMillis) throws IOException {
+    HTTPRequest req = makeRequest(filename, null, HTTPMethod.PUT, timeoutMillis);
+    req.setHeader(new HTTPHeader(CONTENT_LENGTH, String.valueOf(content.remaining())));
+    req.setPayload(peekBytes(content));
+    addOptionsHeaders(req, options);
+    HTTPResponse resp;
+    try {
+      resp = urlfetch.fetch(req);
+    } catch (IOException e) {
+      throw createIOException(req, e);
+    }
+    if (resp.getResponseCode() != 200) {
+      throw handleError(req, resp);
+    }
   }
 
   HTTPRequest createPutRequest(final GcsRestCreationToken token, final ByteBuffer chunk,
@@ -249,11 +285,10 @@ final class OauthRawGcsService implements RawGcsService {
           + "; isFinalChunk: " + isFinalChunk + ")");
     }
     long limit = offset + length;
-    final HTTPRequest req = makeRequest(token.filename, token.uploadId,
-        HTTPMethod.PUT, timeoutMillis);
-    req.setHeader(versionHeader);
+    final HTTPRequest req =
+        makeRequest(token.filename, token.uploadId, HTTPMethod.PUT, timeoutMillis);
     req.setHeader(
-        new HTTPHeader("Content-Range",
+        new HTTPHeader(CONTENT_RANGE,
             "bytes " + (length == 0 ? "*" : offset + "-" + (limit - 1))
             + (isFinalChunk ? "/" + limit : "/*")));
     req.setPayload(peekBytes(chunk));
@@ -304,8 +339,7 @@ final class OauthRawGcsService implements RawGcsService {
     try {
       response = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw new IOException(
-          "URLFetch threw IOException; request: " + URLFetchUtils.describeRequest(req), e);
+      throw createIOException(req, e);
     }
     return handlePutResponse(token, chunk, isFinalChunk, length, req, response);
   }
@@ -349,14 +383,11 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public boolean deleteObject(GcsFilename filename, long timeoutMillis) throws IOException {
     HTTPRequest req = makeRequest(filename, null, HTTPMethod.DELETE, timeoutMillis);
-    req.setHeader(versionHeader);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw new IOException("URLFetch threw IOException; request: "
-          + URLFetchUtils.describeRequest(req),
-          e);
+      throw createIOException(req, e);
     }
     switch (resp.getResponseCode()) {
       case 204:
@@ -369,14 +400,14 @@ final class OauthRawGcsService implements RawGcsService {
   }
 
   private long getLengthFromContentRange(HTTPResponse resp) {
-    String range = URLFetchUtils.getSingleHeader(resp, "Content-Range");
+    String range = URLFetchUtils.getSingleHeader(resp, CONTENT_RANGE);
     Preconditions.checkState(range.matches("bytes [0-9]+-[0-9]+/[0-9]+"),
-        "%s: unexpected Content-Range: %s", this, range);
+        "%s: unexpected " + CONTENT_RANGE + ": %s", this, range);
     return Long.parseLong(range.substring(range.indexOf("/") + 1));
   }
 
   private long getLengthFromContentLength(HTTPResponse resp) {
-    return Long.parseLong(URLFetchUtils.getSingleHeader(resp, "Content-Length"));
+    return Long.parseLong(URLFetchUtils.getSingleHeader(resp, CONTENT_LENGTH));
   }
 
   /**
@@ -392,9 +423,8 @@ final class OauthRawGcsService implements RawGcsService {
     final int want = Math.min(READ_LIMIT_BYTES, n);
 
     final HTTPRequest req = makeRequest(filename, null, HTTPMethod.GET, timeoutMillis);
-    req.setHeader(versionHeader);
     req.setHeader(
-        new HTTPHeader("Range", "bytes=" + startOffsetBytes + "-" + (startOffsetBytes + want - 1)));
+        new HTTPHeader(RANGE, "bytes=" + startOffsetBytes + "-" + (startOffsetBytes + want - 1)));
     return new FutureWrapper<HTTPResponse, GcsFileMetadata>(urlfetch.fetchAsync(req)) {
       @Override
       protected GcsFileMetadata wrap(HTTPResponse resp) throws IOException {
@@ -432,8 +462,7 @@ final class OauthRawGcsService implements RawGcsService {
     if (e instanceof IOException || e instanceof RuntimeException) {
       return e;
     } else {
-      return new IOException(
-          "URLFetch threw IOException; request: " + URLFetchUtils.describeRequest(req), e);
+      return createIOException(req, e);
     }
   }
 
@@ -441,13 +470,11 @@ final class OauthRawGcsService implements RawGcsService {
   public GcsFileMetadata getObjectMetadata(GcsFilename filename, long timeoutMillis)
       throws IOException {
     HTTPRequest req = makeRequest(filename, null, HTTPMethod.HEAD, timeoutMillis);
-    req.setHeader(versionHeader);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw new IOException(
-          "URLFetch threw IOException; request: " + URLFetchUtils.describeRequest(req), e);
+      throw createIOException(req, e);
     }
     int responseCode = resp.getResponseCode();
     if (responseCode == 404) {
@@ -466,35 +493,38 @@ final class OauthRawGcsService implements RawGcsService {
     String etag = null;
     Date lastModified = null;
     for (HTTPHeader header : headers) {
-      if (header.getName().startsWith("x-goog-meta-")) {
-        String key = header.getName().replaceFirst("x-goog-meta-", "");
+      if (header.getName().startsWith(X_GOOG_META)) {
+        String key = header.getName().substring(X_GOOG_META.length());
         String value = header.getValue();
         optionsBuilder.addUserMetadata(key, value);
-      }
-      if (header.getName().equals(ACL)) {
-        optionsBuilder.acl(header.getValue());
-      }
-      if (header.getName().equals(CACHE_CONTROL)) {
-        optionsBuilder.cacheControl(header.getValue());
-      }
-      if (header.getName().equals(CONTENT_ENCODING)) {
-        optionsBuilder.contentEncoding(header.getValue());
-      }
-      if (header.getName().equals(CONTENT_DISPOSITION)) {
-        optionsBuilder.contentDisposition(header.getValue());
-      }
-      if (header.getName().equals(CONTENT_TYPE)) {
-        optionsBuilder.mimeType(header.getValue());
-      }
-      if (header.getName().equals(ETAG)) {
-        etag = header.getValue();
-      }
-      if (header.getName().equals(LAST_MODIFIED)) {
-        lastModified = URLFetchUtils.parseDate(header.getValue());
+      } else {
+        switch (header.getName()) {
+          case ACL:
+            optionsBuilder.acl(header.getValue());
+            break;
+          case CACHE_CONTROL:
+            optionsBuilder.cacheControl(header.getValue());
+            break;
+          case CONTENT_ENCODING:
+            optionsBuilder.contentEncoding(header.getValue());
+            break;
+          case CONTENT_DISPOSITION:
+            optionsBuilder.contentDisposition(header.getValue());
+            break;
+          case CONTENT_TYPE:
+            optionsBuilder.mimeType(header.getValue());
+            break;
+          case ETAG:
+            etag = header.getValue();
+            break;
+          case LAST_MODIFIED:
+            lastModified = URLFetchUtils.parseDate(header.getValue());
+            break;
+          default:
+        }
       }
     }
     GcsFileOptions options = optionsBuilder.build();
-
     return new GcsFileMetadata(filename, options, etag, length, lastModified);
   }
 
@@ -502,5 +532,4 @@ final class OauthRawGcsService implements RawGcsService {
   public int getChunkSizeBytes() {
     return CHUNK_ALIGNMENT_BYTES;
   }
-
 }

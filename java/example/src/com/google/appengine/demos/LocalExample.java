@@ -62,9 +62,8 @@ public class LocalExample {
    * See below for why.
    */
   private void writeObjectToFile(GcsFilename fileName, Object content) throws IOException {
-    @SuppressWarnings("resource")
     GcsOutputChannel outputChannel =
-    gcsService.createOrReplace(fileName, GcsFileOptions.getDefaultInstance());
+        gcsService.createOrReplace(fileName, GcsFileOptions.getDefaultInstance());
     @SuppressWarnings("resource")
     ObjectOutputStream oout =
         new ObjectOutputStream(Channels.newOutputStream(outputChannel));

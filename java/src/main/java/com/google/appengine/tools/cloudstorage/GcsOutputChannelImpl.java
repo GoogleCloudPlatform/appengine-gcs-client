@@ -132,6 +132,10 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
 
   @Override
   public int getBufferSizeBytes() {
+    return getBufferSizeBytes(raw);
+  }
+
+  static int getBufferSizeBytes(RawGcsService raw) {
     int chunkSize = raw.getChunkSizeBytes();
     if (chunkSize <= 256 * 1024) {
       return 4 * chunkSize;
@@ -251,10 +255,9 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
     }
   }
 
-  private void retryWrite() throws IOException {
-    ongoingWrite = new OutstandingRequest(ongoingWrite.requestToken,
-        ongoingWrite.ongoingRequestBuf, raw.continueObjectCreationAsync(
-            ongoingWrite.requestToken, ongoingWrite.ongoingRequestBuf,
+  private void retryWrite() {
+    ongoingWrite = new OutstandingRequest(ongoingWrite.requestToken, ongoingWrite.ongoingRequestBuf,
+        raw.continueObjectCreationAsync(ongoingWrite.requestToken, ongoingWrite.ongoingRequestBuf,
             retryParams.getRequestTimeoutMillisForCurrentAttempt()));
   }
 

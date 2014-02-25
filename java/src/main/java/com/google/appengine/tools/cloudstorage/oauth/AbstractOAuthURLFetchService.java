@@ -55,32 +55,32 @@ abstract class AbstractOAuthURLFetchService implements OAuthURLFetchService {
 
   protected abstract String getToken();
 
-  private HTTPRequest authorizeRequest(final HTTPRequest req) {
-    return RetryHelper.runWithRetries(new Callable<HTTPRequest>() {
+  private HTTPRequest createAuthorizeRequest(final HTTPRequest req) throws RetryHelperException {
+    String token = RetryHelper.runWithRetries(new Callable<String>() {
       @Override
-      public HTTPRequest call() {
-        HTTPRequest request = URLFetchUtils.copyRequest(req);
-        request.setHeader(new HTTPHeader("Authorization", "Bearer " + getToken()));
-        return request;
+      public String call() {
+        return getToken();
       }
     }, RETRY_PARAMS, EXCEPTION_HANDLER);
+    HTTPRequest request = URLFetchUtils.copyRequest(req);
+    request.setHeader(new HTTPHeader("Authorization", "Bearer " + token));
+    return request;
   }
 
   @Override
-  public HTTPResponse fetch(HTTPRequest req) throws IOException {
-    return urlFetch.fetch(authorizeRequest(req));
+  public HTTPResponse fetch(HTTPRequest req) throws IOException, RetryHelperException {
+    HTTPRequest authorizedRequest = createAuthorizeRequest(req);
+    return urlFetch.fetch(authorizedRequest);
   }
 
   @Override
   public Future<HTTPResponse> fetchAsync(HTTPRequest req) {
     HTTPRequest authorizedRequest;
     try {
-      authorizedRequest = authorizeRequest(req);
+      authorizedRequest = createAuthorizeRequest(req);
     } catch (RetryHelperException e) {
       return Futures.immediateFailedCheckedFuture(e);
     }
     return urlFetch.fetchAsync(authorizedRequest);
   }
-
-
 }

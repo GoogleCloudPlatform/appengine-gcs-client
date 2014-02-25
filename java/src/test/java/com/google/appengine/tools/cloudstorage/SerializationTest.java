@@ -92,7 +92,6 @@ public class SerializationTest {
     helper.tearDown();
   }
 
-  @SuppressWarnings("resource")
   @Test
   public void testSimpleGcsInputChannelLocal() throws IOException, ClassNotFoundException {
     GcsService gcsService = GcsServiceFactory.createGcsService();

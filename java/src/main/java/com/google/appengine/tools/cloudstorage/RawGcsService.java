@@ -64,15 +64,12 @@ public interface RawGcsService {
   /**
    * @param options null means let Google Cloud Storage use its default
    */
-  RawGcsCreationToken beginObjectCreation(
-      GcsFilename filename,
-      GcsFileOptions options,
-      long timeoutMillis)
-      throws IOException;
+  RawGcsCreationToken beginObjectCreation(GcsFilename filename, GcsFileOptions options,
+      long timeoutMillis) throws IOException;
 
   /**
    * Reads all remaining bytes from {@code chunk} and writes them to the object and offset specified
-   * by {@code token} asynchronusly.
+   * by {@code token} asynchronously.
    *
    * <p>
    * Returns a future for a new token to be used to continue writing to the object. Does not mutate
@@ -93,8 +90,7 @@ public interface RawGcsService {
    * on a retry leaves the object in a bad state.)
    */
   Future<RawGcsCreationToken> continueObjectCreationAsync(RawGcsCreationToken token,
-      ByteBuffer chunk, long timeoutMillis)
-      throws IOException;
+      ByteBuffer chunk, long timeoutMillis);
 
   /**
    * Reads all remaining bytes from {@code chunk} and writes them to the object
@@ -114,9 +110,14 @@ public interface RawGcsService {
    * exception was thrown by this method, and writing different data on a retry
    * leaves the object in a bad state.)
    */
-  void finishObjectCreation(RawGcsCreationToken token,
-      ByteBuffer chunk, long timeoutMillis)
+  void finishObjectCreation(RawGcsCreationToken token, ByteBuffer chunk, long timeoutMillis)
       throws IOException;
+
+  /**
+   * Create or replace {@code filename} with the given {@code content}.
+   */
+  void putObject(GcsFilename filename, GcsFileOptions options, ByteBuffer content,
+      long timeoutMillis) throws IOException;
 
   /**
    * Issues a request to the server to retrieve data to fill the provided buffer.
@@ -126,7 +127,7 @@ public interface RawGcsService {
       long timeoutMillis);
 
   /**
-   *
+   * Returns the meta-data for {@code filename}.
    */
   GcsFileMetadata getObjectMetadata(GcsFilename filename, long timeoutMillis) throws IOException;
 

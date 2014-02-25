@@ -48,11 +48,13 @@ final class GcsServiceImpl implements GcsService {
           InterruptedIOException.class)
       .build();
 
-  private static final int REQUEST_MAX_SIZE_MB = 10_000_000;
+  private static final int REQUEST_MAX_SIZE_BYTES = 10_000_000;
+  private final int nonResumeableMaxSizeBytes;
 
   GcsServiceImpl(RawGcsService raw, RetryParams retryParams) {
     this.raw = checkNotNull(raw, "Null raw");
     this.retryParams = new RetryParams.Builder(retryParams).requestTimeoutRetryFactor(1.2).build();
+    nonResumeableMaxSizeBytes = GcsOutputChannelImpl.getBufferSizeBytes(raw);
   }
 
   @Override
@@ -83,7 +85,7 @@ final class GcsServiceImpl implements GcsService {
   @Override
   public void createOrReplace(final GcsFilename filename, final GcsFileOptions options,
       final ByteBuffer src) throws IOException {
-    if (src.remaining() > REQUEST_MAX_SIZE_MB) {
+    if (src.remaining() > REQUEST_MAX_SIZE_BYTES) {
       @SuppressWarnings("resource")
       GcsOutputChannel channel = createOrReplace(filename, options);
       channel.write(src);
@@ -92,22 +94,13 @@ final class GcsServiceImpl implements GcsService {
     }
 
     try {
-      final RawGcsCreationToken token =
-          RetryHelper.runWithRetries(new Callable<RawGcsCreationToken>() {
-            @Override
-            public RawGcsCreationToken call() throws IOException {
-              return raw.beginObjectCreation(
-                  filename, options, retryParams.getRequestTimeoutMillisForCurrentAttempt());
-            }
-          }, retryParams, exceptionHandler);
       RetryHelper.runWithRetries(new Callable<Void>() {
-        @Override
-        public Void call() throws IOException {
-          raw.finishObjectCreation(
-              token, src, retryParams.getRequestTimeoutMillisForCurrentAttempt());
-          return null;
-        }
-      }, retryParams, exceptionHandler);
+          @Override
+          public Void call() throws IOException {
+            raw.putObject(filename, options, src, retryParams.getRequestTimeoutMillis());
+            return null;
+          }
+        }, retryParams, exceptionHandler);
     } catch (RetryInterruptedException ex) {
       throw new ClosedByInterruptException();
     } catch (NonRetriableException e) {

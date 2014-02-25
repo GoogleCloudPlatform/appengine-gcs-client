@@ -39,7 +39,6 @@ public class ExceptionHandlerTest {
   @Test
   public void testVerifyCaller() {
     class A implements Callable<Object> {
-      @SuppressWarnings("unused")
       @Override public Object call() throws IOException, InterruptedException {
         return null;
       }
@@ -49,7 +48,6 @@ public class ExceptionHandlerTest {
     }
 
     class C extends A {
-      @SuppressWarnings("unused")
       @Override public Object call() throws FileNotFoundException  {
         return null;
       }

@@ -220,7 +220,6 @@ final class LocalRawGcsService implements RawGcsService {
         AppEngineFile.FileSystem.GS, filename.getBucketName() + "/" + filename.getObjectName());
   }
 
-
   @Override
   public GcsFileMetadata getObjectMetadata(GcsFilename filename, long timeoutMillis)
       throws IOException {
@@ -292,4 +291,10 @@ final class LocalRawGcsService implements RawGcsService {
     return CHUNK_ALIGNMENT_BYTES;
   }
 
+  @Override
+  public void putObject(GcsFilename filename, GcsFileOptions options, ByteBuffer content,
+      long timeoutMillis) throws IOException {
+    Token token = beginObjectCreation(filename, options, timeoutMillis);
+    finishObjectCreation(token, content, timeoutMillis);
+  }
 }
