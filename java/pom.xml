@@ -5,6 +5,9 @@
   <artifactId>appengine-gcs-client</artifactId>
   <name>App Engine Client for Google Cloud Storage</name>
   <url>http://code.google.com/p/appengine-gcs-client/</url>
+  <organization>
+    <name>Google</name>
+  </organization>
   <version>0.4-SNAPSHOT</version>
   <packaging>jar</packaging>
   <licenses>
@@ -24,6 +27,18 @@
         <configuration>
           <source>1.7</source>
           <target>1.7</target>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <archive>
+            <manifest>
+              <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+              <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+            </manifest>
+          </archive>
         </configuration>
       </plugin>
     </plugins>
