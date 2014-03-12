@@ -600,7 +600,9 @@ class StreamingBuffer(object):
 
   _blocksize = 256 * 1024
 
-  _maxrequestsize = 16 * _blocksize
+  _flushsize = 8 * _blocksize
+
+  _maxrequestsize = 9 * 4 * _blocksize
 
   def __init__(self,
                api,
@@ -624,6 +626,7 @@ class StreamingBuffer(object):
 
     self._api = api
     self._path = path
+
     self.name = api_utils._unquote_filename(path)
     self.closed = False
 
@@ -700,18 +703,18 @@ class StreamingBuffer(object):
     self._buffer.append(data)
     self._buffered += len(data)
     self._offset += len(data)
-    if self._buffered >= self._blocksize:
+    if self._buffered >= self._flushsize:
       self._flush()
 
   def flush(self):
-    """Dummy API.
+    """Flush as much as possible to GCS.
 
-    This API is provided because the zipfile module uses it.  It is a
-    no-op because Google Storage *requires* that all writes except for
-    the final one are multiples on 256K bytes aligned on 256K-byte
-    boundaries.
+    GCS *requires* that all writes except for the final one align on
+    256KB boundaries. So the internal buffer may still have < 256KB bytes left
+    after flush.
     """
     self._check_open()
+    self._flush(finish=False)
 
   def tell(self):
     """Return the total number of bytes passed to write() so far.
@@ -740,7 +743,7 @@ class StreamingBuffer(object):
   def _flush(self, finish=False):
     """Internal API to flush.
 
-    This is called only when the total amount of buffered data is at
+    Buffer is flushed to GCS only when the total amount of buffered data is at
     least self._blocksize, or to flush the final (incomplete) block of
     the file with finish=True.
     """
