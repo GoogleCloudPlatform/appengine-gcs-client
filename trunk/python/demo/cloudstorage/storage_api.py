@@ -623,6 +623,7 @@ class StreamingBuffer(object):
     """
     assert self._maxrequestsize > self._blocksize
     assert self._maxrequestsize % self._blocksize == 0
+    assert self._maxrequestsize >= self._flushsize
 
     self._api = api
     self._path = path
@@ -747,12 +748,13 @@ class StreamingBuffer(object):
     least self._blocksize, or to flush the final (incomplete) block of
     the file with finish=True.
     """
-    flush_len = 0 if finish else self._blocksize
+    blocksize_or_zero = 0 if finish else self._blocksize
 
-    while self._buffered >= flush_len:
+    while self._buffered >= blocksize_or_zero:
       buffer = []
       buffered = 0
 
+      excess = 0
       while self._buffer:
         buf = self._buffer.popleft()
         size = len(buf)
@@ -760,14 +762,11 @@ class StreamingBuffer(object):
         buffer.append(buf)
         buffered += size
         if buffered >= self._maxrequestsize:
+          excess = buffered - self._maxrequestsize
           break
-
-      if buffered > self._maxrequestsize:
-        excess = buffered - self._maxrequestsize
-      elif finish:
-        excess = 0
-      else:
-        excess = buffered % self._blocksize
+        if self._buffered < blocksize_or_zero and buffered >= blocksize_or_zero:
+          excess = buffered % self._blocksize
+          break
 
       if excess:
         over = buffer.pop()
