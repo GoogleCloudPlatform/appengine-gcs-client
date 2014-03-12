@@ -23,12 +23,15 @@ try:
   from google.appengine.ext.cloudstorage import cloudstorage_stub
   from cloudstorage import common
   from cloudstorage import errors
+  from cloudstorage import storage_api
 except ImportError:
   from google.appengine.ext import cloudstorage
   from google.appengine.ext.cloudstorage import cloudstorage_api
   from google.appengine.ext.cloudstorage import cloudstorage_stub
   from google.appengine.ext.cloudstorage import common
   from google.appengine.ext.cloudstorage import errors
+  from google.appengine.ext.cloudstorage import storage_api
+
 
 BUCKET = '/bucket'
 TESTFILE = BUCKET + '/testfile'
@@ -71,7 +74,8 @@ class IrregularPatternTest(unittest.TestCase):
     self.assertRaises(IOError, f.write, 'foo')
     f.close()
 
-    self.assertRaises(errors.FileClosedError, f2.write, 'c'*256*1024)
+    self.assertRaises(errors.FileClosedError, f2.write,
+                      'c'*storage_api.StreamingBuffer._flushsize)
 
     a, b = 0, 0
     f = cloudstorage.open(TESTFILE)
