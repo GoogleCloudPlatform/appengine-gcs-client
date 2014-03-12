@@ -171,6 +171,22 @@ class CloudStorageTest(unittest.TestCase):
       self.assertEqual('a'*10, result)
       self.assertEqual('a'*1014 + 'b'*1024, gz.read())
 
+  def testFlush(self):
+    blocksize = 0
+    with cloudstorage.open(TESTFILE, 'w') as f:
+      blocksize = f._blocksize
+      f.write('a'*(blocksize-2))
+      f.write('a'*3)
+      f.write('a')
+      f.flush()
+      self.assertEqual(2, f._buffered)
+      f.flush()
+      f.write('a')
+      f.close()
+
+    with cloudstorage.open(TESTFILE) as f:
+      self.assertEqual(blocksize + 3, len(f.read()))
+
   def testCopy2(self):
     with cloudstorage.open(TESTFILE, 'w',
                            'text/foo', {'x-goog-meta-foo': 'foo'}) as f:
