@@ -16,6 +16,9 @@
 
 package com.google.appengine.tools.cloudstorage;
 
+import com.google.appengine.api.urlfetch.HTTPHeader;
+import com.google.common.collect.ImmutableSet;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
@@ -135,4 +138,9 @@ public interface RawGcsService {
    * Returns true if deleted, false if not found.
    */
   boolean deleteObject(GcsFilename filename, long timeoutMillis) throws IOException;
+
+  /**
+   * Set of HTTP headers that will be provided in any GCS request.
+   */
+  void setHttpHeaders(ImmutableSet<HTTPHeader> headers);
 }

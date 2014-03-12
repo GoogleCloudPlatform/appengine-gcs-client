@@ -35,6 +35,7 @@ import com.google.appengine.api.files.FileStat;
 import com.google.appengine.api.files.FileWriteChannel;
 import com.google.appengine.api.files.GSFileOptions;
 import com.google.appengine.api.files.GSFileOptions.GSFileOptionsBuilder;
+import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.tools.cloudstorage.BadRangeException;
 import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
@@ -44,6 +45,7 @@ import com.google.apphosting.api.ApiProxy;
 import com.google.apphosting.api.ApiProxy.Environment;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.Futures;
 
 import java.io.ByteArrayInputStream;
@@ -296,5 +298,9 @@ final class LocalRawGcsService implements RawGcsService {
       long timeoutMillis) throws IOException {
     Token token = beginObjectCreation(filename, options, timeoutMillis);
     finishObjectCreation(token, content, timeoutMillis);
+  }
+
+  @Override
+  public void setHttpHeaders(ImmutableSet<HTTPHeader> headers) {
   }
 }

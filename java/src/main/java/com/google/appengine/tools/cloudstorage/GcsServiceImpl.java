@@ -18,11 +18,13 @@ package com.google.appengine.tools.cloudstorage;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken;
 import com.google.apphosting.api.ApiProxy.ApiDeadlineExceededException;
 import com.google.apphosting.api.ApiProxy.RPCFailedException;
 import com.google.apphosting.api.ApiProxy.UnknownException;
 import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableSet;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -31,6 +33,7 @@ import java.net.MalformedURLException;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
+import java.util.Map;
 import java.util.concurrent.Callable;
 
 /**
@@ -154,5 +157,16 @@ final class GcsServiceImpl implements GcsService {
       Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
       throw e;
     }
+  }
+
+  @Override
+  public void setHttpHeaders(Map<String, String> headers) {
+    ImmutableSet.Builder<HTTPHeader> builder = ImmutableSet.builder();
+    if (headers != null) {
+      for (Map.Entry<String, String> header : headers.entrySet()) {
+        builder.add(new HTTPHeader(header.getKey(), header.getValue()));
+      }
+    }
+    raw.setHttpHeaders(builder.build());
   }
 }
