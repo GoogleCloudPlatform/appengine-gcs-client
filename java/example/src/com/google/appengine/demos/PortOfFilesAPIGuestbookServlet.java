@@ -48,30 +48,37 @@ public class PortOfFilesAPIGuestbookServlet extends HttpServlet {
     resp.getWriter().println("Hello, world from java");
     GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsFilename filename = new GcsFilename(BUCKETNAME, FILENAME);
-    GcsFileOptions options = new GcsFileOptions.Builder().mimeType("text/html")
-        .acl("public-read").addUserMetadata("myfield1", "my field value").build();
-    GcsOutputChannel writeChannel = gcsService.createOrReplace(filename, options);
+    GcsFileOptions options = new GcsFileOptions.Builder()
+        .mimeType("text/html")
+        .acl("public-read")
+        .addUserMetadata("myfield1", "my field value")
+        .build();
 
-    PrintWriter out = new PrintWriter(Channels.newWriter(writeChannel, "UTF8"));
-    out.println("The woods are lovely dark and deep.");
-    out.println("But I have promises to keep.");
-    out.flush();
+    GcsOutputChannel writeChannel = gcsService.createOrReplace(filename, options);
+    PrintWriter writer = new PrintWriter(Channels.newWriter(writeChannel, "UTF8"));
+    writer.println("The woods are lovely dark and deep.");
+    writer.println("But I have promises to keep.");
+    writer.flush();
 
     writeChannel.waitForOutstandingWrites();
 
-    writeChannel.write(ByteBuffer.wrap("And miles to go before I sleep.".getBytes()));
+    writeChannel.write(ByteBuffer.wrap("And miles to go before I sleep.".getBytes("UTF8")));
 
     writeChannel.close();
     resp.getWriter().println("Done writing...");
 
 
-    GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0);
-    BufferedReader reader = new BufferedReader(Channels.newReader(readChannel, "UTF8"));
-    String line;
-    while ((line = reader.readLine()) != null) {
-      resp.getWriter().println("READ:" + line);
+    GcsInputChannel readChannel = null;
+    BufferedReader reader = null;
+    try {
+      readChannel = gcsService.openReadChannel(filename, 0);
+      reader = new BufferedReader(Channels.newReader(readChannel, "UTF8"));
+      String line;
+      while ((line = reader.readLine()) != null) {
+        resp.getWriter().println("READ:" + line);
+      }
+    } finally {
+      if (reader != null) { reader.close(); }
     }
-    readChannel.close();
   }
-
 }
