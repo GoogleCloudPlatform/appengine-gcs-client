@@ -112,8 +112,8 @@ class RetryParams(object):
                backoff_factor=2.0,
                initial_delay=0.1,
                max_delay=10.0,
-               min_retries=2,
-               max_retries=5,
+               min_retries=3,
+               max_retries=6,
                max_retry_period=30.0,
                urlfetch_timeout=None,
                save_access_token=False):
