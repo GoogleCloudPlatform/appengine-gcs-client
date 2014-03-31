@@ -52,37 +52,15 @@ class RestApiTest(unittest.TestCase):
     fut_urlfetch = ndb.Future()
     fut_urlfetch.set_result(
         test_utils.MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
-    api.urlfetch_async = mock.create_autospec(api.urlfetch_async,
-                                              return_value=fut_urlfetch)
+    ctx_urlfetch = mock.Mock(return_value=fut_urlfetch)
+    ndb.get_context().urlfetch = ctx_urlfetch
 
     res = api.do_request('http://example.com')
 
     self.assertEqual(res, (200, {'foo': 'bar'}, 'yoohoo'))
-    api.urlfetch_async.assert_called_once_with(
-        url='http://example.com',
-        headers=mock.ANY,
-        follow_redirects=False,
-        payload=None,
-        method='GET',
-        deadline=None,
-        callback=None)
-
-  def testAsyncCall(self):
-    api = rest_api._RestApi('scope')
-
-    fut_urlfetch = ndb.Future()
-    fut_urlfetch.set_result(
-        test_utils.MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
-    api.urlfetch_async = mock.create_autospec(api.urlfetch_async,
-                                              return_value=fut_urlfetch)
-
-    fut = api.do_request_async('http://example.com')
-    res = fut.get_result()
-
-    self.assertEqual(res, (200, {'foo': 'bar'}, 'yoohoo'))
-    api.urlfetch_async.assert_called_once_with(
-        url='http://example.com',
-        headers=mock.ANY,
+    ctx_urlfetch.assert_called_once_with(
+        'http://example.com',
+        headers={'authorization': 'OAuth blah'},
         follow_redirects=False,
         payload=None,
         method='GET',
