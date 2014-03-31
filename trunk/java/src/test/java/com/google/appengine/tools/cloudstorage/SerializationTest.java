@@ -93,6 +93,17 @@ public class SerializationTest {
   }
 
   @Test
+  public void testSerializeClosedOutputChannel() throws IOException, ClassNotFoundException {
+    GcsService gcsService = GcsServiceFactory.createGcsService();
+    @SuppressWarnings("resource")
+    GcsOutputChannel ch =
+        gcsService.createOrReplace(TestFile.SMALL.filename, GcsFileOptions.getDefaultInstance());
+    ch.close();
+    reconstruct(ch);
+  }
+
+  @SuppressWarnings("resource")
+  @Test
   public void testSimpleGcsInputChannelLocal() throws IOException, ClassNotFoundException {
     GcsService gcsService = GcsServiceFactory.createGcsService();
     createFiles(gcsService);
@@ -197,14 +208,16 @@ public class SerializationTest {
     readChannel.close();
   }
 
-  private GcsInputChannel reconstruct(GcsInputChannel readChannel)
+  @SuppressWarnings("unchecked")
+  private static <T> T reconstruct(T value)
       throws IOException, ClassNotFoundException {
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
     try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
-      oout.writeObject(readChannel);
+      oout.writeObject(value);
     }
     ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bout.toByteArray()));
-    return (GcsInputChannel) in.readObject();
+    T answer = (T) in.readObject();
+    assertEquals(-1, in.read());
+    return answer;
   }
-
 }

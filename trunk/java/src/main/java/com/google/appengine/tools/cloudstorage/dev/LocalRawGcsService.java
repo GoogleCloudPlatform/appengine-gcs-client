@@ -66,6 +66,7 @@ import java.util.concurrent.TimeUnit;
  * Implementation of {@code RawGcsService} for dev_appserver. For now, uses datastore and
  * fileService so that the viewers can be re-used.
  */
+@SuppressWarnings("deprecation")
 final class LocalRawGcsService implements RawGcsService {
 
   static final int CHUNK_ALIGNMENT_BYTES = 256 * 1024;
@@ -298,6 +299,11 @@ final class LocalRawGcsService implements RawGcsService {
       long timeoutMillis) throws IOException {
     Token token = beginObjectCreation(filename, options, timeoutMillis);
     finishObjectCreation(token, content, timeoutMillis);
+  }
+
+  @Override
+  public int getMaxWriteSizeByte() {
+    return 10_000_000;
   }
 
   @Override

@@ -57,5 +57,4 @@ public final class GcsServiceFactory {
   public static GcsService createGcsService() {
     return createGcsService(RetryParams.getDefaultInstance());
   }
-
 }

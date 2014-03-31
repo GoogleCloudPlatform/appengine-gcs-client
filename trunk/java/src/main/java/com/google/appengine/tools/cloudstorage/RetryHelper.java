@@ -48,7 +48,7 @@ public class RetryHelper<V>  {
   private final Callable<V> callable;
   private final RetryParams params;
   private final ExceptionHandler exceptionHandler;
-  private int attemptsSoFar;
+  private int attemptNumber;
 
 
   private static final ThreadLocal<Context> context = new ThreadLocal<>();
@@ -65,8 +65,8 @@ public class RetryHelper<V>  {
       return helper.params;
     }
 
-    public int getAttemptsSoFar() {
-      return helper.attemptsSoFar;
+    public int getAttemptNumber() {
+      return helper.attemptNumber;
     }
   }
 
@@ -96,19 +96,19 @@ public class RetryHelper<V>  {
 
   @Override
   public String toString() {
-    return getClass().getSimpleName() + "(" + stopwatch + ", " + attemptsSoFar + " attempts, "
+    return getClass().getSimpleName() + "(" + stopwatch + ", " + attemptNumber + " attempts, "
         + callable + ")";
   }
 
   private V doRetry() throws RetryHelperException {
     stopwatch.start();
     while (true) {
-      attemptsSoFar++;
+      attemptNumber++;
       Exception exception;
       try {
         V value = callable.call();
-        if (attemptsSoFar > 1) {
-          log.info(this + ": attempt #" + attemptsSoFar + " succeeded");
+        if (attemptNumber > 1) {
+          log.info(this + ": attempt #" + attemptNumber + " succeeded");
         }
         return value;
       } catch (Exception e) {
@@ -122,13 +122,13 @@ public class RetryHelper<V>  {
         }
         exception = e;
       }
-      if (attemptsSoFar >= params.getRetryMaxAttempts() || (
-          attemptsSoFar >= params.getRetryMinAttempts()
+      if (attemptNumber >= params.getRetryMaxAttempts() || (
+          attemptNumber >= params.getRetryMinAttempts()
           && stopwatch.elapsed(MILLISECONDS) >= params.getTotalRetryPeriodMillis())) {
         throw new RetriesExhaustedException(this + ": Too many failures, giving up", exception);
       }
-      long sleepDurationMillis = getSleepDuration(params, attemptsSoFar);
-      log.info(this + ": Attempt #" + attemptsSoFar + " failed [" + exception + "], sleeping for "
+      long sleepDurationMillis = getSleepDuration(params, attemptNumber);
+      log.info(this + ": Attempt #" + attemptNumber + " failed [" + exception + "], sleeping for "
           + sleepDurationMillis + " ms");
       try {
         Thread.sleep(sleepDurationMillis);

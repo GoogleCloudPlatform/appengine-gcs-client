@@ -26,6 +26,8 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * {@link OAuthURLFetchService} based on {@link AppIdentityService}. This will work in production
@@ -41,16 +43,13 @@ final class AppIdentityOAuthURLFetchService extends AbstractOAuthURLFetchService
    */
   private static final int MAX_CACHE_EXPIRATION_HEADROOM = 300000;
   private static final int MIN_CACHE_EXPIRATION_HEADROOM = 60000;
-  private final Random rand = new Random();
-  private final Object lock = new Object();
 
+  private final Random rand = new Random();
+  private final Lock lock = new ReentrantLock();
   private final AppIdentityService appIdentityService =
       AppIdentityServiceFactory.getAppIdentityService();
-
   private final List<String> oauthScopes;
-
   private final AtomicReference<GetAccessTokenResult> accessToken = new AtomicReference<>();
-
   private final AtomicInteger cacheExpirationHeadroom =
       new AtomicInteger(getNextCacheExpirationHeadroom());
 
@@ -74,27 +73,31 @@ final class AppIdentityOAuthURLFetchService extends AbstractOAuthURLFetchService
    */
   @Override
   protected String getToken() {
+    verifyProdOnly();
+    GetAccessTokenResult token = accessToken.get();
+    if (token == null || isExpired(token)
+        || (isAboutToExpire(token) && refreshInProgress.compareAndSet(false, true))) {
+      lock.lock();
+      try {
+        token = accessToken.get();
+        if (token == null || isAboutToExpire(token)) {
+          token = appIdentityService.getAccessToken(oauthScopes);
+          accessToken.set(token);
+          cacheExpirationHeadroom.set(getNextCacheExpirationHeadroom());
+        }
+      } finally {
+        refreshInProgress.set(false);
+        lock.unlock();
+      }
+    }
+    return token.getAccessToken();
+  }
+
+  private void verifyProdOnly() {
     if (SystemProperty.environment.value() == SystemProperty.Environment.Value.Development) {
       throw new IllegalStateException(
           "The access token from the development environment won't work in production");
     }
-    GetAccessTokenResult token = accessToken.get();
-    if (token == null || isExpired(token)
-        || (isAboutToExpire(token) && refreshInProgress.compareAndSet(false, true))) {
-      synchronized (lock) {
-        try {
-          token = accessToken.get();
-          if (token == null || isAboutToExpire(token)) {
-            token = appIdentityService.getAccessToken(oauthScopes);
-            accessToken.set(token);
-            cacheExpirationHeadroom.set(getNextCacheExpirationHeadroom());
-          }
-        } finally {
-          refreshInProgress.set(false);
-        }
-      }
-    }
-    return token.getAccessToken();
   }
 
   private boolean isExpired(GetAccessTokenResult token) {
@@ -102,13 +105,12 @@ final class AppIdentityOAuthURLFetchService extends AbstractOAuthURLFetchService
   }
 
   private boolean isAboutToExpire(GetAccessTokenResult token) {
-    return token.getExpirationTime().getTime() - cacheExpirationHeadroom.get()
-        < System.currentTimeMillis();
+    long now = System.currentTimeMillis();
+    return token.getExpirationTime().getTime() - cacheExpirationHeadroom.get() < now;
   }
 
   private final int getNextCacheExpirationHeadroom() {
     return rand.nextInt(MAX_CACHE_EXPIRATION_HEADROOM - MIN_CACHE_EXPIRATION_HEADROOM)
         + MIN_CACHE_EXPIRATION_HEADROOM;
   }
-
 }

@@ -298,7 +298,7 @@ public final class RetryParams implements Serializable {
     if (context == null) {
       return getRequestTimeoutMillis();
     }
-    int attempt = context.getAttemptsSoFar();
+    int attempt = context.getAttemptNumber();
     return getExponentialValue(
         requestTimeoutMillis, requestTimeoutRetryFactor, maxRequestTimeout, attempt);
   }

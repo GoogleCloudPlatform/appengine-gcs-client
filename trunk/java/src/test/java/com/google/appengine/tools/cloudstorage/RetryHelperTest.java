@@ -56,10 +56,10 @@ public class RetryHelperTest {
       RetryHelper.runWithRetries(new Callable<Void>() {
         @Override public Void call() throws IOException, NullPointerException {
           if (count.decrementAndGet() == 2) {
-            assertEquals(1, RetryHelper.getContext().getAttemptsSoFar());
+            assertEquals(1, RetryHelper.getContext().getAttemptNumber());
             throw new IOException("should be retried");
           }
-          assertEquals(2, RetryHelper.getContext().getAttemptsSoFar());
+          assertEquals(2, RetryHelper.getContext().getAttemptNumber());
           throw new NullPointerException("Boo!");
         }
       }, params, handler);
@@ -106,7 +106,7 @@ public class RetryHelperTest {
       int timesCalled = 0;
       @Override public Integer call() throws IOException {
         timesCalled++;
-        assertEquals(timesCalled, RetryHelper.getContext().getAttemptsSoFar());
+        assertEquals(timesCalled, RetryHelper.getContext().getAttemptNumber());
         assertEquals(10, RetryHelper.getContext().getRetryParams().getRetryMaxAttempts());
         if (timesCalled <= timesToFail) {
           throw new IOException();
