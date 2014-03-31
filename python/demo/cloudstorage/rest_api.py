@@ -20,7 +20,6 @@
 
 __all__ = ['add_sync_methods']
 
-import httplib
 import random
 import time
 
@@ -32,6 +31,7 @@ try:
 except ImportError:
   from google.appengine.api import app_identity
   from google.appengine.ext import ndb
+
 
 
 def _make_sync_method(name):
@@ -122,11 +122,11 @@ class _RestApi(object):
 
     Args:
       scopes: A scope or a list of scopes.
+      service_account_id: Internal use only.
       token_maker: An asynchronous function of the form
         (scopes, service_account_id) -> (token, expires).
       retry_params: An instance of api_utils.RetryParams. If None, the
         default for current thread will be used.
-      service_account_id: Internal use only.
     """
 
     if isinstance(scopes, basestring):
@@ -134,18 +134,16 @@ class _RestApi(object):
     self.scopes = scopes
     self.service_account_id = service_account_id
     self.make_token_async = token_maker or _make_token_async
-    self.token = None
     if not retry_params:
       retry_params = api_utils._get_default_retry_params()
     self.retry_params = retry_params
 
   def __getstate__(self):
     """Store state as part of serialization/pickling."""
-    return {'token': self.token,
-            'scopes': self.scopes,
+    return {'scopes': self.scopes,
             'id': self.service_account_id,
-            'a_maker': None if self.make_token_async == _make_token_async
-            else self.make_token_async,
+            'a_maker': (None if self.make_token_async == _make_token_async
+                        else self.make_token_async),
             'retry_params': self.retry_params}
 
   def __setstate__(self, state):
@@ -154,50 +152,27 @@ class _RestApi(object):
                   service_account_id=state['id'],
                   token_maker=state['a_maker'],
                   retry_params=state['retry_params'])
-    self.token = state['token']
 
   @ndb.tasklet
   def do_request_async(self, url, method='GET', headers=None, payload=None,
                        deadline=None, callback=None):
     """Issue one HTTP request.
 
-    This is an async wrapper around urlfetch(). It adds an authentication
-    header and retries on a 401 status code. Upon other retriable errors,
-    it performs blocking retries.
+    It performs async retries using tasklets.
     """
-    headers = {} if headers is None else dict(headers)
-    if self.token is None:
-      self.token = yield self.get_token_async()
-    headers['authorization'] = 'OAuth ' + self.token
-
-    deadline = deadline or self.retry_params.urlfetch_timeout
-
-    retry = False
-    resp = None
-    try:
-      resp = yield self.urlfetch_async(url, payload=payload, method=method,
-                                       headers=headers, follow_redirects=False,
-                                       deadline=deadline, callback=callback)
-      if resp.status_code == httplib.UNAUTHORIZED:
-        self.token = yield self.get_token_async(refresh=True)
-        headers['authorization'] = 'OAuth ' + self.token
-        resp = yield self.urlfetch_async(
-            url, payload=payload, method=method, headers=headers,
-            follow_redirects=False, deadline=deadline, callback=callback)
-    except api_utils._RETRIABLE_EXCEPTIONS:
-      retry = True
-    else:
-      retry = api_utils._should_retry(resp)
-
-    if retry:
-      retry_resp = api_utils._retry_fetch(
-          url, retry_params=self.retry_params, payload=payload, method=method,
-          headers=headers, follow_redirects=False, deadline=deadline)
-      if retry_resp:
-        resp = retry_resp
-      elif not resp:
-        raise
-
+    retry_wrapper = api_utils._RetryWrapper(
+        self.retry_params,
+        retriable_exceptions=api_utils._RETRIABLE_EXCEPTIONS,
+        should_retry=api_utils._should_retry)
+    resp = yield retry_wrapper.run(
+        self.urlfetch_async,
+        url=url,
+        method=method,
+        headers=headers,
+        payload=payload,
+        deadline=deadline,
+        callback=callback,
+        follow_redirects=False)
     raise ndb.Return((resp.status_code, resp.headers, resp.content))
 
   @ndb.tasklet
@@ -210,16 +185,14 @@ class _RestApi(object):
       refresh: If True, ignore a cached token; default False.
 
     Returns:
-      An authentication token.
+      An authentication token. This token is guaranteed to be non-expired.
     """
-    if self.token is not None and not refresh:
-      raise ndb.Return(self.token)
     key = '%s,%s' % (self.service_account_id, ','.join(self.scopes))
     ts = yield _AE_TokenStorage_.get_by_id_async(
         key, use_cache=True, use_memcache=True,
         use_datastore=self.retry_params.save_access_token)
-    if ts is None or ts.expires < (time.time() +
-                                   self._TOKEN_EXPIRATION_HEADROOM):
+    if refresh or ts is None or ts.expires < (
+        time.time() + self._TOKEN_EXPIRATION_HEADROOM):
       token, expires_at = yield self.make_token_async(
           self.scopes, self.service_account_id)
       timeout = int(expires_at - time.time())
@@ -228,19 +201,29 @@ class _RestApi(object):
         yield ts.put_async(memcache_timeout=timeout,
                            use_datastore=self.retry_params.save_access_token,
                            use_cache=True, use_memcache=True)
-    self.token = ts.token
-    raise ndb.Return(self.token)
+    raise ndb.Return(ts.token)
 
-  def urlfetch_async(self, url, **kwds):
+  @ndb.tasklet
+  def urlfetch_async(self, url, method='GET', headers=None,
+                     payload=None, deadline=None, callback=None,
+                     follow_redirects=False):
     """Make an async urlfetch() call.
 
-    This just passes the url and keyword arguments to NDB's async
-    urlfetch() wrapper in the current context.
-
-    This returns a Future despite not being decorated with @ndb.tasklet!
+    This is an async wrapper around urlfetch(). It adds an authentication
+    header.
     """
+    headers = {} if headers is None else dict(headers)
+    self.token = yield self.get_token_async()
+    headers['authorization'] = 'OAuth ' + self.token
+
+    deadline = deadline or self.retry_params.urlfetch_timeout
+
     ctx = ndb.get_context()
-    return ctx.urlfetch(url, **kwds)
+    resp = yield ctx.urlfetch(
+        url, payload=payload, method=method,
+        headers=headers, follow_redirects=follow_redirects,
+        deadline=deadline, callback=callback)
+    raise ndb.Return(resp)
 
 
 _RestApi = add_sync_methods(_RestApi)
