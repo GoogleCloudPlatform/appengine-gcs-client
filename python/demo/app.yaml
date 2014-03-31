@@ -1,11 +1,10 @@
-application: your-app-id-goes-here
+application: your-app-id
 version: v1
 runtime: python27
 api_version: 1
 threadsafe: yes
 
 env_variables:
-  BUCKET: 'your-bucket-name-goes-here'
 
 handlers:
 - url: /blobstore.*
