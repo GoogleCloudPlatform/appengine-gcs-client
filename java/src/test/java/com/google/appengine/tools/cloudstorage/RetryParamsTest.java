@@ -133,7 +133,7 @@ public class RetryParamsTest {
   private static void verifyRequestTimeoutMillisForCurrentAttempt(RetryParams params,
       int value, double timeout) {
     Context ctx = mock(Context.class);
-    stub(ctx.getAttemptsSoFar()).toReturn(value);
+    stub(ctx.getAttemptNumber()).toReturn(value);
     RetryHelper.setContext(ctx);
     assertEquals(timeout, params.getRequestTimeoutMillisForCurrentAttempt(), 1);
     RetryHelper.clearContext();

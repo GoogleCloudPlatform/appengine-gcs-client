@@ -51,13 +51,9 @@ final class GcsServiceImpl implements GcsService {
           InterruptedIOException.class)
       .build();
 
-  private static final int REQUEST_MAX_SIZE_BYTES = 10_000_000;
-  private final int nonResumeableMaxSizeBytes;
-
   GcsServiceImpl(RawGcsService raw, RetryParams retryParams) {
     this.raw = checkNotNull(raw, "Null raw");
     this.retryParams = new RetryParams.Builder(retryParams).requestTimeoutRetryFactor(1.2).build();
-    nonResumeableMaxSizeBytes = GcsOutputChannelImpl.getBufferSizeBytes(raw);
   }
 
   @Override
@@ -88,7 +84,7 @@ final class GcsServiceImpl implements GcsService {
   @Override
   public void createOrReplace(final GcsFilename filename, final GcsFileOptions options,
       final ByteBuffer src) throws IOException {
-    if (src.remaining() > REQUEST_MAX_SIZE_BYTES) {
+    if (src.remaining() > raw.getMaxWriteSizeByte()) {
       @SuppressWarnings("resource")
       GcsOutputChannel channel = createOrReplace(filename, options);
       channel.write(src);

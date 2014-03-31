@@ -46,6 +46,12 @@ public interface RawGcsService {
   public int getChunkSizeBytes();
 
   /**
+   * Returns the max bytes allowed per putObject/finishObject operations.
+   * Value should always be equal or larger than {@link #getChunkSizeBytes}.
+   */
+  public int getMaxWriteSizeByte();
+
+  /**
    * Immutable token that wraps the information a specific implementation of
    * {@link RawGcsService} needs to write to an object.
    *

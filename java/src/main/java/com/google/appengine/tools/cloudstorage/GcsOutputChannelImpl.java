@@ -17,11 +17,15 @@
 package com.google.appengine.tools.cloudstorage;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.lang.Math.max;
+import static java.lang.Math.min;
 
 import com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -49,8 +53,8 @@ import java.util.logging.Logger;
 final class GcsOutputChannelImpl implements GcsOutputChannel {
 
   private static final long serialVersionUID = 3011935384698648440L;
-
   private static final Logger log = Logger.getLogger(GcsOutputChannelImpl.class.getName());
+  private static final ByteBuffer EMPTY_BYTE_BUFFER = ByteBuffer.allocate(0);
 
   /**
    * Represents a request that is currently in-flight. Contains all the information needed to retry
@@ -59,14 +63,34 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
   private class OutstandingRequest {
     private final RawGcsCreationToken requestToken;
     /** buffer that is associated with the on outstanding request */
-    private final ByteBuffer ongoingRequestBuf;
-    private final Future<RawGcsCreationToken> nextToken;
+    private final ByteBuffer toWrite;
+    private Future<RawGcsCreationToken> nextToken;
 
-    OutstandingRequest(RawGcsCreationToken requestToken, ByteBuffer ongoingRequestBuf,
-        Future<RawGcsCreationToken> nextToken) {
-      this.requestToken = requestToken;
-      this.ongoingRequestBuf = ongoingRequestBuf;
-      this.nextToken = nextToken;
+    OutstandingRequest(RawGcsCreationToken token, ByteBuffer toWrite) {
+      this.toWrite = toWrite;
+      this.requestToken = token;
+      this.nextToken = raw.continueObjectCreationAsync(
+          token, toWrite.slice(), retryParams.getRequestTimeoutMillisForCurrentAttempt());
+    }
+
+
+    RawGcsCreationToken waitForNextToken() throws IOException, InterruptedException {
+      try {
+        return nextToken.get();
+      } catch (ExecutionException e) {
+        Throwable cause = e.getCause();
+        if (cause instanceof IOException) {
+          log.log(Level.WARNING, this + ": IOException writing block", cause);
+          throw (IOException) cause;
+        } else {
+          throw new RuntimeException(this + ": Unexpected cause of ExecutionException", cause);
+        }
+      }
+    }
+
+    void retry() {
+      nextToken = raw.continueObjectCreationAsync(
+          requestToken, toWrite.slice(), retryParams.getRequestTimeoutMillisForCurrentAttempt());
     }
   }
 
@@ -74,9 +98,10 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
    * Held over write and close for the entire call. Per Channel specification.
    */
   private transient Object lock = new Object();
-  private transient ByteBuffer buf;
+  @VisibleForTesting transient ByteBuffer buf;
   private transient RawGcsService raw;
-  private transient OutstandingRequest ongoingWrite;private RawGcsCreationToken token;
+  private transient OutstandingRequest outstandingRequest;
+  private RawGcsCreationToken token;
   private final GcsFilename filename;
   private final RetryParams retryParams;
 
@@ -84,9 +109,9 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
   GcsOutputChannelImpl(RawGcsService raw, RawGcsCreationToken nextToken, RetryParams retryParams) {
     this.retryParams = retryParams;
     this.raw = checkNotNull(raw, "Null raw");
-    createNewBuffer();
     this.token = checkNotNull(nextToken, "Null token");
     this.filename = nextToken.getFilename();
+    this.buf = EMPTY_BYTE_BUFFER;
   }
 
   private void readObject(ObjectInputStream aInputStream)
@@ -96,52 +121,50 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
     raw = GcsServiceFactory.createRawGcsService();
     if (token != null) {
       int length = aInputStream.readInt();
-      int bufferSize = getBufferSizeBytes();
-      if (length > bufferSize) {
-        throw new IllegalStateException(
-            "Size of buffer " + bufferSize + " is smaller than initial contents: " + length);
-      }
       if (length > 0) {
-        byte[] initialBuffer = new byte[bufferSize];
-        for (int pos = 0; pos < length;) {
-          pos += aInputStream.read(initialBuffer, pos, length - pos);
+        int bufferSize = getBufferSizeBytes();
+        if (length > bufferSize) {
+          throw new IllegalStateException(
+              "Size of buffer " + bufferSize + " is smaller than initial contents: " + length);
         }
+        byte[] initialBuffer = new byte[bufferSize];
+        DataInputStream dis = new DataInputStream(aInputStream);
+        dis.readFully(initialBuffer, 0, length);
         buf = ByteBuffer.wrap(initialBuffer);
         buf.position(length);
       } else {
-        buf = ByteBuffer.allocate(0);
+        buf = EMPTY_BYTE_BUFFER;
       }
     }
   }
 
-  private void createNewBuffer() {
-    buf = ByteBuffer.allocate(getBufferSizeBytes());
-  }
-
   private void writeObject(ObjectOutputStream aOutputStream) throws IOException {
     aOutputStream.defaultWriteObject();
-    int length = (buf == null) ? 0 : buf.position();
-    aOutputStream.writeInt(length);
-    if (length > 0 && isOpen()) {
-      buf.rewind();
-      byte[] toWrite = new byte[length];
-      buf.get(toWrite);
-      aOutputStream.write(toWrite);
+    synchronized (lock) {
+      if (token != null) {
+        int length = buf.position();
+        aOutputStream.writeInt(length);
+        if (length > 0) {
+          buf.rewind();
+          byte[] toWrite = new byte[length];
+          buf.get(toWrite);
+          aOutputStream.write(toWrite);
+        }
+      }
     }
   }
 
   @Override
   public int getBufferSizeBytes() {
-    return getBufferSizeBytes(raw);
+    return min(raw.getChunkSizeBytes() * 8, getMaxBufferSizeBytes());
   }
 
-  static int getBufferSizeBytes(RawGcsService raw) {
+  private int getMaxBufferSizeBytes() {
+    int maxWriteSize = raw.getMaxWriteSizeByte();
     int chunkSize = raw.getChunkSizeBytes();
-    if (chunkSize <= 256 * 1024) {
-      return 4 * chunkSize;
-    } else {
-      return chunkSize;
-    }
+    Preconditions.checkState(
+        maxWriteSize >= chunkSize, "max write size is smaller than chunk size");
+    return maxWriteSize - maxWriteSize % chunkSize;
   }
 
   @Override
@@ -162,29 +185,20 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
     return filename;
   }
 
-  private ByteBuffer getSliceForWrite() {
-    int oldPos = buf.position();
-    buf.flip();
-    ByteBuffer out = buf.slice();
-    buf.limit(buf.capacity());
-    buf.position(oldPos);
-
-    return out;
-  }
-
   @Override
   public void close() throws IOException {
     synchronized (lock) {
       if (!isOpen()) {
         return;
       }
-      waitForNextToken();
-      final ByteBuffer out = getSliceForWrite();
+      waitForOutstandingRequest();
+      buf.flip();
       try {
         RetryHelper.runWithRetries(new Callable<Void>() {
-          @Override public Void call() throws IOException {
+          @Override
+          public Void call() throws IOException {
             raw.finishObjectCreation(
-                token, out, retryParams.getRequestTimeoutMillisForCurrentAttempt());
+                token, buf.slice(), retryParams.getRequestTimeoutMillisForCurrentAttempt());
             return null;
           }
         }, retryParams, GcsServiceImpl.exceptionHandler);
@@ -195,19 +209,7 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
         throw e;
       }
       token = null;
-    }
-  }
-
-  private void flushIfNeeded() throws IOException {
-    if (!buf.hasRemaining()) {
-      waitForNextToken();
-      ByteBuffer toWrite = getSliceForWrite();
-      createNewBuffer();
-      if (toWrite.remaining() > 0) {
-        ongoingWrite = new OutstandingRequest(token, toWrite,
-            raw.continueObjectCreationAsync(
-                token, toWrite, retryParams.getRequestTimeoutMillisForCurrentAttempt()));
-      }
+      buf = null;
     }
   }
 
@@ -218,32 +220,20 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
    * @throws IOException In the event of FileNotFoundException, MalformedURLException
    * @throws RetriesExhaustedException if exceeding the number of retries
    */
-  private void waitForNextToken() throws IOException {
-    if (ongoingWrite == null) {
+  private void waitForOutstandingRequest() throws IOException {
+    if (outstandingRequest == null) {
       return;
     }
     try {
       RetryHelper.runWithRetries(new Callable<Void>() {
-        boolean failed = false;
         @Override
         public Void call() throws IOException, InterruptedException {
-          if (failed) {
-            retryWrite();
+          if (RetryHelper.getContext().getAttemptNumber() > 1) {
+            outstandingRequest.retry();
           }
-          try {
-            token = ongoingWrite.nextToken.get();
-            ongoingWrite = null;
-            return null;
-          } catch (ExecutionException e) {
-            failed = true;
-            Throwable cause = e.getCause();
-            if (cause instanceof IOException) {
-              log.log(Level.WARNING, this + ": IOException writing block", cause);
-              throw (IOException) cause;
-            } else {
-              throw new RuntimeException(this + ": Unexpected cause of ExecutionException", cause);
-            }
-          }
+          token = outstandingRequest.waitForNextToken();
+          outstandingRequest = null;
+          return null;
         }
       }, retryParams, GcsServiceImpl.exceptionHandler);
     } catch (RetryInterruptedException ex) {
@@ -255,55 +245,79 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
     }
   }
 
-  private void retryWrite() {
-    ongoingWrite = new OutstandingRequest(ongoingWrite.requestToken, ongoingWrite.ongoingRequestBuf,
-        raw.continueObjectCreationAsync(ongoingWrite.requestToken, ongoingWrite.ongoingRequestBuf,
-            retryParams.getRequestTimeoutMillisForCurrentAttempt()));
-  }
-
   @Override
   public int write(ByteBuffer in) throws IOException {
+    int written = in.remaining();
     synchronized (lock) {
       if (!isOpen()) {
         throw new ClosedChannelException();
       }
-      int inBufferSize = in.remaining();
       while (in.hasRemaining()) {
-        flushIfNeeded();
-        Preconditions.checkState(buf.hasRemaining(), "%s: %s", this, buf);
-        int numBytesToCopyToBuffer = Math.min(buf.remaining(), in.remaining());
-
-        int oldLimit = in.limit();
-        in.limit(in.position() + numBytesToCopyToBuffer);
-        buf.put(in);
-        in.limit(oldLimit);
+        extendBufferIfNeeded(in.remaining());
+        if (in.remaining() < buf.remaining()) {
+          buf.put(in);
+        } else {
+          int oldLimit = in.limit();
+          in.limit(in.position() + buf.remaining());
+          buf.put(in);
+          in.limit(oldLimit);
+          flushBuffer(in.remaining());
+        }
       }
-      flushIfNeeded();
-      return inBufferSize;
     }
+    return written;
+  }
+
+  private void flushBuffer(int nextBytesToAdd) throws IOException {
+    int chunkSize = raw.getChunkSizeBytes();
+    int position = buf.position();
+    int bytesToWrite = (position / chunkSize) * chunkSize;
+    if (bytesToWrite > 0) {
+      buf.flip();
+      ByteBuffer toWrite = buf.slice();
+      toWrite.limit(bytesToWrite);
+      waitForOutstandingRequest();
+      outstandingRequest = new OutstandingRequest(token, toWrite);
+      if (position > bytesToWrite || nextBytesToAdd > 0) {
+        buf.position(bytesToWrite);
+        buf.limit(position);
+        int newBufferSize = getNewBufferSize(position - bytesToWrite + nextBytesToAdd);
+        ByteBuffer newBuf = ByteBuffer.allocate(newBufferSize);
+        newBuf.put(buf);
+        buf = newBuf;
+      } else {
+        buf = EMPTY_BYTE_BUFFER;
+      }
+    }
+  }
+
+  private void extendBufferIfNeeded(int nextBytesToAdd) {
+    if (nextBytesToAdd <= buf.remaining()) {
+      return;
+    }
+    int newBufferSize = getNewBufferSize(buf.position() + nextBytesToAdd);
+    if (newBufferSize > buf.capacity()) {
+      ByteBuffer newBuf = ByteBuffer.allocate(newBufferSize);
+      buf.flip();
+      newBuf.put(buf);
+      buf = newBuf;
+    }
+  }
+
+  private int getNewBufferSize(int requestedSize) {
+    int chunkSize = raw.getChunkSizeBytes();
+    int defaultBufSize = getBufferSizeBytes();
+    int maxBufSize = getMaxBufferSizeBytes();
+    int chunks = requestedSize / chunkSize;
+    return max(defaultBufSize, min(chunks * chunkSize, maxBufSize));
   }
 
   @Override
   public void waitForOutstandingWrites() throws ClosedByInterruptException, IOException {
     synchronized (lock) {
-      if (!isOpen()) {
-        return;
-      }
-      waitForNextToken();
-      int chunkSize = raw.getChunkSizeBytes();
-      int position = buf.position();
-      int bytesToWrite = (position / chunkSize) * chunkSize;
-      if (bytesToWrite > 0) {
-        ByteBuffer outputBuffer = getSliceForWrite();
-        outputBuffer.limit(bytesToWrite);
-        ongoingWrite = new OutstandingRequest(token, outputBuffer, raw.continueObjectCreationAsync(
-            token, outputBuffer, retryParams.getRequestTimeoutMillisForCurrentAttempt()));
-        waitForNextToken();
-        buf.position(bytesToWrite);
-        buf.limit(position);
-        ByteBuffer remaining = buf.slice();
-        createNewBuffer();
-        buf.put(remaining);
+      if (isOpen()) {
+        flushBuffer(0);
+        waitForOutstandingRequest();
       }
     }
   }

@@ -81,7 +81,8 @@ final class OauthRawGcsService implements RawGcsService {
   public static final List<String> OAUTH_SCOPES =
       ImmutableList.of("https://www.googleapis.com/auth/devstorage.read_write");
 
-  private static final int READ_LIMIT_BYTES = 8 * 1024 * 1024;
+  private static final int READ_LIMIT_BYTES = 31 * 1024 * 1024;
+  public static final int WRITE_LIMIT_BYTES = 10_000_000;
   private static final int CHUNK_ALIGNMENT_BYTES = 256 * 1024;
 
   /**
@@ -188,6 +189,11 @@ final class OauthRawGcsService implements RawGcsService {
               + URLFetchUtils.describeRequestAndResponse(req, resp, true));
         }
     }
+  }
+
+  @Override
+  public int getMaxWriteSizeByte() {
+    return WRITE_LIMIT_BYTES;
   }
 
   @Override

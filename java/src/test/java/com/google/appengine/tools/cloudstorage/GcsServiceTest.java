@@ -113,14 +113,13 @@ public class GcsServiceTest {
     GcsFilename filename = new GcsFilename("testWrite10mbBucket", "testWrite10mbFile");
 
     GcsService gcsService = GcsServiceFactory.createGcsService();
-    GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
-
-    outputChannel.write(ByteBuffer.wrap(content));
-    outputChannel.close();
-
-    GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0);
-    verifyContent(content, readChannel, 25000);
+    try (GcsOutputChannel outputChannel =
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance())) {
+      outputChannel.write(ByteBuffer.wrap(content));
+    }
+    try (GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0)) {
+      verifyContent(content, readChannel, 25000);
+    }
     gcsService.delete(filename);
   }
 
@@ -133,14 +132,14 @@ public class GcsServiceTest {
         new GcsFilename("testShortFileLongBufferBucket", "testShortFileLongBufferFile");
 
     GcsService gcsService = GcsServiceFactory.createGcsService();
-    GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
-
-    outputChannel.write(ByteBuffer.wrap(content));
-    outputChannel.close();
-
-    GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(filename, 0, 512 * 1024);
-    verifyContent(content, readChannel, 13);
+    try (GcsOutputChannel outputChannel =
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance())) {
+      outputChannel.write(ByteBuffer.wrap(content));
+    }
+    try (GcsInputChannel readChannel =
+        gcsService.openPrefetchingReadChannel(filename, 0, 512 * 1024)) {
+      verifyContent(content, readChannel, 13);
+    }
     gcsService.delete(filename);
   }
 
@@ -152,28 +151,27 @@ public class GcsServiceTest {
     GcsFilename filename = new GcsFilename("testDeleteBucket", "testDeleteFile");
 
     GcsService gcsService = GcsServiceFactory.createGcsService();
-    GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
-
-    outputChannel.write(ByteBuffer.wrap(content));
-    outputChannel.close();
-
+    try (GcsOutputChannel outputChannel =
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance())) {
+      outputChannel.write(ByteBuffer.wrap(content));
+    }
     gcsService.delete(filename);
-
     ByteBuffer result = ByteBuffer.allocate(1);
-
-    GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0);
-    try {
-      readChannel.read(result);
-      fail();
-    } catch (IOException e) {
+    try (GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0)) {
+      try {
+        readChannel.read(result);
+        fail();
+      } catch (IOException e) {
+      }
     }
 
-    readChannel = gcsService.openPrefetchingReadChannel(filename, 0, 512 * 1024);
-    try {
-      readChannel.read(result);
-      fail();
-    } catch (IOException e) {
+    try (GcsInputChannel readChannel =
+        gcsService.openPrefetchingReadChannel(filename, 0, 512 * 1024)) {
+      try {
+        readChannel.read(result);
+        fail();
+      } catch (IOException e) {
+      }
     }
   }
 
@@ -185,14 +183,15 @@ public class GcsServiceTest {
     GcsFilename filename = new GcsFilename("testBufferedReadsBucket", "testBufferedReadsFile");
 
     GcsService gcsService = GcsServiceFactory.createGcsService();
-    GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance());
+    try (GcsOutputChannel outputChannel =
+        gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance())) {
+      outputChannel.write(ByteBuffer.wrap(content));
+    }
 
-    outputChannel.write(ByteBuffer.wrap(content));
-    outputChannel.close();
-
-    GcsInputChannel readChannel = gcsService.openPrefetchingReadChannel(filename, 0, 512 * 1024);
-    verifyContent(content, readChannel, 13);
+    try (GcsInputChannel readChannel =
+        gcsService.openPrefetchingReadChannel(filename, 0, 512 * 1024)) {
+      verifyContent(content, readChannel, 13);
+    }
     gcsService.delete(filename);
   }
 
@@ -206,10 +205,9 @@ public class GcsServiceTest {
 
     GcsService gcsService = GcsServiceFactory.createGcsService();
     GcsFileOptions options = GcsFileOptions.getDefaultInstance();
-    GcsOutputChannel outputChannel = gcsService.createOrReplace(filename, options);
-
-    outputChannel.write(ByteBuffer.wrap(content));
-    outputChannel.close();
+    try (GcsOutputChannel outputChannel = gcsService.createOrReplace(filename, options)) {
+      outputChannel.write(ByteBuffer.wrap(content));
+    }
 
     GcsFileMetadata metadata = gcsService.getMetadata(filename);
     assertNotNull(metadata);
@@ -229,13 +227,13 @@ public class GcsServiceTest {
     assertNull(metadata);
   }
 
-
   private void verifyContent(byte[] content, GcsInputChannel readChannel, int readSize)
       throws IOException {
     ByteBuffer result = ByteBuffer.allocate(readSize);
     ByteBuffer wrapped = ByteBuffer.wrap(content);
     int offset = 0;
     int read = readChannel.read(result);
+    assertTrue(read != -1);
     while (read != -1) {
       result.limit(read);
       wrapped.position(offset);
@@ -246,10 +244,13 @@ public class GcsServiceTest {
       assertTrue(read <= readSize);
 
       result.rewind();
-      assertEquals(wrapped, result);
+      try {
+        assertEquals(wrapped, result);
+      } catch (AssertionError er) {
+        er.printStackTrace();
+        throw er;
+      }
       read = readChannel.read(result);
     }
   }
-
-
 }
