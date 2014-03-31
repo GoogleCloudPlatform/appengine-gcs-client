@@ -16,6 +16,9 @@ package com.google.appengine.tools.cloudstorage.oauth;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.google.api.client.http.HttpHeaders;
+import com.google.api.client.http.HttpRequest;
+import com.google.api.client.http.HttpResponseException;
 import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
@@ -26,6 +29,7 @@ import com.google.common.collect.Iterables;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 
+import java.io.IOException;
 import java.util.Date;
 
 /**
@@ -50,6 +54,25 @@ final class URLFetchUtils {
     }
   }
 
+  private static void appendRequest(HttpRequest req, StringBuilder b) {
+    b.append(req.getRequestMethod()).append(' ').append(req.getUrl());
+    HttpHeaders headers = req.getHeaders();
+    for (String name : req.getHeaders().keySet()) {
+      b.append('\n').append(name).append(": ").append(headers.get(name));
+    }
+    b.append("\n\n");
+    if (req.getContent() == null) {
+      b.append("no content");
+    } else {
+      try {
+        b.append(req.getContent().getLength()).append(" bytes of content");
+      } catch (IOException e) {
+        b.append("could not read content length");
+      }
+    }
+    b.append('\n');
+  }
+
   static void appendRequest(HTTPRequest req, StringBuilder b) {
     b.append(req.getMethod()).append(' ').append(req.getURL());
     for (HTTPHeader h : req.getHeaders()) {
@@ -64,26 +87,41 @@ final class URLFetchUtils {
     b.append('\n');
   }
 
-  private static void appendResponse(HTTPResponse resp, boolean includeBody, StringBuilder b) {
-    b.append(resp.getResponseCode()).append(" with ").append(resp.getContent().length);
+  private static void appendResponse(HttpResponseException exception, StringBuilder b) {
+    b.append(exception.getStatusCode()).append(" with ");
+    Long contentLength = exception.getHeaders().getContentLength();
+    b.append(contentLength != null ? contentLength : Long.valueOf(0));
+    b.append(" bytes of content");
+    HttpHeaders headers = exception.getHeaders();
+    for (String name : headers.keySet()) {
+      b.append('\n').append(name).append(": ").append(headers.get(name));
+    }
+    b.append('\n').append(exception.getContent()).append('\n');
+  }
+
+  private static void appendResponse(HTTPResponse resp, StringBuilder b) {
+    byte[] content = resp.getContent();
+    b.append(resp.getResponseCode()).append(" with ").append(content == null ? 0 : content.length);
     b.append(" bytes of content");
     for (HTTPHeader h : resp.getHeadersUncombined()) {
       b.append('\n').append(h.getName()).append(": ").append(h.getValue());
     }
-    if (includeBody) {
-      b.append('\n').append(new String(resp.getContent(), UTF_8));
-    } else {
-      b.append("\n<content elided>");
-    }
-    b.append('\n');
+    b.append('\n').append(content == null ? "" : new String(content, UTF_8)).append('\n');
   }
 
-  static String describeRequestAndResponse(HTTPRequest req, HTTPResponse resp,
-      boolean includeResponseBody) {
+  static String describeRequestAndResponse(HttpRequest req, HttpResponseException resp) {
     StringBuilder stBuilder = new StringBuilder(256).append("Request: ");
     appendRequest(req, stBuilder);
     stBuilder.append("\nResponse: ");
-    appendResponse(resp, includeResponseBody, stBuilder);
+    appendResponse(resp, stBuilder);
+    return stBuilder.toString();
+  }
+
+  static String describeRequestAndResponse(HTTPRequest req, HTTPResponse resp) {
+    StringBuilder stBuilder = new StringBuilder(256).append("Request: ");
+    appendRequest(req, stBuilder);
+    stBuilder.append("\nResponse: ");
+    appendResponse(resp, stBuilder);
     return stBuilder.toString();
   }
 

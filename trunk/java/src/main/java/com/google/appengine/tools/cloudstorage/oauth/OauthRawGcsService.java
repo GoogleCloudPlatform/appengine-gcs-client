@@ -18,12 +18,21 @@ package com.google.appengine.tools.cloudstorage.oauth;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.api.client.extensions.appengine.http.UrlFetchTransport;
+import com.google.api.client.googleapis.extensions.appengine.auth.oauth2.AppIdentityCredential;
+import com.google.api.client.http.HttpRequest;
+import com.google.api.client.http.HttpResponse;
+import com.google.api.client.http.HttpResponseException;
+import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.services.storage.Storage;
+import com.google.api.services.storage.Storage.Objects.Delete;
 import com.google.appengine.api.urlfetch.FetchOptions;
 import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.api.urlfetch.HTTPMethod;
 import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
 import com.google.appengine.api.utils.FutureWrapper;
+import com.google.appengine.api.utils.SystemProperty;
 import com.google.appengine.tools.cloudstorage.BadRangeException;
 import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
@@ -34,6 +43,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.primitives.Ints;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -118,10 +128,14 @@ final class OauthRawGcsService implements RawGcsService {
   }
 
   private final OAuthURLFetchService urlfetch;
+  private final Storage storage;
   private volatile ImmutableSet<HTTPHeader> headers = ImmutableSet.of();
 
   OauthRawGcsService(OAuthURLFetchService urlfetch) {
     this.urlfetch = checkNotNull(urlfetch, "Null urlfetch");
+    AppIdentityCredential cred = new AppIdentityCredential(OAUTH_SCOPES);
+    storage = new Storage.Builder(new UrlFetchTransport(), new JacksonFactory(), cred)
+        .setApplicationName(SystemProperty.applicationId.get()).build();
   }
 
   @Override
@@ -161,36 +175,6 @@ final class OauthRawGcsService implements RawGcsService {
     return request;
   }
 
-  private static Error handleError(HTTPRequest req, HTTPResponse resp) throws IOException {
-    int responseCode = resp.getResponseCode();
-    switch (responseCode) {
-      case 400:
-        throw new RuntimeException("Server replied with 400, probably bad request: "
-            + URLFetchUtils.describeRequestAndResponse(req, resp, true));
-      case 401:
-        throw new RuntimeException("Server replied with 401, probably bad authentication: "
-            + URLFetchUtils.describeRequestAndResponse(req, resp, true));
-      case 403:
-        throw new RuntimeException(
-            "Server replied with 403, check that ACLs are set correctly on the object and bucket: "
-            + URLFetchUtils.describeRequestAndResponse(req, resp, true));
-      case 404:
-        throw new RuntimeException("Server replied with 404, probably no such bucket: "
-            + URLFetchUtils.describeRequestAndResponse(req, resp, true));
-      case 412:
-        throw new RuntimeException("Server replied with 412, precondition failure: "
-            + URLFetchUtils.describeRequestAndResponse(req, resp, true));
-      default:
-        if (responseCode >= 500 && responseCode < 600) {
-          throw new IOException("Response code " + resp.getResponseCode() + ", retryable: "
-              + URLFetchUtils.describeRequestAndResponse(req, resp, true));
-        } else {
-          throw new RuntimeException("Unexpected response code " + resp.getResponseCode() + ": "
-              + URLFetchUtils.describeRequestAndResponse(req, resp, true));
-        }
-    }
-  }
-
   @Override
   public int getMaxWriteSizeByte() {
     return WRITE_LIMIT_BYTES;
@@ -218,7 +202,7 @@ final class OauthRawGcsService implements RawGcsService {
           LOCATION + " header," + location + ", has a query string without " + UPLOAD_ID);
       return new GcsRestCreationToken(filename, params.get(UPLOAD_ID), 0);
     } else {
-      throw handleError(req, resp);
+      throw HttpErrorHandler.error(req, resp);
     }
   }
 
@@ -278,7 +262,7 @@ final class OauthRawGcsService implements RawGcsService {
       throw createIOException(req, e);
     }
     if (resp.getResponseCode() != 200) {
-      throw handleError(req, resp);
+      throw HttpErrorHandler.error(req, resp);
     }
   }
 
@@ -324,7 +308,7 @@ final class OauthRawGcsService implements RawGcsService {
       case 200:
         if (!isFinalChunk) {
           throw new RuntimeException("Unexpected response code 200 on non-final chunk: "
-              + URLFetchUtils.describeRequestAndResponse(req, resp, true));
+              + URLFetchUtils.describeRequestAndResponse(req, resp));
         } else {
           chunk.position(chunk.limit());
           return null;
@@ -332,13 +316,13 @@ final class OauthRawGcsService implements RawGcsService {
       case 308:
         if (isFinalChunk) {
           throw new RuntimeException("Unexpected response code 308 on final chunk: "
-              + URLFetchUtils.describeRequestAndResponse(req, resp, true));
+              + URLFetchUtils.describeRequestAndResponse(req, resp));
         } else {
           chunk.position(chunk.limit());
           return new GcsRestCreationToken(token.filename, token.uploadId, token.offset + length);
         }
       default:
-        throw handleError(req, resp);
+        throw HttpErrorHandler.error(req, resp);
     }
   }
 
@@ -397,20 +381,21 @@ final class OauthRawGcsService implements RawGcsService {
   /** True if deleted, false if not found. */
   @Override
   public boolean deleteObject(GcsFilename filename, long timeoutMillis) throws IOException {
-    HTTPRequest req = makeRequest(filename, null, HTTPMethod.DELETE, timeoutMillis, headers);
-    HTTPResponse resp;
+    Delete delCmd = storage.objects().delete(filename.getBucketName(), filename.getObjectName());
+    HttpRequest request = delCmd.buildHttpRequest();
+    request.setReadTimeout(Ints.saturatedCast(timeoutMillis));
+    request.setNumberOfRetries(0);
     try {
-      resp = urlfetch.fetch(req);
-    } catch (IOException e) {
-      throw createIOException(req, e);
-    }
-    switch (resp.getResponseCode()) {
-      case 204:
-        return true;
-      case 404:
-        return false;
-      default:
-        throw handleError(req, resp);
+      HttpResponse response = request.execute();
+      if (response.getStatusCode() != 204) {
+        throw new HttpResponseException(response);
+      }
+      return true;
+    } catch (HttpResponseException ex) {
+      if (ex.getStatusCode() != 404) {
+        throw HttpErrorHandler.error(request, ex);
+      }
+      return false;
     }
   }
 
@@ -455,9 +440,9 @@ final class OauthRawGcsService implements RawGcsService {
             throw new FileNotFoundException("Cound not find: " + filename);
           case 416:
             throw new BadRangeException("Requested Range not satisfiable; perhaps read past EOF? "
-                + URLFetchUtils.describeRequestAndResponse(req, resp, true));
+                + URLFetchUtils.describeRequestAndResponse(req, resp));
           default:
-            throw handleError(req, resp);
+            throw HttpErrorHandler.error(req, resp);
         }
         byte[] content = resp.getContent();
         Preconditions.checkState(
@@ -496,7 +481,7 @@ final class OauthRawGcsService implements RawGcsService {
       return null;
     }
     if (responseCode != 200) {
-      throw handleError(req, resp);
+      throw HttpErrorHandler.error(req, resp);
     }
     return getMetadataFromResponse(filename, resp, getLengthFromContentLength(resp));
   }
