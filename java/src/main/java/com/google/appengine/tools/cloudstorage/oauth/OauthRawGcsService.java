@@ -29,6 +29,7 @@ import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.RawGcsService;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
@@ -36,12 +37,11 @@ import com.google.common.collect.ImmutableSet;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -128,20 +128,19 @@ final class OauthRawGcsService implements RawGcsService {
     return getClass().getSimpleName() + "(" + urlfetch + ")";
   }
 
-  private static URL makeUrl(GcsFilename filename, String uploadId) {
-    StringBuilder path =
-        new StringBuilder().append('/').append(filename.getBucketName()).append('/');
-    try {
-      path.append(URLEncoder.encode(filename.getObjectName(), StandardCharsets.UTF_8.name()));
-    } catch (UnsupportedEncodingException e) {
-      throw new RuntimeException("Failed to encode object name for " + filename , e);
-    }
+  @VisibleForTesting
+  static URL makeUrl(GcsFilename filename, String uploadId) {
+    String path = new StringBuilder()
+        .append('/').append(filename.getBucketName())
+        .append('/').append(filename.getObjectName())
+        .toString();
+    String query = null;
     if (uploadId != null) {
-      path.append('?').append(UPLOAD_ID).append('=').append(uploadId);
+      query = new StringBuilder().append(UPLOAD_ID).append('=').append(uploadId).toString();
     }
     try {
-      return new URL("https", STORAGE_API_HOSTNAME, path.toString());
-    } catch (MalformedURLException e) {
+      return new URI("https", null, STORAGE_API_HOSTNAME, -1, path, query, null).toURL();
+    } catch (MalformedURLException | URISyntaxException e) {
       throw new RuntimeException(
           "Could not create a URL for " + filename + " with uploadId " + uploadId, e);
     }
