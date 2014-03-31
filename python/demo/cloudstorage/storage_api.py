@@ -206,14 +206,20 @@ class ReadBuffer(object):
     self._buffer = _Buffer()
     self._etag = None
 
-    self._request_next_buffer()
+    get_future = self._get_segment(0, self._buffer_size, check_response=False)
 
     status, headers, content = self._api.head_object(path)
     errors.check_status(status, [200], path, resp_headers=headers, body=content)
     self._file_size = long(headers['content-length'])
     self._check_etag(headers.get('etag'))
-    if self._file_size == 0:
-      self._buffer_future = None
+
+    self._buffer_future = None
+
+    if self._file_size != 0:
+      content, check_response_closure = get_future.get_result()
+      check_response_closure()
+      self._buffer.reset(content)
+      self._request_next_buffer()
 
   def __getstate__(self):
     """Store state as part of serialization/pickling.
@@ -372,11 +378,11 @@ class ReadBuffer(object):
   def _request_next_buffer(self):
     """Request next buffer.
 
-    Requires self._offset and self._buffer are in consistent state
+    Requires self._offset and self._buffer are in consistent state.
     """
     self._buffer_future = None
     next_offset = self._offset + self._buffer.remaining()
-    if not hasattr(self, '_file_size') or next_offset != self._file_size:
+    if next_offset != self._file_size:
       self._buffer_future = self._get_segment(next_offset,
                                               self._buffer_size)
 
@@ -409,7 +415,7 @@ class ReadBuffer(object):
     return [fut.get_result() for fut in futures]
 
   @ndb.tasklet
-  def _get_segment(self, start, request_size):
+  def _get_segment(self, start, request_size, check_response=True):
     """Get a segment of the file from Google Storage.
 
     Args:
@@ -418,9 +424,15 @@ class ReadBuffer(object):
       request_size: number of bytes to request. Have to be small enough
         for a single urlfetch request. May go over the logical range of the
         file.
+      check_response: True to check the validity of GCS response automatically
+        before the future returns. False otherwise. See Yields section.
 
     Yields:
-      a segment [start, start + request_size) of the file.
+      If check_response is True, the segment [start, start + request_size)
+      of the file.
+      Otherwise, a tuple. The first element is the unverified file segment.
+      The second element is a closure that checks response. Caller should
+      first invoke the closure before consuing the file segment.
 
     Raises:
       ValueError: if the file has changed while reading.
@@ -430,10 +442,14 @@ class ReadBuffer(object):
     headers = {'Range': 'bytes=' + content_range}
     status, resp_headers, content = yield self._api.get_object_async(
         self._path, headers=headers)
-    errors.check_status(status, [200, 206], self._path, headers, resp_headers,
-                        body=content)
-    self._check_etag(resp_headers.get('etag'))
-    raise ndb.Return(content)
+    def _checker():
+      errors.check_status(status, [200, 206], self._path, headers,
+                          resp_headers, body=content)
+      self._check_etag(resp_headers.get('etag'))
+    if check_response:
+      _checker()
+      raise ndb.Return(content)
+    raise ndb.Return(content, _checker)
 
   def _check_etag(self, etag):
     """Check if etag is the same across requests to GCS.
