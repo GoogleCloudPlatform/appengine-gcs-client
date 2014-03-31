@@ -200,6 +200,8 @@ class _RetryWrapper(object):
 class RetryParams(object):
   """Retry configuration parameters."""
 
+  _DEFAULT_USER_AGENT = 'App Engine Python GCS Client'
+
   @datastore_rpc._positional(1)
   def __init__(self,
                backoff_factor=2.0,
@@ -209,7 +211,8 @@ class RetryParams(object):
                max_retries=6,
                max_retry_period=30.0,
                urlfetch_timeout=None,
-               save_access_token=False):
+               save_access_token=False,
+               _user_agent=None):
     """Init.
 
     This object is unique per request per thread.
@@ -233,6 +236,7 @@ class RetryParams(object):
         excessive usage of GetAccessToken API. Usually the token is cached
         in process and in memcache. In some cases, memcache isn't very
         reliable.
+      _user_agent: The user agent string that you want to use in your requests.
     """
     self.backoff_factor = self._check('backoff_factor', backoff_factor)
     self.initial_delay = self._check('initial_delay', initial_delay)
@@ -248,6 +252,7 @@ class RetryParams(object):
       self.urlfetch_timeout = self._check('urlfetch_timeout', urlfetch_timeout)
     self.save_access_token = self._check('save_access_token', save_access_token,
                                          True, bool)
+    self._user_agent = _user_agent or self._DEFAULT_USER_AGENT
 
     self._request_id = os.getenv('REQUEST_LOG_ID')
 

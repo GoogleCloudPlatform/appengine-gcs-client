@@ -92,8 +92,8 @@ def _make_token_async(scopes, service_account_id):
     scopes: A list of scopes.
     service_account_id: Internal-use only.
 
-  Returns:
-    An tuple (token, expiration_time) where expiration_time is
+  Raises:
+    An ndb.Return with a tuple (token, expiration_time) where expiration_time is
     seconds since the epoch.
   """
   rpc = app_identity.create_rpc()
@@ -137,6 +137,7 @@ class _RestApi(object):
     if not retry_params:
       retry_params = api_utils._get_default_retry_params()
     self.retry_params = retry_params
+    self.user_agent = {'User-Agent': retry_params._user_agent}
 
   def __getstate__(self):
     """Store state as part of serialization/pickling."""
@@ -159,6 +160,17 @@ class _RestApi(object):
     """Issue one HTTP request.
 
     It performs async retries using tasklets.
+
+    Args:
+      url: the url to fetch.
+      method: the method in which to fetch.
+      headers: the http headers.
+      payload: the data to submit in the fetch.
+      deadline: the deadline in which to make the call.
+      callback: the call to make once completed.
+
+    Yields:
+      The async fetch of the url.
     """
     retry_wrapper = api_utils._RetryWrapper(
         self.retry_params,
@@ -184,7 +196,7 @@ class _RestApi(object):
     Args:
       refresh: If True, ignore a cached token; default False.
 
-    Returns:
+    Yields:
       An authentication token. This token is guaranteed to be non-expired.
     """
     key = '%s,%s' % (self.service_account_id, ','.join(self.scopes))
@@ -211,8 +223,21 @@ class _RestApi(object):
 
     This is an async wrapper around urlfetch(). It adds an authentication
     header.
+
+    Args:
+      url: the url to fetch.
+      method: the method in which to fetch.
+      headers: the http headers.
+      payload: the data to submit in the fetch.
+      deadline: the deadline in which to make the call.
+      callback: the call to make once completed.
+      follow_redirects: whether or not to follow redirects.
+
+    Yields:
+      This returns a Future despite not being decorated with @ndb.tasklet!
     """
     headers = {} if headers is None else dict(headers)
+    headers.update(self.user_agent)
     self.token = yield self.get_token_async()
     headers['authorization'] = 'OAuth ' + self.token
 

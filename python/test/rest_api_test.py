@@ -60,7 +60,38 @@ class RestApiTest(unittest.TestCase):
     self.assertEqual(res, (200, {'foo': 'bar'}, 'yoohoo'))
     ctx_urlfetch.assert_called_once_with(
         'http://example.com',
-        headers={'authorization': 'OAuth blah'},
+        headers={'authorization': 'OAuth blah',
+                 'User-Agent': 'App Engine Python GCS Client'},
+        follow_redirects=False,
+        payload=None,
+        method='GET',
+        deadline=None,
+        callback=None)
+
+  def testBasicCallWithUserAgent(self):
+    user_agent = 'Test User Agent String'
+    retry_params = api_utils.RetryParams(_user_agent=user_agent)
+    api = rest_api._RestApi('scope', retry_params=retry_params)
+    self.assertEqual(api.scopes, ['scope'])
+
+    fut_get_token = ndb.Future()
+    fut_get_token.set_result('blah')
+    api.get_token_async = mock.create_autospec(api.get_token_async,
+                                               return_value=fut_get_token)
+
+    fut_urlfetch = ndb.Future()
+    fut_urlfetch.set_result(
+        test_utils.MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
+    ctx_urlfetch = mock.Mock(return_value=fut_urlfetch)
+    ndb.get_context().urlfetch = ctx_urlfetch
+
+    res = api.do_request('http://example.com')
+
+    self.assertEqual(res, (200, {'foo': 'bar'}, 'yoohoo'))
+    ctx_urlfetch.assert_called_once_with(
+        'http://example.com',
+        headers={'authorization': 'OAuth blah',
+                 'User-Agent': user_agent},
         follow_redirects=False,
         payload=None,
         method='GET',

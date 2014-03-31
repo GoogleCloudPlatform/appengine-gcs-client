@@ -83,6 +83,14 @@ class FilenameEscapingTest(unittest.TestCase):
 class RetryParamsTest(unittest.TestCase):
   """Tests for RetryParams."""
 
+  def testInitialization(self):
+    retry_params = api_utils._get_default_retry_params()
+    self.assertEqual('App Engine Python GCS Client', retry_params._user_agent)
+
+    user_agent = 'Test User Agent String'
+    retry_params = api_utils.RetryParams(_user_agent=user_agent)
+    self.assertEqual(user_agent, retry_params._user_agent)
+
   def testValidation(self):
     self.assertRaises(TypeError, api_utils.RetryParams, 2)
     self.assertRaises(TypeError, api_utils.RetryParams, urlfetch_timeout='foo')
