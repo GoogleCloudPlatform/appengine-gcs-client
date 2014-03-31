@@ -8,6 +8,8 @@ import os
 import cloudstorage as gcs
 import webapp2
 
+from google.appengine.api import app_identity
+
 my_default_retry_params = gcs.RetryParams(initial_delay=0.2,
                                           max_delay=5.0,
                                           backoff_factor=2,
@@ -19,12 +21,15 @@ class MainPage(webapp2.RequestHandler):
   """Main page for GCS demo application."""
 
   def get(self):
-    self.response.headers['Content-Type'] = 'text/plain'
-    self.response.write('Demo GCS Application Version: '
-                        + os.environ['CURRENT_VERSION_ID'] + '\n')
-    self.response.write('Using bucket: ' + os.environ['BUCKET'] + '\n\n')
+    bucket_name = os.environ.get('BUCKET_NAME',
+                                 app_identity.get_default_gcs_bucket_name())
 
-    bucket = '/' + os.environ['BUCKET']
+    self.response.headers['Content-Type'] = 'text/plain'
+    self.response.write('Demo GCS Application running from Version: '
+                        + os.environ['CURRENT_VERSION_ID'] + '\n')
+    self.response.write('Using bucket name: ' + bucket_name + '\n\n')
+
+    bucket = '/' + bucket_name
     filename = bucket + '/demo-testfile'
     self.tmp_filenames_to_clean_up = []
 
