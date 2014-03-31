@@ -2,7 +2,6 @@
 
 """Tests for api_utils.py."""
 
-import httplib
 import os
 import threading
 import time
@@ -11,17 +10,16 @@ import unittest
 import mock
 
 from google.appengine.ext import ndb
+from google.appengine import runtime
 from google.appengine.api import apiproxy_stub_map
-from google.appengine.api import urlfetch
 from google.appengine.ext import testbed
-from google.appengine.runtime import apiproxy_errors
 
 try:
   from cloudstorage import api_utils
-  from cloudstorage import test_utils
 except ImportError:
   from google.appengine.ext.cloudstorage import api_utils
-  from google.appengine.ext.cloudstorage import test_utils
+
+
 
 
 class EagerTaskletTest(unittest.TestCase):
@@ -160,67 +158,100 @@ class RetryParamsTest(unittest.TestCase):
       self.assertEqual(-1, retry_params.delay(7, start_time))
 
 
-class RetryFetchTest(unittest.TestCase):
-  """Tests for _retry_fetch."""
+@ndb.tasklet
+def test_tasklet1(a, b):
+  result = yield test_tasklet2(a)
+  raise ndb.Return(result, b)
+
+
+@ndb.tasklet
+def test_tasklet2(a):
+  raise ndb.Return(a)
+
+
+@ndb.tasklet
+def test_tasklet3(a):
+  raise ValueError('Raise an error %r for testing.' % a)
+
+
+@ndb.tasklet
+def test_tasklet4():
+  raise runtime.DeadlineExceededError('Raise an error for testing.')
+
+
+class RetriableTaskletTest(unittest.TestCase):
+  """Tests for _retriable_tasklet."""
 
   def setUp(self):
-    super(RetryFetchTest, self).setUp()
-    self.results = []
-    self.max_retries = 10
-    self.retry_params = api_utils.RetryParams(backoff_factor=1,
-                                              max_retries=self.max_retries)
+    super(RetriableTaskletTest, self).setUp()
+    self.invoked = 0
 
-  def _SideEffect(self, *args, **kwds):
-    if self.results:
-      result = self.results.pop(0)
-      if isinstance(result, Exception):
-        raise result
-      return result
+  @ndb.tasklet
+  def tasklet_for_test(self, results):
+    r = results[self.invoked]
+    self.invoked += 1
+    if isinstance(r, type) and issubclass(r, Exception):
+      raise r('Raise an error for testing for the %d time.' % self.invoked)
+    raise ndb.Return(r)
 
-  def testRetriableStatus(self):
-    self.assertTrue(api_utils._should_retry(
-        test_utils.MockUrlFetchResult(httplib.REQUEST_TIMEOUT, None, None)))
-    self.assertTrue(api_utils._should_retry(
-        test_utils.MockUrlFetchResult(555, None, None)))
+  def testTaskletWasSuccessful(self):
+    fut = api_utils._RetryWrapper(api_utils.RetryParams()).run(
+        test_tasklet1, a=1, b=2)
+    a, b = fut.get_result()
+    self.assertEqual(1, a)
+    self.assertEqual(2, b)
 
-  def testNoRetry(self):
-    retry_params = api_utils.RetryParams(max_retries=0)
-    self.assertEqual(None, api_utils._retry_fetch('foo', retry_params))
+  def testRetryDueToBadResult(self):
+    fut = api_utils._RetryWrapper(
+        api_utils.RetryParams(min_retries=1, max_retries=3),
+        should_retry=lambda r: r < 0).run(
+            self.tasklet_for_test, results=[-1, -1, 1])
+    r = fut.get_result()
+    self.assertEqual(1, r)
 
-  def testRetrySuccess(self):
-    self.results.append(test_utils.MockUrlFetchResult(httplib.REQUEST_TIMEOUT,
-                                                      None, None))
-    self.results.append(test_utils.MockUrlFetchResult(
-        httplib.SERVICE_UNAVAILABLE, None, None))
-    self.results.append(urlfetch.DownloadError())
-    self.results.append(apiproxy_errors.Error())
-    self.results.append(test_utils.MockUrlFetchResult(httplib.ACCEPTED,
-                                                      None, None))
-    with mock.patch.object(api_utils.urlfetch, 'fetch') as f:
-      f.side_effect = self._SideEffect
-      self.assertEqual(httplib.ACCEPTED,
-                       api_utils._retry_fetch('foo', self.retry_params,
-                                              deadline=1000).status_code)
-      self.assertEqual(1000, f.call_args[1]['deadline'])
+  def testRetryReturnedABadResult(self):
+    fut = api_utils._RetryWrapper(
+        api_utils.RetryParams(min_retries=1, max_retries=3),
+        should_retry=lambda r: r < 0).run(
+            self.tasklet_for_test, results=[-1, -1, -1, -1])
+    r = fut.get_result()
+    self.assertEqual(-1, r)
 
-  def testRetryFailWithUrlfetchTimeOut(self):
-    with mock.patch.object(api_utils.urlfetch, 'fetch') as f:
-      f.side_effect = urlfetch.DownloadError
-      try:
-        api_utils._retry_fetch('foo', self.retry_params)
-        self.fail('Should have raised error.')
-      except urlfetch.DownloadError:
-        self.assertEqual(self.max_retries, f.call_count)
+  def testRetryDueToError(self):
+    fut = api_utils._RetryWrapper(
+        api_utils.RetryParams(min_retries=1, max_retries=3),
+        retriable_exceptions=(ValueError,)).run(
+            self.tasklet_for_test,
+            results=[ValueError, ValueError, ValueError, 1])
+    r = fut.get_result()
+    self.assertEqual(1, r)
 
-  def testRetryFailWithResponseTimeOut(self):
-    self.results.extend([urlfetch.DownloadError()] * (self.max_retries - 1))
-    self.results.append(test_utils.MockUrlFetchResult(httplib.REQUEST_TIMEOUT,
-                                                      None, None))
-    with mock.patch.object(api_utils.urlfetch, 'fetch') as f:
-      f.side_effect = self._SideEffect
-      self.assertEqual(
-          httplib.REQUEST_TIMEOUT,
-          api_utils._retry_fetch('foo', self.retry_params).status_code)
+  def testTooLittleRetry(self):
+    fut = api_utils._RetryWrapper(
+        api_utils.RetryParams(min_retries=0, max_retries=1),
+        retriable_exceptions=(ValueError,)).run(
+            self.tasklet_for_test,
+            results=[ValueError, ValueError])
+    self.assertRaises(ValueError, fut.get_result)
+
+  def testNoRetryDueToRetryParams(self):
+    retry_params = api_utils.RetryParams(min_retries=0, max_retries=0)
+    fut = api_utils._RetryWrapper(
+        retry_params, retriable_exceptions=[ValueError]).run(
+            test_tasklet3, a=1)
+    self.assertRaises(ValueError, fut.get_result)
+
+  def testNoRetryDueToErrorType(self):
+    fut = api_utils._RetryWrapper(
+        api_utils.RetryParams(),
+        retriable_exceptions=[TypeError]).run(
+            test_tasklet3, a=1)
+    self.assertRaises(ValueError, fut.get_result)
+
+  def testRuntimeError(self):
+    fut = api_utils._RetryWrapper(
+        api_utils.RetryParams()).run(test_tasklet4)
+    self.assertRaises(runtime.DeadlineExceededError, fut.get_result)
 
 
 if __name__ == '__main__':
