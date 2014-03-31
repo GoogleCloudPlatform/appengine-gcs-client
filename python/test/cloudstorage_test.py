@@ -187,6 +187,19 @@ class CloudStorageTest(unittest.TestCase):
     with cloudstorage.open(TESTFILE) as f:
       self.assertEqual(blocksize + 3, len(f.read()))
 
+  def testFlush2(self):
+    blocksize = 0
+    with cloudstorage.open(TESTFILE, 'w') as f:
+      blocksize = f._blocksize
+      f.write('a'*(blocksize+1))
+      f.write('a')
+      f.write('a'*(blocksize-1))
+      f.flush()
+      self.assertEqual(1, f._buffered)
+
+    with cloudstorage.open(TESTFILE) as f:
+      self.assertEqual(blocksize*2+1, len(f.read()))
+
   def testCopy2(self):
     with cloudstorage.open(TESTFILE, 'w',
                            'text/foo', {'x-goog-meta-foo': 'foo'}) as f:

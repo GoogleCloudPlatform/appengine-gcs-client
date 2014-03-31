@@ -748,39 +748,40 @@ class StreamingBuffer(object):
     least self._blocksize, or to flush the final (incomplete) block of
     the file with finish=True.
     """
-    blocksize_or_zero = 0 if finish else self._blocksize
-
-    while self._buffered >= blocksize_or_zero:
-      buffer = []
-      buffered = 0
+    while ((finish and self._buffered >= 0) or
+           (not finish and self._buffered >= self._blocksize)):
+      tmp_buffer = []
+      tmp_buffer_len = 0
 
       excess = 0
       while self._buffer:
         buf = self._buffer.popleft()
         size = len(buf)
         self._buffered -= size
-        buffer.append(buf)
-        buffered += size
-        if buffered >= self._maxrequestsize:
-          excess = buffered - self._maxrequestsize
+        tmp_buffer.append(buf)
+        tmp_buffer_len += size
+        if tmp_buffer_len >= self._maxrequestsize:
+          excess = tmp_buffer_len - self._maxrequestsize
           break
-        if self._buffered < blocksize_or_zero and buffered >= blocksize_or_zero:
-          excess = buffered % self._blocksize
+        if not finish and (
+            tmp_buffer_len % self._blocksize + self._buffered <
+            self._blocksize):
+          excess = tmp_buffer_len % self._blocksize
           break
 
       if excess:
-        over = buffer.pop()
+        over = tmp_buffer.pop()
         size = len(over)
         assert size >= excess
-        buffered -= size
+        tmp_buffer_len -= size
         head, tail = over[:-excess], over[-excess:]
         self._buffer.appendleft(tail)
         self._buffered += len(tail)
         if head:
-          buffer.append(head)
-          buffered += len(head)
+          tmp_buffer.append(head)
+          tmp_buffer_len += len(head)
 
-      data = ''.join(buffer)
+      data = ''.join(tmp_buffer)
       file_len = '*'
       if finish and not self._buffered:
         file_len = self._written + len(data)
