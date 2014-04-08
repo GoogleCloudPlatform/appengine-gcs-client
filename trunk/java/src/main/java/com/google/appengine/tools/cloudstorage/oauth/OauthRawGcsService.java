@@ -20,12 +20,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.api.client.extensions.appengine.http.UrlFetchTransport;
 import com.google.api.client.googleapis.extensions.appengine.auth.oauth2.AppIdentityCredential;
-import com.google.api.client.http.HttpRequest;
-import com.google.api.client.http.HttpResponse;
-import com.google.api.client.http.HttpResponseException;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.storage.Storage;
-import com.google.api.services.storage.Storage.Objects.Delete;
 import com.google.appengine.api.urlfetch.FetchOptions;
 import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.api.urlfetch.HTTPMethod;
@@ -43,7 +39,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.primitives.Ints;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -381,23 +376,23 @@ final class OauthRawGcsService implements RawGcsService {
   /** True if deleted, false if not found. */
   @Override
   public boolean deleteObject(GcsFilename filename, long timeoutMillis) throws IOException {
-    Delete delCmd = storage.objects().delete(filename.getBucketName(), filename.getObjectName());
-    HttpRequest request = delCmd.buildHttpRequest();
-    request.setReadTimeout(Ints.saturatedCast(timeoutMillis));
-    request.setNumberOfRetries(0);
+    HTTPRequest req = makeRequest(filename, null, HTTPMethod.DELETE, timeoutMillis, headers);
+    HTTPResponse resp;
     try {
-      HttpResponse response = request.execute();
-      if (response.getStatusCode() != 204) {
-        throw new HttpResponseException(response);
-      }
-      return true;
-    } catch (HttpResponseException ex) {
-      if (ex.getStatusCode() != 404) {
-        throw HttpErrorHandler.error(request, ex);
-      }
-      return false;
+      resp = urlfetch.fetch(req);
+    } catch (IOException e) {
+      throw createIOException(req, e);
+    }
+    switch (resp.getResponseCode()) {
+      case 204:
+        return true;
+      case 404:
+        return false;
+      default:
+        throw HttpErrorHandler.error(req, resp);
     }
   }
+
 
   private long getLengthFromContentRange(HTTPResponse resp) {
     String range = URLFetchUtils.getSingleHeader(resp, CONTENT_RANGE);
