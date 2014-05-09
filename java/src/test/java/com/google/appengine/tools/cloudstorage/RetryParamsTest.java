@@ -136,7 +136,7 @@ public class RetryParamsTest {
     stub(ctx.getAttemptNumber()).toReturn(value);
     RetryHelper.setContext(ctx);
     assertEquals(timeout, params.getRequestTimeoutMillisForCurrentAttempt(), 1);
-    RetryHelper.clearContext();
+    RetryHelper.setContext(null);
   }
 
   @Test
