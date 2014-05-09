@@ -72,12 +72,11 @@ public class RetryHelper<V>  {
 
   @VisibleForTesting
   static final void setContext(Context ctx) {
-    context.set(ctx);
-  }
-
-  @VisibleForTesting
-  static final void clearContext() {
-    context.remove();
+    if (ctx == null) {
+      context.remove();
+    } else {
+      context.set(ctx);
+    }
   }
 
   static final Context getContext() {
@@ -161,11 +160,12 @@ public class RetryHelper<V>  {
   static <V> V runWithRetries(Callable<V> callable, RetryParams params,
       ExceptionHandler exceptionHandler, Stopwatch stopwatch) throws RetryHelperException {
     RetryHelper<V> retryHelper = new RetryHelper<>(callable, params, exceptionHandler, stopwatch);
+    Context previousContext = getContext();
+    setContext(new Context(retryHelper));
     try {
-      setContext(new Context(retryHelper));
       return retryHelper.doRetry();
     } finally {
-      clearContext();
+      setContext(previousContext);
     }
   }
 }

@@ -227,4 +227,26 @@ public class RetryHelperTest {
     sleepDuration = RetryHelper.getSleepDuration(params, 12);
     assertTrue("" + sleepDuration, sleepDuration < 25600 && sleepDuration >= 15360);
   }
+
+  @Test
+  public void testNestedUsage() {
+    assertEquals((1 + 3) * 2, invokeNested(3, 2));
+  }
+
+  private int invokeNested(final int level, final int retries) {
+    if (level < 0) {
+      return 0;
+    }
+    return RetryHelper.runWithRetries(new Callable<Integer>() {
+      @Override
+      public Integer call() throws IOException {
+        if (RetryHelper.getContext().getAttemptNumber() < retries) {
+          throw new IOException();
+        }
+        assertEquals(retries, RetryHelper.getContext().getAttemptNumber());
+        return invokeNested(level - 1, retries) + RetryHelper.getContext().getAttemptNumber();
+      }
+    });
+  }
+
 }
