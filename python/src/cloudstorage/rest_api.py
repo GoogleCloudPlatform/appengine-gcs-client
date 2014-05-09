@@ -239,7 +239,8 @@ class _RestApi(object):
     headers = {} if headers is None else dict(headers)
     headers.update(self.user_agent)
     self.token = yield self.get_token_async()
-    headers['authorization'] = 'OAuth ' + self.token
+    if self.token:
+      headers['authorization'] = 'OAuth ' + self.token
 
     deadline = deadline or self.retry_params.urlfetch_timeout
 
