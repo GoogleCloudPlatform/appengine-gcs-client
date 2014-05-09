@@ -142,7 +142,7 @@ def stat(filename, retry_params=None, _account_id=None):
                       body=content)
   file_stat = common.GCSFileStat(
       filename=filename,
-      st_size=headers.get('content-length'),
+      st_size=common.get_stored_content_length(headers),
       st_ctime=common.http_time_to_posix(headers.get('last-modified')),
       etag=headers.get('etag'),
       content_type=headers.get('content-type'),

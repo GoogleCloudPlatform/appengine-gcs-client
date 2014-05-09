@@ -25,6 +25,7 @@ __all__ = ['CS_XML_NS',
            'LOCAL_GCS_ENDPOINT',
            'local_run',
            'get_access_token',
+           'get_stored_content_length',
            'get_metadata',
            'GCSFileStat',
            'http_time_to_posix',
@@ -170,6 +171,25 @@ class GCSFileStat(object):
 
 
 CSFileStat = GCSFileStat
+
+
+def get_stored_content_length(headers):
+  """Return the content length (in bytes) of the object as stored in GCS.
+
+  x-goog-stored-content-length should always be present except when called via
+  the local dev_appserver. Therefore if it is not present we default to the
+  standard content-length header.
+
+  Args:
+    headers: a dict of headers from the http response.
+
+  Returns:
+    the stored content length.
+  """
+  length = headers.get('x-goog-stored-content-length')
+  if length is None:
+    length = headers.get('content-length')
+  return length
 
 
 def get_metadata(headers):
