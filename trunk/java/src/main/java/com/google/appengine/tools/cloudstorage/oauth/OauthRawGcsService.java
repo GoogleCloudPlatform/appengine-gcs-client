@@ -76,6 +76,7 @@ final class OauthRawGcsService implements RawGcsService {
   private static final String RANGE = "Range";
   private static final String UPLOAD_ID = "upload_id";
   private static final String X_GOOG_META = "x-goog-meta-";
+  private static final String X_GOOG_CONTENT_LENGTH =  "x-goog-stored-content-length";
   private static final String STORAGE_API_HOSTNAME = "storage.googleapis.com";
   private static final HTTPHeader RESUMABLE_HEADER = new HTTPHeader("x-goog-resumable", "start");
   private static final HTTPHeader USER_AGENT =
@@ -401,8 +402,8 @@ final class OauthRawGcsService implements RawGcsService {
     return Long.parseLong(range.substring(range.indexOf("/") + 1));
   }
 
-  private long getLengthFromContentLength(HTTPResponse resp) {
-    return Long.parseLong(URLFetchUtils.getSingleHeader(resp, CONTENT_LENGTH));
+  private long getLengthFromHeader(HTTPResponse resp, String header) {
+    return Long.parseLong(URLFetchUtils.getSingleHeader(resp, header));
   }
 
   /**
@@ -426,7 +427,7 @@ final class OauthRawGcsService implements RawGcsService {
         long totalLength;
         switch (resp.getResponseCode()) {
           case 200:
-            totalLength = getLengthFromContentLength(resp);
+            totalLength = getLengthFromHeader(resp, X_GOOG_CONTENT_LENGTH);
             break;
           case 206:
             totalLength = getLengthFromContentRange(resp);
@@ -478,7 +479,8 @@ final class OauthRawGcsService implements RawGcsService {
     if (responseCode != 200) {
       throw HttpErrorHandler.error(req, resp);
     }
-    return getMetadataFromResponse(filename, resp, getLengthFromContentLength(resp));
+    return getMetadataFromResponse(
+        filename, resp, getLengthFromHeader(resp, X_GOOG_CONTENT_LENGTH));
   }
 
   private GcsFileMetadata getMetadataFromResponse(
