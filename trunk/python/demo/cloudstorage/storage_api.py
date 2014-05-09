@@ -210,7 +210,7 @@ class ReadBuffer(object):
 
     status, headers, content = self._api.head_object(path)
     errors.check_status(status, [200], path, resp_headers=headers, body=content)
-    self._file_size = long(headers['content-length'])
+    self._file_size = long(common.get_stored_content_length(headers))
     self._check_etag(headers.get('etag'))
 
     self._buffer_future = None

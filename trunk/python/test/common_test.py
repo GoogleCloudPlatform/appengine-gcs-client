@@ -110,5 +110,17 @@ class HelpersTest(unittest.TestCase):
         remote_api_shell.main(sys.argv)
         self.assertFalse(common.local_run())
 
+  def testGetContentLength(self):
+    headers = {'content-length': 69}
+    self.assertEqual(69, common.get_stored_content_length(headers))
+    headers = {'x-goog-stored-content-length': 75}
+    self.assertEqual(75, common.get_stored_content_length(headers))
+    headers = {'x-goog-stored-content-length': 75, 'content-length': 69}
+    self.assertEqual(75, common.get_stored_content_length(headers))
+    headers = {'x-goog-stored-content-length': 0, 'content-length': 69}
+    self.assertEqual(0, common.get_stored_content_length(headers))
+    headers = {'foo': 69}
+    self.assertIsNone(common.get_stored_content_length(headers))
+
 if __name__ == '__main__':
   unittest.main()

@@ -163,7 +163,7 @@ class CloudStorageTest(unittest.TestCase):
     stat = cloudstorage.stat(TESTFILE)
     self.assertEqual('text/plain', stat.content_type)
     self.assertEqual('gzip', stat.metadata['content-encoding'])
-    self.assertTrue(stat.st_size < 1024*2)
+    self.assertEqual(37, stat.st_size)
 
     with cloudstorage.open(TESTFILE) as f:
       gz = gzip.GzipFile('', 'rb', 9, f)
