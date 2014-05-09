@@ -53,7 +53,7 @@ class MainPage(webapp2.RequestHandler):
       self.response.write('\n\n')
 
     except Exception, e:
-      logging.error(e)
+      logging.exception(e)
       self.delete_files()
       self.response.write('\n\nThere was an error running the demo! '
                           'Please check the logs for more details.\n')
@@ -81,12 +81,12 @@ class MainPage(webapp2.RequestHandler):
                                  'x-goog-meta-bar': 'bar'},
                         retry_params=write_retry_params)
     gcs_file.write('abcde\n')
-    gcs_file.write('f'*1024 + '\n')
+    gcs_file.write('f'*1024*4 + '\n')
     gcs_file.close()
     self.tmp_filenames_to_clean_up.append(filename)
 
   def read_file(self, filename):
-    self.response.write('Truncated file content:\n')
+    self.response.write('Abbreviated file content (first line and last 1K):\n')
 
     gcs_file = gcs.open(filename)
     self.response.write(gcs_file.readline())
