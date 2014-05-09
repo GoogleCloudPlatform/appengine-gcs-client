@@ -114,7 +114,7 @@ class _RestApi(object):
   and is subject to change at any release.
   """
 
-  _TOKEN_EXPIRATION_HEADROOM = random.randint(60, 600)
+  _TOKEN_EXPIRATION_HEADROOM = random.randint(60, 240)
 
   def __init__(self, scopes, service_account_id=None, token_maker=None,
                retry_params=None):
