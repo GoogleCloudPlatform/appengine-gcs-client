@@ -98,6 +98,33 @@ class RestApiTest(unittest.TestCase):
         deadline=None,
         callback=None)
 
+  def testNoToken(self):
+    api = rest_api._RestApi('scope')
+    self.assertEqual(api.scopes, ['scope'])
+
+    fut_get_token = ndb.Future()
+    fut_get_token.set_result(None)
+    api.get_token_async = mock.create_autospec(api.get_token_async,
+                                               return_value=fut_get_token)
+
+    fut_urlfetch = ndb.Future()
+    fut_urlfetch.set_result(
+        test_utils.MockUrlFetchResult(200, {'foo': 'bar'}, 'yoohoo'))
+    ctx_urlfetch = mock.Mock(return_value=fut_urlfetch)
+    ndb.get_context().urlfetch = ctx_urlfetch
+
+    res = api.do_request('http://example.com')
+
+    self.assertEqual(res, (200, {'foo': 'bar'}, 'yoohoo'))
+    ctx_urlfetch.assert_called_once_with(
+        'http://example.com',
+        headers={'User-Agent': 'App Engine Python GCS Client'},
+        follow_redirects=False,
+        payload=None,
+        method='GET',
+        deadline=None,
+        callback=None)
+
   def testMultipleScopes(self):
     api = rest_api._RestApi(['scope1', 'scope2'])
     self.assertEqual(api.scopes, ['scope1', 'scope2'])
