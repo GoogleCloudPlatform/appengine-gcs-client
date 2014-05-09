@@ -80,7 +80,7 @@
     <dependency>
       <groupId>com.google.apis</groupId>
       <artifactId>google-api-services-storage</artifactId>
-      <version>[v1beta2-rev41-1.17,v1beta2-rev41-2)</version>
+      <version>v1-rev1-1.18.0-rc</version>
     </dependency>
 
     <!-- Test Dependencies -->
