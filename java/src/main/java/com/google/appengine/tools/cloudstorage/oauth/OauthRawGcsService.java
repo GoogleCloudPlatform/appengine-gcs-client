@@ -34,6 +34,7 @@ import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.RawGcsService;
+import com.google.appengine.tools.cloudstorage.oauth.URLFetchUtils.HTTPRequestInfo;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
@@ -180,13 +181,14 @@ final class OauthRawGcsService implements RawGcsService {
   public RawGcsCreationToken beginObjectCreation(
       GcsFilename filename, GcsFileOptions options, long timeoutMillis) throws IOException {
     HTTPRequest req = makeRequest(filename, null, HTTPMethod.POST, timeoutMillis, headers);
+    HTTPRequestInfo info = new HTTPRequestInfo(req);
     req.setHeader(RESUMABLE_HEADER);
     addOptionsHeaders(req, options);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw createIOException(req, e);
+      throw createIOException(info, e);
     }
     if (resp.getResponseCode() == 201) {
       String location = URLFetchUtils.getSingleHeader(resp, LOCATION);
@@ -198,14 +200,14 @@ final class OauthRawGcsService implements RawGcsService {
           LOCATION + " header," + location + ", has a query string without " + UPLOAD_ID);
       return new GcsRestCreationToken(filename, params.get(UPLOAD_ID), 0);
     } else {
-      throw HttpErrorHandler.error(req, resp);
+      throw HttpErrorHandler.error(info, resp);
     }
   }
 
-  private static IOException createIOException(HTTPRequest req, Throwable ex) {
-    StringBuilder stBuilder = new StringBuilder("URLFetch threw IOException; request: ");
-    URLFetchUtils.appendRequest(req, stBuilder);
-    return new IOException(stBuilder.toString(), ex);
+  private static IOException createIOException(HTTPRequestInfo req, Throwable ex) {
+    StringBuilder b = new StringBuilder("URLFetch threw IOException; request: ");
+    req.appendToString(b);
+    return new IOException(b.toString(), ex);
   }
 
   private void addOptionsHeaders(HTTPRequest req, GcsFileOptions options) {
@@ -248,6 +250,7 @@ final class OauthRawGcsService implements RawGcsService {
   public void putObject(GcsFilename filename, GcsFileOptions options, ByteBuffer content,
       long timeoutMillis) throws IOException {
     HTTPRequest req = makeRequest(filename, null, HTTPMethod.PUT, timeoutMillis, headers);
+    HTTPRequestInfo info = new HTTPRequestInfo(req);
     req.setHeader(new HTTPHeader(CONTENT_LENGTH, String.valueOf(content.remaining())));
     req.setPayload(peekBytes(content));
     addOptionsHeaders(req, options);
@@ -255,10 +258,10 @@ final class OauthRawGcsService implements RawGcsService {
     try {
       resp = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw createIOException(req, e);
+      throw createIOException(info, e);
     }
     if (resp.getResponseCode() != 200) {
-      throw HttpErrorHandler.error(req, resp);
+      throw HttpErrorHandler.error(info, resp);
     }
   }
 
@@ -295,30 +298,28 @@ final class OauthRawGcsService implements RawGcsService {
    * request.
    */
   GcsRestCreationToken handlePutResponse(final GcsRestCreationToken token,
-      final ByteBuffer chunk,
       final boolean isFinalChunk,
       final int length,
-      final HTTPRequest req,
+      final HTTPRequestInfo reqInfo,
       HTTPResponse resp) throws Error, IOException {
     switch (resp.getResponseCode()) {
       case 200:
         if (!isFinalChunk) {
-          throw new RuntimeException("Unexpected response code 200 on non-final chunk: "
-              + URLFetchUtils.describeRequestAndResponse(req, resp));
+          throw new RuntimeException("Unexpected response code 200 on non-final chunk. Request: \n"
+              + URLFetchUtils.describeRequestAndResponse(reqInfo, resp));
         } else {
-          chunk.position(chunk.limit());
           return null;
         }
       case 308:
         if (isFinalChunk) {
           throw new RuntimeException("Unexpected response code 308 on final chunk: "
-              + URLFetchUtils.describeRequestAndResponse(req, resp));
+              + URLFetchUtils.describeRequestAndResponse(reqInfo, resp));
         } else {
-          chunk.position(chunk.limit());
           return new GcsRestCreationToken(token.filename, token.uploadId, token.offset + length);
         }
       default:
-        throw HttpErrorHandler.error(req, resp);
+        throw HttpErrorHandler.error(resp.getResponseCode(),
+            URLFetchUtils.describeRequestAndResponse(reqInfo, resp));
     }
   }
 
@@ -326,17 +327,18 @@ final class OauthRawGcsService implements RawGcsService {
    * Write the provided chunk at the offset specified in the token. If finalChunk is set, the file
    * will be closed.
    */
-  private RawGcsCreationToken put(final GcsRestCreationToken token, final ByteBuffer chunk,
+  private RawGcsCreationToken put(final GcsRestCreationToken token, ByteBuffer chunk,
       final boolean isFinalChunk, long timeoutMillis) throws IOException {
     final int length = chunk.remaining();
-    final HTTPRequest req = createPutRequest(token, chunk, isFinalChunk, timeoutMillis, length);
+    HTTPRequest req = createPutRequest(token, chunk, isFinalChunk, timeoutMillis, length);
+    HTTPRequestInfo info = new HTTPRequestInfo(req);
     HTTPResponse response;
     try {
       response = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw createIOException(req, e);
+      throw createIOException(info, e);
     }
-    return handlePutResponse(token, chunk, isFinalChunk, length, req, response);
+    return handlePutResponse(token, isFinalChunk, length, info, response);
   }
 
   /**
@@ -345,18 +347,19 @@ final class OauthRawGcsService implements RawGcsService {
    * exception that would have been thrown by put.
    */
   private Future<RawGcsCreationToken> putAsync(final GcsRestCreationToken token,
-      final ByteBuffer chunk, final boolean isFinalChunk, long timeoutMillis) {
+      ByteBuffer chunk, final boolean isFinalChunk, long timeoutMillis) {
     final int length = chunk.remaining();
-    final HTTPRequest req = createPutRequest(token, chunk, isFinalChunk, timeoutMillis, length);
+    HTTPRequest req = createPutRequest(token, chunk, isFinalChunk, timeoutMillis, length);
+    final HTTPRequestInfo info = new HTTPRequestInfo(req);
     return new FutureWrapper<HTTPResponse, RawGcsCreationToken>(urlfetch.fetchAsync(req)) {
       @Override
       protected Throwable convertException(Throwable e) {
-        return OauthRawGcsService.convertException(e, req);
+        return OauthRawGcsService.convertException(info, e);
       }
 
       @Override
       protected GcsRestCreationToken wrap(HTTPResponse resp) throws Exception {
-        return handlePutResponse(token, chunk, isFinalChunk, length, req, resp);
+        return handlePutResponse(token, isFinalChunk, length, info, resp);
       }
     };
   }
@@ -378,11 +381,12 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public boolean deleteObject(GcsFilename filename, long timeoutMillis) throws IOException {
     HTTPRequest req = makeRequest(filename, null, HTTPMethod.DELETE, timeoutMillis, headers);
+    HTTPRequestInfo info = new HTTPRequestInfo(req);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw createIOException(req, e);
+      throw createIOException(info, e);
     }
     switch (resp.getResponseCode()) {
       case 204:
@@ -390,7 +394,7 @@ final class OauthRawGcsService implements RawGcsService {
       case 404:
         return false;
       default:
-        throw HttpErrorHandler.error(req, resp);
+        throw HttpErrorHandler.error(info, resp);
     }
   }
 
@@ -410,10 +414,10 @@ final class OauthRawGcsService implements RawGcsService {
    * Might not fill all of dst.
    */
   @Override
-  public Future<GcsFileMetadata> readObjectAsync(
-      final ByteBuffer dst, final GcsFilename filename, long startOffsetBytes, long timeoutMillis) {
-    Preconditions.checkArgument(startOffsetBytes >= 0, "%s: offset must be non-negative: %s",
-        this, startOffsetBytes);
+  public Future<GcsFileMetadata> readObjectAsync(final ByteBuffer dst, final GcsFilename filename,
+      long startOffsetBytes, long timeoutMillis) {
+    Preconditions.checkArgument(startOffsetBytes >= 0, "%s: offset must be non-negative: %s", this,
+        startOffsetBytes);
     final int n = dst.remaining();
     Preconditions.checkArgument(n > 0, "%s: dst full: %s", this, dst);
     final int want = Math.min(READ_LIMIT_BYTES, n);
@@ -421,6 +425,7 @@ final class OauthRawGcsService implements RawGcsService {
     final HTTPRequest req = makeRequest(filename, null, HTTPMethod.GET, timeoutMillis, headers);
     req.setHeader(
         new HTTPHeader(RANGE, "bytes=" + startOffsetBytes + "-" + (startOffsetBytes + want - 1)));
+    final HTTPRequestInfo info = new HTTPRequestInfo(req);
     return new FutureWrapper<HTTPResponse, GcsFileMetadata>(urlfetch.fetchAsync(req)) {
       @Override
       protected GcsFileMetadata wrap(HTTPResponse resp) throws IOException {
@@ -436,29 +441,29 @@ final class OauthRawGcsService implements RawGcsService {
             throw new FileNotFoundException("Cound not find: " + filename);
           case 416:
             throw new BadRangeException("Requested Range not satisfiable; perhaps read past EOF? "
-                + URLFetchUtils.describeRequestAndResponse(req, resp));
+                + URLFetchUtils.describeRequestAndResponse(info, resp));
           default:
-            throw HttpErrorHandler.error(req, resp);
+            throw HttpErrorHandler.error(info, resp);
         }
         byte[] content = resp.getContent();
-        Preconditions.checkState(
-            content.length <= want, "%s: got %s > wanted %s", this, content.length, want);
+        Preconditions.checkState(content.length <= want, "%s: got %s > wanted %s", this,
+            content.length, want);
         dst.put(content);
         return getMetadataFromResponse(filename, resp, totalLength);
       }
 
       @Override
       protected Throwable convertException(Throwable e) {
-        return OauthRawGcsService.convertException(e, req);
+        return OauthRawGcsService.convertException(info, e);
       }
     };
   }
 
-  private static Throwable convertException(Throwable e, HTTPRequest req) {
+  private static Throwable convertException(HTTPRequestInfo info, Throwable e) {
     if (e instanceof IOException || e instanceof RuntimeException) {
       return e;
     } else {
-      return createIOException(req, e);
+      return new IOException("URLFetch threw IOException; request: " + info, e);
     }
   }
 
@@ -466,18 +471,19 @@ final class OauthRawGcsService implements RawGcsService {
   public GcsFileMetadata getObjectMetadata(GcsFilename filename, long timeoutMillis)
       throws IOException {
     HTTPRequest req = makeRequest(filename, null, HTTPMethod.HEAD, timeoutMillis, headers);
+    HTTPRequestInfo info = new HTTPRequestInfo(req);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw createIOException(req, e);
+      throw createIOException(info, e);
     }
     int responseCode = resp.getResponseCode();
     if (responseCode == 404) {
       return null;
     }
     if (responseCode != 200) {
-      throw HttpErrorHandler.error(req, resp);
+      throw HttpErrorHandler.error(info, resp);
     }
     return getMetadataFromResponse(
         filename, resp, getLengthFromHeader(resp, X_GOOG_CONTENT_LENGTH));

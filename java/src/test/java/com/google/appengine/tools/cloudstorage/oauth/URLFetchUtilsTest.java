@@ -17,6 +17,7 @@ import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.api.urlfetch.HTTPMethod;
 import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
+import com.google.appengine.tools.cloudstorage.oauth.URLFetchUtils.HTTPRequestInfo;
 import com.google.common.collect.ImmutableList;
 
 import org.joda.time.format.DateTimeFormat;
@@ -74,7 +75,8 @@ public class URLFetchUtilsTest {
     }
     String expected = "Request: DELETE " + Storage.DEFAULT_BASE_URL + "b/b/o/o\n"
         + "k1: v1\nk2: v2\n\nno content\n\nResponse: 400 with 0 bytes of content\n";
-    String result = URLFetchUtils.describeRequestAndResponse(request, exception);
+    String result =
+        URLFetchUtils.describeRequestAndResponse(new HTTPRequestInfo(request), exception);
     assertTrue(expected + "\nis not a prefix of:\n" + result, result.startsWith(expected));
   }
 
@@ -90,7 +92,8 @@ public class URLFetchUtilsTest {
     when(response.getContent()).thenReturn("bla".getBytes());
     String expected = "Request: GET http://ping/pong\nk1: v1\nk2: v2\n\n"
         + "5 bytes of content\n\nResponse: 500 with 3 bytes of content\nk3: v3\nbla\n";
-    String result = URLFetchUtils.describeRequestAndResponse(request, response);
+    String result =
+        URLFetchUtils.describeRequestAndResponse(new HTTPRequestInfo(request), response);
     assertEquals(expected, result);
   }
 
