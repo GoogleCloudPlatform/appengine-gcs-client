@@ -90,10 +90,7 @@ public interface RawGcsService {
    * implementation-dependent.
    *
    * <p>
-   * On error, does not consume any bytes from {@code chunk}. The write may be retried by making
-   * another call with the same {@code token}. A whole sequence of writes may be retried by using a
-   * previous token (this is useful if the calling code crashes and rolls back to an earlier state).
-   * In both cases, the calling code is responsible for guaranteeing that the byte sequence written
+   * The calling code is responsible for guaranteeing that the byte sequence written
    * to the object remains identical across retries. (This is because the write may have succeeded
    * on the backend even though an exception was thrown by this method, and writing different data
    * on a retry leaves the object in a bad state.)

@@ -1,24 +1,20 @@
 /*
  * Copyright 2014 Google Inc. All Rights Reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 package com.google.appengine.tools.cloudstorage.oauth;
 
-import com.google.api.client.http.HttpRequest;
-import com.google.api.client.http.HttpResponseException;
-import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
+import com.google.appengine.tools.cloudstorage.oauth.URLFetchUtils.HTTPRequestInfo;
 import com.google.common.base.Strings;
 
 import java.io.IOException;
@@ -26,96 +22,40 @@ import java.io.IOException;
 /**
  * Handles failed HTTP responses.
  */
-abstract class HttpErrorHandler {
+class HttpErrorHandler {
 
-  private static class ApiClientHttpErrorHandler extends HttpErrorHandler {
-
-    private final HttpRequest request;
-    private final HttpResponseException exception;
-
-    private ApiClientHttpErrorHandler(HttpRequest request, HttpResponseException exception) {
-      this.request = request;
-      this.exception = exception;
-    }
-
-    @Override
-    protected int getResponseCode() {
-      return exception.getStatusCode();
-    }
-
-    @Override
-    protected String describeRequestAndResponse() {
-      return URLFetchUtils.describeRequestAndResponse(request, exception);
-    }
-  }
-
-  private static class AppEngineHttpErrorHandler extends HttpErrorHandler {
-
-    private final HTTPRequest request;
-    private final HTTPResponse response;
-
-    private AppEngineHttpErrorHandler(HTTPRequest request, HTTPResponse response) {
-      this.request = request;
-      this.response = response;
-    }
-
-    @Override
-    protected int getResponseCode() {
-      return response.getResponseCode();
-    }
-
-    @Override
-    protected String describeRequestAndResponse() {
-      return URLFetchUtils.describeRequestAndResponse(request, response);
-    }
-  }
-
-  private void error() throws IOException {
-    int responseCode = getResponseCode();
+  static IOException error(int responseCode, String description) throws IOException {
     switch (responseCode) {
       case 400:
-        throw createException("Server replied with 400, probably bad request");
+        throw createException("Server replied with 400, probably bad request", description);
       case 401:
-        throw createException("Server replied with 401, probably bad authentication");
+        throw createException("Server replied with 401, probably bad authentication", description);
       case 403:
         throw createException(
-            "Server replied with 403, verify ACLs are set correctly on the object and bucket");
+            "Server replied with 403, verify ACLs are set correctly on the object and bucket",
+            description);
       case 404:
-        throw createException("Server replied with 404, probably no such bucket");
+        throw createException("Server replied with 404, probably no such bucket", description);
       case 412:
-        throw createException("Server replied with 412, precondition failure");
+        throw createException("Server replied with 412, precondition failure", description);
       default:
         if (responseCode >= 500 && responseCode < 600) {
-          throw new IOException("Response code " + responseCode + ", retryable: "
-              + describeRequestAndResponse());
+          throw new IOException("Response code " + responseCode + ", retryable: " + description);
         } else {
-          throw createException("Unexpected response code " + getResponseCode());
+          throw createException("Unexpected response code " + responseCode, description);
         }
     }
   }
 
-  private RuntimeException createException(String msg) {
-    String info = describeRequestAndResponse();
-    if (!Strings.isNullOrEmpty(info)) {
-      msg += ": " + info;
+  private static RuntimeException createException(String msg, String description) {
+    if (Strings.isNullOrEmpty(description)) {
+      return new RuntimeException(msg);
+    } else {
+      return new RuntimeException(msg + ": " + description);
     }
-    return new RuntimeException(msg);
   }
 
-  protected abstract int getResponseCode();
-
-  protected abstract String describeRequestAndResponse();
-
-  static IOException error(HttpRequest request, HttpResponseException exception)
-      throws IOException {
-    HttpErrorHandler handler = new HttpErrorHandler.ApiClientHttpErrorHandler(request, exception);
-    handler.error();
-    return null;
-  }
-
-  static IOException error(HTTPRequest request, HTTPResponse response) throws IOException {
-    HttpErrorHandler handler = new HttpErrorHandler.AppEngineHttpErrorHandler(request, response);
-    handler.error();
-    return null;
+  public static IOException error(HTTPRequestInfo req, HTTPResponse resp) throws IOException {
+    return error(resp.getResponseCode(), URLFetchUtils.describeRequestAndResponse(req, resp));
   }
 }
