@@ -77,7 +77,8 @@ final class URLFetchUtils {
 
     HTTPRequestInfo(HTTPRequest req) {
       method = req.getMethod().toString();
-      length = req.getPayload().length;
+      byte[] payload = req.getPayload();
+      length = payload == null ? -1 : payload.length;
       url = req.getURL();
       h1 = null;
       h2 = req.getHeaders();
