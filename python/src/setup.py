@@ -9,7 +9,7 @@ import setuptools
 
 setuptools.setup(
     name="GoogleAppEngineCloudStorageClient",
-    version="1.9.0.0",
+    version="1.9.5.0",
     packages=setuptools.find_packages(),
     author="Google App Engine",
     author_email="app-engine-pipeline-api@googlegroups.com",
