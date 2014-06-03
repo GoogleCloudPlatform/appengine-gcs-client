@@ -114,8 +114,6 @@ class _RestApi(object):
   and is subject to change at any release.
   """
 
-  _TOKEN_EXPIRATION_HEADROOM = random.randint(60, 240)
-
   def __init__(self, scopes, service_account_id=None, token_maker=None,
                retry_params=None):
     """Constructor.
@@ -138,6 +136,7 @@ class _RestApi(object):
       retry_params = api_utils._get_default_retry_params()
     self.retry_params = retry_params
     self.user_agent = {'User-Agent': retry_params._user_agent}
+    self.expiration_headroom = random.randint(60, 240)
 
   def __getstate__(self):
     """Store state as part of serialization/pickling."""
@@ -145,7 +144,8 @@ class _RestApi(object):
             'id': self.service_account_id,
             'a_maker': (None if self.make_token_async == _make_token_async
                         else self.make_token_async),
-            'retry_params': self.retry_params}
+            'retry_params': self.retry_params,
+            'expiration_headroom': self.expiration_headroom}
 
   def __setstate__(self, state):
     """Restore state as part of deserialization/unpickling."""
@@ -153,6 +153,7 @@ class _RestApi(object):
                   service_account_id=state['id'],
                   token_maker=state['a_maker'],
                   retry_params=state['retry_params'])
+    self.expiration_headroom = state['expiration_headroom']
 
   @ndb.tasklet
   def do_request_async(self, url, method='GET', headers=None, payload=None,
@@ -192,6 +193,8 @@ class _RestApi(object):
     """Get an authentication token.
 
     The token is cached in memcache, keyed by the scopes argument.
+    Uses a random token expiration headroom value generated in the constructor
+    to eliminate a burst of GET_ACCESS_TOKEN API requests.
 
     Args:
       refresh: If True, ignore a cached token; default False.
@@ -204,7 +207,7 @@ class _RestApi(object):
         key, use_cache=True, use_memcache=True,
         use_datastore=self.retry_params.save_access_token)
     if refresh or ts is None or ts.expires < (
-        time.time() + self._TOKEN_EXPIRATION_HEADROOM):
+        time.time() + self.expiration_headroom):
       token, expires_at = yield self.make_token_async(
           self.scopes, self.service_account_id)
       timeout = int(expires_at - time.time())

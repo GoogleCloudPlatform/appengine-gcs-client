@@ -146,9 +146,9 @@ class RestApiTest(unittest.TestCase):
       t.side_effect = [2, 4, 5, 6]
       api = rest_api._RestApi('scope')
       fut1 = ndb.Future()
-      fut1.set_result(('token1', 3 + api._TOKEN_EXPIRATION_HEADROOM))
+      fut1.set_result(('token1', 3 + api.expiration_headroom))
       fut2 = ndb.Future()
-      fut2.set_result(('token2', 7 + api._TOKEN_EXPIRATION_HEADROOM))
+      fut2.set_result(('token2', 7 + api.expiration_headroom))
       api.make_token_async = mock.create_autospec(
           api.make_token_async, side_effect=[fut1, fut2])
 
