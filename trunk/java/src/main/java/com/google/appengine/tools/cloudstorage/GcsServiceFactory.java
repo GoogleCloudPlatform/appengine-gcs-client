@@ -31,8 +31,13 @@ public final class GcsServiceFactory {
   private GcsServiceFactory() {}
 
   public static GcsService createGcsService(RetryParams params) {
+    return createGcsService(new GcsServiceOptions.Builder().withRetryParams(params).build());
+  }
+
+  public static GcsService createGcsService(GcsServiceOptions options) {
     RawGcsService rawGcsService = createRawGcsService();
-    return new GcsServiceImpl(rawGcsService, params);
+    return new GcsServiceImpl(rawGcsService, options.getRetryParams(),
+        options.getDefaultWriteBufferSize());
   }
 
   static RawGcsService createRawGcsService() {

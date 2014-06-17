@@ -198,6 +198,40 @@ public class GcsOutputChannelTest {
   }
 
   @Test
+  public void testSettingBufferSize() throws IOException {
+    RawGcsService raw = GcsServiceFactory.createRawGcsService();
+    GcsFilename filename = new GcsFilename("GcsOutputChannelTestBucket", "testSettingBufferSize");
+    GcsFileOptions fileOptions = GcsFileOptions.getDefaultInstance();
+    int chunkSizeBytes = raw.getChunkSizeBytes();
+
+    GcsService out = GcsServiceFactory.createGcsService(
+        new GcsServiceOptions.Builder().withDefaultWriteBufferSize(null).build());
+    assertEquals(BUFFER_SIZE, out.createOrReplace(filename, fileOptions).getBufferSizeBytes());
+
+    out = GcsServiceFactory.createGcsService(
+        new GcsServiceOptions.Builder().withDefaultWriteBufferSize(0).build());
+    assertEquals(chunkSizeBytes, out.createOrReplace(filename, fileOptions).getBufferSizeBytes());
+
+    out = GcsServiceFactory.createGcsService(
+        new GcsServiceOptions.Builder().withDefaultWriteBufferSize(chunkSizeBytes).build());
+    assertEquals(chunkSizeBytes, out.createOrReplace(filename, fileOptions).getBufferSizeBytes());
+
+    out = GcsServiceFactory.createGcsService(
+        new GcsServiceOptions.Builder().withDefaultWriteBufferSize(chunkSizeBytes + 1).build());
+    assertEquals(chunkSizeBytes, out.createOrReplace(filename, fileOptions).getBufferSizeBytes());
+
+    out = GcsServiceFactory.createGcsService(
+        new GcsServiceOptions.Builder().withDefaultWriteBufferSize(chunkSizeBytes * 2).build());
+    assertEquals(chunkSizeBytes * 2,
+        out.createOrReplace(filename, fileOptions).getBufferSizeBytes());
+
+    out = GcsServiceFactory.createGcsService(
+        new GcsServiceOptions.Builder().withDefaultWriteBufferSize(Integer.MAX_VALUE).build());
+    assertEquals((raw.getMaxWriteSizeByte() / chunkSizeBytes) * chunkSizeBytes,
+        out.createOrReplace(filename, fileOptions).getBufferSizeBytes());
+  }
+
+  @Test
   public void testSingleLargeWrite() throws IOException, ClassNotFoundException {
     int size = 5 * BUFFER_SIZE;
     byte[] content = new byte[size];
