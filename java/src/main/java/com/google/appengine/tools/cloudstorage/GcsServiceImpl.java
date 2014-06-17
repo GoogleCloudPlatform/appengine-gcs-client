@@ -43,6 +43,7 @@ import java.util.concurrent.Callable;
 final class GcsServiceImpl implements GcsService {
 
   private final RawGcsService raw;
+  private final Integer defaultBufferSize;
   private final RetryParams retryParams;
   static final ExceptionHandler exceptionHandler = new ExceptionHandler.Builder()
       .retryOn(UnknownException.class, RPCFailedException.class, ApiDeadlineExceededException.class,
@@ -52,7 +53,8 @@ final class GcsServiceImpl implements GcsService {
           InterruptedIOException.class)
       .build();
 
-  GcsServiceImpl(RawGcsService raw, RetryParams retryParams) {
+  GcsServiceImpl(RawGcsService raw, RetryParams retryParams, Integer defaultBufferSize) {
+    this.defaultBufferSize = defaultBufferSize;
     this.raw = checkNotNull(raw, "Null raw");
     this.retryParams = new RetryParams.Builder(retryParams).requestTimeoutRetryFactor(1.2).build();
   }
@@ -73,7 +75,7 @@ final class GcsServiceImpl implements GcsService {
               filename, options, retryParams.getRequestTimeoutMillisForCurrentAttempt());
         }
       }, retryParams, exceptionHandler);
-      return new GcsOutputChannelImpl(raw, token, retryParams);
+      return new GcsOutputChannelImpl(raw, token, retryParams, defaultBufferSize);
     } catch (RetryInterruptedException ex) {
       throw new ClosedByInterruptException();
     } catch (NonRetriableException e) {

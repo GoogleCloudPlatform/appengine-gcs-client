@@ -128,7 +128,8 @@ public class SerializationTest {
   @Test
   public void testOauthSerializes() throws IOException, ClassNotFoundException {
     RawGcsService rawGcsService = OauthRawGcsServiceFactory.createOauthRawGcsService();
-    GcsService gcsService = new GcsServiceImpl(rawGcsService, RetryParams.getDefaultInstance());
+    GcsService gcsService =
+        new GcsServiceImpl(rawGcsService, RetryParams.getDefaultInstance(), null);
     GcsInputChannel readChannel = gcsService.openReadChannel(TestFile.SMALL.filename, 0);
     GcsInputChannel reconstruct = reconstruct(readChannel);
     readChannel.close();

@@ -22,7 +22,6 @@ import static java.lang.Math.min;
 
 import com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 
 import java.io.DataInputStream;
@@ -104,14 +103,17 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
   private RawGcsCreationToken token;
   private final GcsFilename filename;
   private final RetryParams retryParams;
+  private final Integer requestedBufferSize;
 
 
-  GcsOutputChannelImpl(RawGcsService raw, RawGcsCreationToken nextToken, RetryParams retryParams) {
+  GcsOutputChannelImpl(RawGcsService raw, RawGcsCreationToken nextToken, RetryParams retryParams,
+      Integer requestedBufferSize) {
     this.retryParams = retryParams;
     this.raw = checkNotNull(raw, "Null raw");
     this.token = checkNotNull(nextToken, "Null token");
     this.filename = nextToken.getFilename();
     this.buf = EMPTY_BYTE_BUFFER;
+    this.requestedBufferSize = requestedBufferSize;
   }
 
   private void readObject(ObjectInputStream aInputStream)
@@ -156,15 +158,11 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
 
   @Override
   public int getBufferSizeBytes() {
-    return min(raw.getChunkSizeBytes() * 8, getMaxBufferSizeBytes());
-  }
-
-  private int getMaxBufferSizeBytes() {
-    int maxWriteSize = raw.getMaxWriteSizeByte();
-    int chunkSize = raw.getChunkSizeBytes();
-    Preconditions.checkState(
-        maxWriteSize >= chunkSize, "max write size is smaller than chunk size");
-    return maxWriteSize - maxWriteSize % chunkSize;
+    if (requestedBufferSize == null) {
+      return findBufferSize(raw.getChunkSizeBytes() * 8);
+    } else {
+      return findBufferSize(requestedBufferSize);
+    }
   }
 
   @Override
@@ -305,11 +303,14 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
   }
 
   private int getNewBufferSize(int requestedSize) {
+    return max(getBufferSizeBytes(), findBufferSize(requestedSize));
+  }
+
+  private int findBufferSize(int requestedSize) {
     int chunkSize = raw.getChunkSizeBytes();
-    int defaultBufSize = getBufferSizeBytes();
-    int maxBufSize = getMaxBufferSizeBytes();
-    int chunks = requestedSize / chunkSize;
-    return max(defaultBufSize, min(chunks * chunkSize, maxBufSize));
+    int bufferSize = max(chunkSize, min(requestedSize, raw.getMaxWriteSizeByte()));
+    int chunks = bufferSize / chunkSize;
+    return chunkSize * chunks;
   }
 
   @Override

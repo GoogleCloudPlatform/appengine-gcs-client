@@ -71,7 +71,8 @@ public class LocalRawGcsServiceTest {
     helper.setUp();
 
     rawGcsService = LocalRawGcsServiceFactory.createLocalRawGcsService();
-    GcsService gcsService = new GcsServiceImpl(rawGcsService, RetryParams.getDefaultInstance());
+    GcsService gcsService =
+        new GcsServiceImpl(rawGcsService, RetryParams.getDefaultInstance(), null);
 
     for (TestFile file : TestFile.values()) {
       StringBuffer contents = new StringBuffer(file.contentSize);
@@ -93,7 +94,8 @@ public class LocalRawGcsServiceTest {
   @Test
   public void testDeleteExistingFile() throws IOException, InterruptedException {
     GcsFilename filename = new GcsFilename("unit-tests", "testDelete");
-    GcsService gcsService = new GcsServiceImpl(rawGcsService, RetryParams.getDefaultInstance());
+    GcsService gcsService =
+        new GcsServiceImpl(rawGcsService, RetryParams.getDefaultInstance(), null);
     try (GcsOutputChannel outputChannel =
         gcsService.createOrReplace(filename, GcsFileOptions.getDefaultInstance())) {
       outputChannel.write(ByteBuffer.wrap(new byte[] {0, 1, 2, 3, 4}));
