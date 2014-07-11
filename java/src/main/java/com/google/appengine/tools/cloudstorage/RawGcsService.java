@@ -143,6 +143,17 @@ public interface RawGcsService {
   boolean deleteObject(GcsFilename filename, long timeoutMillis) throws IOException;
 
   /**
+   * Compose a file from given files.
+   */
+  void composeObject(Iterable<String> source, GcsFilename dest, long timeoutMillis)
+      throws IOException;
+
+  /**
+   * Copy source file to dest.
+   */
+  void copyObject(GcsFilename source, GcsFilename dest, long timeoutMillis) throws IOException;
+
+  /**
    * Set of HTTP headers that will be provided in any GCS request.
    */
   void setHttpHeaders(ImmutableSet<HTTPHeader> headers);

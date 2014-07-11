@@ -159,6 +159,46 @@ final class GcsServiceImpl implements GcsService {
   }
 
   @Override
+  public void compose(final Iterable<String> source, final GcsFilename dest)
+      throws IOException {
+    try {
+      final long timeout = retryParams.getRequestTimeoutMillisForCurrentAttempt();
+      RetryHelper.runWithRetries(new Callable<Void>() {
+        @Override
+        public Void call() throws IOException {
+          raw.composeObject(source, dest, timeout);
+          return null;
+        }
+      }, retryParams, exceptionHandler);
+    } catch (RetryInterruptedException ex) {
+      throw new ClosedByInterruptException();
+    } catch (NonRetriableException e) {
+      Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
+      throw e;
+    }
+  }
+
+  @Override
+  public void copy(final GcsFilename source, final GcsFilename dest)
+      throws IOException {
+    try {
+      final long timeout = retryParams.getRequestTimeoutMillisForCurrentAttempt();
+      RetryHelper.runWithRetries(new Callable<Void>() {
+        @Override
+        public Void call() throws IOException {
+          raw.copyObject(source, dest, timeout);
+          return null;
+        }
+      }, retryParams, exceptionHandler);
+    } catch (RetryInterruptedException ex) {
+      throw new ClosedByInterruptException();
+    } catch (NonRetriableException e) {
+      Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
+      throw e;
+    }
+  }
+
+  @Override
   public void setHttpHeaders(Map<String, String> headers) {
     ImmutableSet.Builder<HTTPHeader> builder = ImmutableSet.builder();
     if (headers != null) {
