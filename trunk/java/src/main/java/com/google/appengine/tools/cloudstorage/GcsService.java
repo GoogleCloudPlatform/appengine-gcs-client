@@ -84,6 +84,23 @@ public interface GcsService {
   boolean delete(GcsFilename filename) throws IOException;
 
   /**
+   * Compose a file from the given files. All given files must belong
+   * to the same bucket as the composed file.
+   * @param source the files to compose from
+   * @param dest the composed file
+   * @throws IOException if for any reason the file can't be composed
+   */
+  void compose(Iterable<String> source, GcsFilename dest) throws IOException;
+
+  /**
+   * Copy a file.
+   * @param source the file to copy from
+   * @param dest the file to copy to
+   * @throws IOException if for any reason the file can't be copied
+   */
+  void copy(GcsFilename source, GcsFilename dest) throws IOException;
+
+  /**
    * Set HTTP headers that will be provided in any GCS request.
    */
   void setHttpHeaders(Map<String, String> headers);

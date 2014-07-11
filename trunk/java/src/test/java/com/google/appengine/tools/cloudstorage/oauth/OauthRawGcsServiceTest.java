@@ -39,7 +39,7 @@ public class OauthRawGcsServiceTest {
 
   @Test
   public void makeUrlShouldCorrectlyGenerateUrlWithUploadId() {
-    String url = makeUrl(new GcsFilename("bucket", "object"), "1").toString();
+    String url = makeUrl(new GcsFilename("bucket", "object"), "upload_id=1").toString();
     assertEquals("https://storage.googleapis.com/bucket/object?upload_id=1", url);
   }
 
@@ -51,7 +51,7 @@ public class OauthRawGcsServiceTest {
 
   @Test
   public void makeUrlShouldCorrectlyEncodeUploadId() {
-    String url = makeUrl(new GcsFilename("bucket", "object"), "} 20").toString();
+    String url = makeUrl(new GcsFilename("bucket", "object"), "upload_id=} 20").toString();
     assertEquals("https://storage.googleapis.com/bucket/object?upload_id=%7D%2020", url);
   }
 }

@@ -29,6 +29,8 @@ import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
 import com.google.appengine.api.utils.FutureWrapper;
 import com.google.appengine.api.utils.SystemProperty;
+import com.google.appengine.repackaged.com.google.common.escape.Escaper;
+import com.google.appengine.repackaged.com.google.common.xml.XmlEscapers;
 import com.google.appengine.tools.cloudstorage.BadRangeException;
 import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
@@ -40,6 +42,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -48,6 +51,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +82,7 @@ final class OauthRawGcsService implements RawGcsService {
   private static final String UPLOAD_ID = "upload_id";
   private static final String X_GOOG_META = "x-goog-meta-";
   private static final String X_GOOG_CONTENT_LENGTH =  "x-goog-stored-content-length";
+  private static final String X_GOOG_COPY_SOURCE = "x-goog-copy-source";
   private static final String STORAGE_API_HOSTNAME = "storage.googleapis.com";
   private static final HTTPHeader RESUMABLE_HEADER = new HTTPHeader("x-goog-resumable", "start");
   private static final HTTPHeader USER_AGENT =
@@ -140,27 +145,27 @@ final class OauthRawGcsService implements RawGcsService {
     return getClass().getSimpleName() + "(" + urlfetch + ")";
   }
 
-  @VisibleForTesting
-  static URL makeUrl(GcsFilename filename, String uploadId) {
-    String path = new StringBuilder()
+  static String makePath(GcsFilename filename) {
+    return new StringBuilder()
         .append('/').append(filename.getBucketName())
         .append('/').append(filename.getObjectName())
         .toString();
-    String query = null;
-    if (uploadId != null) {
-      query = new StringBuilder().append(UPLOAD_ID).append('=').append(uploadId).toString();
-    }
+  }
+
+  @VisibleForTesting
+  static URL makeUrl(GcsFilename filename, String queryString) {
+    String path = makePath(filename);
     try {
-      return new URI("https", null, STORAGE_API_HOSTNAME, -1, path, query, null).toURL();
+      return new URI("https", null, STORAGE_API_HOSTNAME, -1, path, queryString, null).toURL();
     } catch (MalformedURLException | URISyntaxException e) {
       throw new RuntimeException(
-          "Could not create a URL for " + filename + " with uploadId " + uploadId, e);
+          "Could not create a URL for " + filename + " with query " + queryString, e);
     }
   }
 
-  private static HTTPRequest makeRequest(GcsFilename filename, String uploadId,
+  private static HTTPRequest makeRequest(GcsFilename filename, String queryString,
       HTTPMethod method, long timeoutMillis, Set<HTTPHeader> headers) {
-    HTTPRequest request = new HTTPRequest(makeUrl(filename, uploadId), method,
+    HTTPRequest request = new HTTPRequest(makeUrl(filename, queryString), method,
         FetchOptions.Builder.disallowTruncate()
             .doNotFollowRedirects()
             .validateCertificate()
@@ -181,14 +186,13 @@ final class OauthRawGcsService implements RawGcsService {
   public RawGcsCreationToken beginObjectCreation(
       GcsFilename filename, GcsFileOptions options, long timeoutMillis) throws IOException {
     HTTPRequest req = makeRequest(filename, null, HTTPMethod.POST, timeoutMillis, headers);
-    HTTPRequestInfo info = new HTTPRequestInfo(req);
     req.setHeader(RESUMABLE_HEADER);
     addOptionsHeaders(req, options);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw createIOException(info, e);
+      throw createIOException(new HTTPRequestInfo(req), e);
     }
     if (resp.getResponseCode() == 201) {
       String location = URLFetchUtils.getSingleHeader(resp, LOCATION);
@@ -200,7 +204,7 @@ final class OauthRawGcsService implements RawGcsService {
           LOCATION + " header," + location + ", has a query string without " + UPLOAD_ID);
       return new GcsRestCreationToken(filename, params.get(UPLOAD_ID), 0);
     } else {
-      throw HttpErrorHandler.error(info, resp);
+      throw HttpErrorHandler.error(new HTTPRequestInfo(req), resp);
     }
   }
 
@@ -250,7 +254,6 @@ final class OauthRawGcsService implements RawGcsService {
   public void putObject(GcsFilename filename, GcsFileOptions options, ByteBuffer content,
       long timeoutMillis) throws IOException {
     HTTPRequest req = makeRequest(filename, null, HTTPMethod.PUT, timeoutMillis, headers);
-    HTTPRequestInfo info = new HTTPRequestInfo(req);
     req.setHeader(new HTTPHeader(CONTENT_LENGTH, String.valueOf(content.remaining())));
     req.setPayload(peekBytes(content));
     addOptionsHeaders(req, options);
@@ -258,10 +261,10 @@ final class OauthRawGcsService implements RawGcsService {
     try {
       resp = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw createIOException(info, e);
+      throw createIOException(new HTTPRequestInfo(req), e);
     }
     if (resp.getResponseCode() != 200) {
-      throw HttpErrorHandler.error(info, resp);
+      throw HttpErrorHandler.error(new HTTPRequestInfo(req), resp);
     }
   }
 
@@ -283,8 +286,9 @@ final class OauthRawGcsService implements RawGcsService {
           + "; isFinalChunk: " + isFinalChunk + ")");
     }
     long limit = offset + length;
+    String queryString = new StringBuilder(UPLOAD_ID).append('=').append(token.uploadId).toString();
     final HTTPRequest req =
-        makeRequest(token.filename, token.uploadId, HTTPMethod.PUT, timeoutMillis, headers);
+        makeRequest(token.filename, queryString, HTTPMethod.PUT, timeoutMillis, headers);
     req.setHeader(
         new HTTPHeader(CONTENT_RANGE,
             "bytes " + (length == 0 ? "*" : offset + "-" + (limit - 1))
@@ -349,9 +353,9 @@ final class OauthRawGcsService implements RawGcsService {
   private Future<RawGcsCreationToken> putAsync(final GcsRestCreationToken token,
       ByteBuffer chunk, final boolean isFinalChunk, long timeoutMillis) {
     final int length = chunk.remaining();
-    HTTPRequest req = createPutRequest(token, chunk, isFinalChunk, timeoutMillis, length);
-    final HTTPRequestInfo info = new HTTPRequestInfo(req);
-    return new FutureWrapper<HTTPResponse, RawGcsCreationToken>(urlfetch.fetchAsync(req)) {
+    HTTPRequest request = createPutRequest(token, chunk, isFinalChunk, timeoutMillis, length);
+    final HTTPRequestInfo info = new HTTPRequestInfo(request);
+    return new FutureWrapper<HTTPResponse, RawGcsCreationToken>(urlfetch.fetchAsync(request)) {
       @Override
       protected Throwable convertException(Throwable e) {
         return OauthRawGcsService.convertException(info, e);
@@ -381,12 +385,11 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public boolean deleteObject(GcsFilename filename, long timeoutMillis) throws IOException {
     HTTPRequest req = makeRequest(filename, null, HTTPMethod.DELETE, timeoutMillis, headers);
-    HTTPRequestInfo info = new HTTPRequestInfo(req);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw createIOException(info, e);
+      throw createIOException(new HTTPRequestInfo(req), e);
     }
     switch (resp.getResponseCode()) {
       case 204:
@@ -394,7 +397,7 @@ final class OauthRawGcsService implements RawGcsService {
       case 404:
         return false;
       default:
-        throw HttpErrorHandler.error(info, resp);
+        throw HttpErrorHandler.error(new HTTPRequestInfo(req), resp);
     }
   }
 
@@ -471,19 +474,18 @@ final class OauthRawGcsService implements RawGcsService {
   public GcsFileMetadata getObjectMetadata(GcsFilename filename, long timeoutMillis)
       throws IOException {
     HTTPRequest req = makeRequest(filename, null, HTTPMethod.HEAD, timeoutMillis, headers);
-    HTTPRequestInfo info = new HTTPRequestInfo(req);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
     } catch (IOException e) {
-      throw createIOException(info, e);
+      throw createIOException(new HTTPRequestInfo(req), e);
     }
     int responseCode = resp.getResponseCode();
     if (responseCode == 404) {
       return null;
     }
     if (responseCode != 200) {
-      throw HttpErrorHandler.error(info, resp);
+      throw HttpErrorHandler.error(new HTTPRequestInfo(req), resp);
     }
     return getMetadataFromResponse(
         filename, resp, getLengthFromHeader(resp, X_GOOG_CONTENT_LENGTH));
@@ -534,6 +536,50 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public int getChunkSizeBytes() {
     return CHUNK_ALIGNMENT_BYTES;
+  }
+
+  @Override
+  public void composeObject(Iterable<String> source, GcsFilename dest, long timeoutMillis)
+      throws IOException {
+    HTTPRequest req = makeRequest(dest, "compose", HTTPMethod.PUT, timeoutMillis, headers);
+    StringBuilder xmlContent = new StringBuilder(Iterables.size(source) * 50);
+    xmlContent.append("<ComposeRequest>");
+    Escaper escaper = XmlEscapers.xmlContentEscaper();
+    for (String srcFileName : source) {
+      xmlContent.append("<Component><Name>");
+      xmlContent.append(escaper.escape(srcFileName));
+      xmlContent.append("</Name></Component>");
+    }
+    xmlContent.append("</ComposeRequest>");
+    byte[] payload = xmlContent.toString().getBytes(StandardCharsets.UTF_8);
+    req.setHeader(new HTTPHeader(CONTENT_LENGTH, String.valueOf(payload.length)));
+    req.setPayload(payload);
+    HTTPResponse resp;
+    try {
+      resp = urlfetch.fetch(req);
+    } catch (IOException e) {
+      throw createIOException(new HTTPRequestInfo(req), e);
+    }
+    if (resp.getResponseCode() != 200) {
+      throw HttpErrorHandler.error(new HTTPRequestInfo(req), resp);
+    }
+  }
+
+  @Override
+  public void copyObject(GcsFilename source, GcsFilename dest, long timeoutMillis)
+      throws IOException {
+    HTTPRequest req = makeRequest(dest, null, HTTPMethod.PUT, timeoutMillis, headers);
+    req.setHeader(new HTTPHeader(X_GOOG_COPY_SOURCE, makePath(source)));
+    req.setHeader(new HTTPHeader(CONTENT_LENGTH, "0"));
+    HTTPResponse resp;
+    try {
+      resp = urlfetch.fetch(req);
+    } catch (IOException e) {
+      throw createIOException(new HTTPRequestInfo(req), e);
+    }
+    if (resp.getResponseCode() != 200) {
+      throw HttpErrorHandler.error(new HTTPRequestInfo(req), resp);
+    }
   }
 
   @Override

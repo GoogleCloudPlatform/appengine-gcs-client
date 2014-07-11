@@ -46,6 +46,7 @@ import com.google.apphosting.api.ApiProxy.Environment;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.Futures;
 
 import java.io.ByteArrayInputStream;
@@ -161,6 +162,9 @@ final class LocalRawGcsService implements RawGcsService {
 
   private Token append(RawGcsCreationToken token, ByteBuffer chunk) throws IOException {
     Token t = (Token) token;
+    if (!chunk.hasRemaining()) {
+      return t;
+    }
     try (FileWriteChannel ch = FILES.openWriteChannel(t.file, false)) {
       int n = chunk.remaining();
       int r = ch.write(chunk);
@@ -299,6 +303,54 @@ final class LocalRawGcsService implements RawGcsService {
       long timeoutMillis) throws IOException {
     Token token = beginObjectCreation(filename, options, timeoutMillis);
     finishObjectCreation(token, content, timeoutMillis);
+  }
+
+  @Override
+  public void composeObject(Iterable<String> source, GcsFilename dest, long timeoutMillis)
+      throws IOException {
+    if (Iterables.size(source) > 32) {
+      throw new IOException("Compose attempted with too many components. Limit is 32");
+    }
+    ByteBuffer chunk = ByteBuffer.allocate(1024);
+    Token token = beginObjectCreation(dest, GcsFileOptions.getDefaultInstance(), timeoutMillis);
+    for (String filename : source) {
+      GcsFilename sourceFileName = new GcsFilename(dest.getBucketName(), filename);
+      GcsFileMetadata meta = getObjectMetadata(sourceFileName, timeoutMillis);
+      if (meta == null) {
+        throw new FileNotFoundException(this + ": No such file: " + filename);
+      }
+      AppEngineFile file = nameToAppEngineFile(sourceFileName);
+      try (FileReadChannel readChannel = FILES.openReadChannel(file, false)) {
+        readChannel.position(0);
+        while (readChannel.read(chunk) != -1) {
+          chunk.flip();
+          token = append(token, chunk);
+          chunk.clear();
+        }
+      }
+    }
+    finishObjectCreation(token, ByteBuffer.allocate(0), timeoutMillis);
+  }
+
+  @Override
+  public void copyObject(GcsFilename source, GcsFilename dest, long timeoutMillis)
+      throws IOException {
+    GcsFileMetadata meta = getObjectMetadata(source, timeoutMillis);
+    if (meta == null) {
+      throw new FileNotFoundException(this + ": No such file: " + source);
+    }
+    ByteBuffer chunk = ByteBuffer.allocate(1024);
+    Token token = beginObjectCreation(dest, GcsFileOptions.getDefaultInstance(), timeoutMillis);
+    AppEngineFile file = nameToAppEngineFile(source);
+    try (FileReadChannel readChannel = FILES.openReadChannel(file, false)) {
+      readChannel.position(0);
+      while (readChannel.read(chunk) != -1) {
+        chunk.flip();
+        token = append(token, chunk);
+        chunk.clear();
+      }
+    }
+    finishObjectCreation(token, ByteBuffer.allocate(0), timeoutMillis);
   }
 
   @Override
