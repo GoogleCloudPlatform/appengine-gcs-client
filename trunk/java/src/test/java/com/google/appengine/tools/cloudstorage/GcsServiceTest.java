@@ -18,6 +18,7 @@ package com.google.appengine.tools.cloudstorage;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -136,8 +137,9 @@ public class GcsServiceTest {
   public void testDelete() throws IOException {
     int length = 1024;
     GcsFilename filename = new GcsFilename("testDeleteBucket", "testDeleteFile");
+    assertFalse(gcsService.delete(filename));
     createFile(filename, length, true);
-    gcsService.delete(filename);
+    assertTrue(gcsService.delete(filename));
     ByteBuffer result = ByteBuffer.allocate(1);
     try (GcsInputChannel readChannel = gcsService.openReadChannel(filename, 0)) {
       try {

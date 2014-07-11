@@ -283,13 +283,19 @@ final class LocalRawGcsService implements RawGcsService {
 
   @Override
   public boolean deleteObject(GcsFilename filename, long timeoutMillis) throws IOException {
-    AppEngineFile file = nameToAppEngineFile(filename);
-    if (file == null) {
+    Transaction tx = DATASTORE.beginTransaction();
+    Key key = makeKey(filename);
+    try {
+      DATASTORE.get(tx, key);
+      DATASTORE.delete(tx, key);
+    } catch (EntityNotFoundException ex) {
       return false;
+    } finally {
+      if (tx.isActive()) {
+        tx.commit();
+      }
     }
-
-    DATASTORE.delete((Transaction) null, makeKey(filename));
-    FILES.delete(file);
+    FILES.delete(nameToAppEngineFile(filename));
     return true;
   }
 

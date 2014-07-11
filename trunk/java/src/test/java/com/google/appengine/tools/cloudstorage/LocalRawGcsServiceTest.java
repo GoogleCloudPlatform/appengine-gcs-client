@@ -18,6 +18,7 @@ package com.google.appengine.tools.cloudstorage;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -114,6 +115,8 @@ public class LocalRawGcsServiceTest {
     } catch (ExecutionException e) {
       assertEquals(FileNotFoundException.class, e.getCause().getClass());
     }
+    deleted = rawGcsService.deleteObject(filename, 1000);
+    assertFalse(deleted);
   }
 
   @Test(expected = IllegalArgumentException.class)
