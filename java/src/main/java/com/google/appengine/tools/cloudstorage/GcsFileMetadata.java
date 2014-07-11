@@ -18,10 +18,10 @@ package com.google.appengine.tools.cloudstorage;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 import java.util.Date;
+import java.util.Objects;
 
 /**
  * Contains metadata about a Google Cloud Storage Object.
@@ -77,13 +77,13 @@ public final class GcsFileMetadata {
       return false;
     }
     GcsFileMetadata other = (GcsFileMetadata) o;
-    return length == other.length && Objects.equal(filename, other.filename)
-      && Objects.equal(etag, other.etag) && Objects.equal(options, other.options);
+    return length == other.length && Objects.equals(filename, other.filename)
+      && Objects.equals(etag, other.etag) && Objects.equals(options, other.options);
   }
 
   @Override
   public final int hashCode() {
-    return Objects.hashCode(filename, options, etag, length);
+    return Objects.hash(filename, options, etag, length);
   }
 
 }
