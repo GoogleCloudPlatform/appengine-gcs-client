@@ -44,9 +44,9 @@ public interface GcsService {
       throws IOException;
 
   /**
-   * Creates, writes and closes a new object with a given content.
-   * This is equivalent to calling {@link #createOrReplace(GcsFilename, GcsFileOptions)}
-   * and then {@link GcsOutputChannel#write(ByteBuffer)} and {@link GcsOutputChannel#close()}
+   * Creates, writes, and closes a new object with a given content.
+   * This is equivalent to calling {@link #createOrReplace(GcsFilename, GcsFileOptions)},
+   * then {@link GcsOutputChannel#write(ByteBuffer)}, and finally {@link GcsOutputChannel#close()},
    * but will try to minimize the underlying RPC calls.
    */
   void createOrReplace(GcsFilename filename, GcsFileOptions options, ByteBuffer src)
@@ -62,11 +62,12 @@ public interface GcsService {
   GcsInputChannel openReadChannel(GcsFilename filename, long startPosition) throws IOException;
 
   /**
-   * Same as openReadChannel but buffers data in memory and prefetches it before it is required to
-   * attempt to avoid blocking on every read call.
+   * Same as {@code openReadChannel}, but buffers data in memory and prefetches it before it is
+   * required to avoid blocking on most read calls.
    *
    * If some data is already available locally (prefetched), but not enough to fill the dst buffer,
-   * the returned channel might fill only part of it, to avoid blocking.
+   * the returned channel might fill only part of it, to avoid blocking. If no data is available
+   * locally, reading from the returned channel will block.
    */
   GcsInputChannel openPrefetchingReadChannel(
       GcsFilename filename, long startPosition, int blockSizeBytes);
@@ -79,7 +80,8 @@ public interface GcsService {
   GcsFileMetadata getMetadata(GcsFilename filename) throws IOException;
 
   /**
-   * Returns true if deleted, false if not found.
+   * Deletes a file.
+   * @return true if deleted, false if not found.
    */
   boolean delete(GcsFilename filename) throws IOException;
 
