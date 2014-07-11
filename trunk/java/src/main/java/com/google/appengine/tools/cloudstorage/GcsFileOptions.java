@@ -16,12 +16,12 @@
 
 package com.google.appengine.tools.cloudstorage;
 
-import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 
 import java.io.Serializable;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Container class for holding options for creating Google Storage files.
@@ -127,16 +127,16 @@ public final class GcsFileOptions implements Serializable {
       return false;
     }
     GcsFileOptions other = (GcsFileOptions) o;
-    return Objects.equal(mimeType, other.mimeType) && Objects.equal(acl, other.acl)
-        && Objects.equal(cacheControl, other.cacheControl)
-        && Objects.equal(contentEncoding, other.contentEncoding)
-        && Objects.equal(contentDisposition, other.contentDisposition)
-        && Objects.equal(userMetadata, other.userMetadata);
+    return Objects.equals(mimeType, other.mimeType) && Objects.equals(acl, other.acl)
+        && Objects.equals(cacheControl, other.cacheControl)
+        && Objects.equals(contentEncoding, other.contentEncoding)
+        && Objects.equals(contentDisposition, other.contentDisposition)
+        && Objects.equals(userMetadata, other.userMetadata);
   }
 
   @Override
   public final int hashCode() {
-    return Objects.hashCode(mimeType,
+    return Objects.hash(mimeType,
         acl,
         cacheControl,
         contentEncoding,

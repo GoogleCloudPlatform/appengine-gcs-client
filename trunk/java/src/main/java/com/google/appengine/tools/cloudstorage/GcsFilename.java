@@ -18,9 +18,8 @@ package com.google.appengine.tools.cloudstorage;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.common.base.Objects;
-
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Bucket and object name of a Google Cloud Storage object.
@@ -58,13 +57,13 @@ public final class GcsFilename implements Serializable {
       return false;
     }
     GcsFilename other = (GcsFilename) o;
-    return Objects.equal(bucketName, other.bucketName)
-        && Objects.equal(objectName, other.objectName);
+    return Objects.equals(bucketName, other.bucketName)
+        && Objects.equals(objectName, other.objectName);
   }
 
   @Override
   public final int hashCode() {
-    return Objects.hashCode(bucketName, objectName);
+    return Objects.hash(bucketName, objectName);
   }
 
 }

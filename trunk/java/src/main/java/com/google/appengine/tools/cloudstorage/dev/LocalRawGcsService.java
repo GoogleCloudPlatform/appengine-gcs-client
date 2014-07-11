@@ -43,7 +43,6 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.RawGcsService;
 import com.google.apphosting.api.ApiProxy;
 import com.google.apphosting.api.ApiProxy.Environment;
-import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -58,6 +57,7 @@ import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.util.Date;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -118,13 +118,13 @@ final class LocalRawGcsService implements RawGcsService {
         return false;
       }
       Token other = (Token) o;
-      return offset == other.offset && Objects.equal(filename, other.filename)
-          && Objects.equal(options, other.options);
+      return offset == other.offset && Objects.equals(filename, other.filename)
+          && Objects.equals(options, other.options);
     }
 
     @Override
     public final int hashCode() {
-      return Objects.hashCode(filename, offset, options);
+      return Objects.hash(filename, offset, options);
     }
   }
 
