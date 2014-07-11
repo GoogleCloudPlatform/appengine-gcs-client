@@ -18,6 +18,7 @@ package com.google.appengine.tools.cloudstorage.dev;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.appengine.api.NamespaceManager;
 import com.google.appengine.api.ThreadManager;
 import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.DatastoreService;
@@ -203,8 +204,14 @@ final class LocalRawGcsService implements RawGcsService {
   }
 
   private Key makeKey(GcsFilename filename) {
-    return KeyFactory.createKey(
-        ENTITY_KIND_PREFIX + filename.getBucketName(), filename.getObjectName());
+    String origNamespace = NamespaceManager.get();
+    try {
+      NamespaceManager.set("");
+      return KeyFactory.createKey(
+          ENTITY_KIND_PREFIX + filename.getBucketName(), filename.getObjectName());
+    } finally {
+      NamespaceManager.set(origNamespace);
+    }
   }
 
   @Override
