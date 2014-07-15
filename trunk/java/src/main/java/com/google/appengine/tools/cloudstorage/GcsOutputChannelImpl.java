@@ -31,6 +31,7 @@ import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -104,23 +105,25 @@ final class GcsOutputChannelImpl implements GcsOutputChannel {
   private final GcsFilename filename;
   private final RetryParams retryParams;
   private final Integer requestedBufferSize;
+  private final Map<String, String> headers;
 
 
   GcsOutputChannelImpl(RawGcsService raw, RawGcsCreationToken nextToken, RetryParams retryParams,
-      Integer requestedBufferSize) {
+      Integer requestedBufferSize, Map<String, String> headers) {
     this.retryParams = retryParams;
     this.raw = checkNotNull(raw, "Null raw");
     this.token = checkNotNull(nextToken, "Null token");
     this.filename = nextToken.getFilename();
     this.buf = EMPTY_BYTE_BUFFER;
     this.requestedBufferSize = requestedBufferSize;
+    this.headers = headers;
   }
 
   private void readObject(ObjectInputStream aInputStream)
       throws ClassNotFoundException, IOException {
     aInputStream.defaultReadObject();
     lock = new Object();
-    raw = GcsServiceFactory.createRawGcsService();
+    raw = GcsServiceFactory.createRawGcsService(headers);
     if (token != null) {
       int length = aInputStream.readInt();
       if (length > 0) {

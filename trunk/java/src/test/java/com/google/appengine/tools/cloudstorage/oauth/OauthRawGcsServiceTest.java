@@ -17,6 +17,8 @@
 package com.google.appengine.tools.cloudstorage.oauth;
 
 import static com.google.appengine.tools.cloudstorage.oauth.OauthRawGcsService.makeUrl;
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 
 import com.google.appengine.tools.cloudstorage.GcsFilename;
@@ -25,33 +27,53 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * Verify behaviors of OAuthRawGcsService.
  */
 @RunWith(JUnit4.class)
 public class OauthRawGcsServiceTest {
 
+  private static final String BUCKET = "bucket";
+  private static final String URL_PREFIX = "https://storage.googleapis.com/" + BUCKET + "/";
+
   @Test
   public void makeUrlShouldCorrectlyGenerateUrlWithoutUploadId() {
-    String url = makeUrl(new GcsFilename("bucket", "object"), null).toString();
-    assertEquals("https://storage.googleapis.com/bucket/object", url);
+    String url = makeUrl(new GcsFilename(BUCKET, "object"), null).toString();
+    assertEquals(URL_PREFIX + "object", url);
   }
 
   @Test
   public void makeUrlShouldCorrectlyGenerateUrlWithUploadId() {
-    String url = makeUrl(new GcsFilename("bucket", "object"), "upload_id=1").toString();
-    assertEquals("https://storage.googleapis.com/bucket/object?upload_id=1", url);
+    Map<String, String> queryStrings = singletonMap("upload_id", "1");
+    String url = makeUrl(new GcsFilename(BUCKET, "object"), queryStrings).toString();
+    assertEquals(URL_PREFIX + "object?upload_id=1", url);
   }
 
   @Test
   public void makeUrlShouldCorrectlyEncodeObjectName() {
-    String url = makeUrl(new GcsFilename("bucket", "~obj%ect sp{ace>"), null).toString();
-    assertEquals("https://storage.googleapis.com/bucket/~obj%25ect%20sp%7Bace%3E", url);
+    Map<String, String> queryStrings = emptyMap();
+    String url = makeUrl(new GcsFilename(BUCKET, "~obj%ect sp{ace>"), queryStrings).toString();
+    assertEquals(URL_PREFIX + "~obj%25ect%20sp%7Bace%3E", url);
   }
 
   @Test
-  public void makeUrlShouldCorrectlyEncodeUploadId() {
-    String url = makeUrl(new GcsFilename("bucket", "object"), "upload_id=} 20").toString();
-    assertEquals("https://storage.googleapis.com/bucket/object?upload_id=%7D%2020", url);
+  public void makeUrlShouldCorrectlyEncodeQueryString() {
+    Map<String, String> queryStrings = new LinkedHashMap<>();
+    queryStrings.put("upload_id", "} 20");
+    queryStrings.put("composed", null);
+    queryStrings.put("val=ue", "%7D&");
+    queryStrings.put("regular", "val");
+    queryStrings.put("k e+y", "=v a+lu&e=");
+    String url = makeUrl(new GcsFilename(BUCKET, "object"), queryStrings).toString();
+    String expected = URL_PREFIX + "object?"
+        + "upload_id=%7D+20&"
+        + "composed&"
+        + "val%3Due=%257D%26&"
+        + "regular=val&"
+        + "k+e%2By=%3Dv+a%2Blu%26e%3D";
+    assertEquals(expected, url);
   }
 }

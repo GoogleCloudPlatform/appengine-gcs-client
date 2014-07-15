@@ -26,6 +26,7 @@ import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestC
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
+import com.google.common.collect.ImmutableMap;
 
 import org.junit.After;
 import org.junit.Before;
@@ -199,34 +200,34 @@ public class GcsOutputChannelTest {
 
   @Test
   public void testSettingBufferSize() throws IOException {
-    RawGcsService raw = GcsServiceFactory.createRawGcsService();
+    RawGcsService raw = GcsServiceFactory.createRawGcsService(ImmutableMap.<String, String>of());
     GcsFilename filename = new GcsFilename("GcsOutputChannelTestBucket", "testSettingBufferSize");
     GcsFileOptions fileOptions = GcsFileOptions.getDefaultInstance();
     int chunkSizeBytes = raw.getChunkSizeBytes();
 
     GcsService out = GcsServiceFactory.createGcsService(
-        new GcsServiceOptions.Builder().withDefaultWriteBufferSize(null).build());
+        new GcsServiceOptions.Builder().setDefaultWriteBufferSize(null).build());
     assertEquals(BUFFER_SIZE, out.createOrReplace(filename, fileOptions).getBufferSizeBytes());
 
     out = GcsServiceFactory.createGcsService(
-        new GcsServiceOptions.Builder().withDefaultWriteBufferSize(0).build());
+        new GcsServiceOptions.Builder().setDefaultWriteBufferSize(0).build());
     assertEquals(chunkSizeBytes, out.createOrReplace(filename, fileOptions).getBufferSizeBytes());
 
     out = GcsServiceFactory.createGcsService(
-        new GcsServiceOptions.Builder().withDefaultWriteBufferSize(chunkSizeBytes).build());
+        new GcsServiceOptions.Builder().setDefaultWriteBufferSize(chunkSizeBytes).build());
     assertEquals(chunkSizeBytes, out.createOrReplace(filename, fileOptions).getBufferSizeBytes());
 
     out = GcsServiceFactory.createGcsService(
-        new GcsServiceOptions.Builder().withDefaultWriteBufferSize(chunkSizeBytes + 1).build());
+        new GcsServiceOptions.Builder().setDefaultWriteBufferSize(chunkSizeBytes + 1).build());
     assertEquals(chunkSizeBytes, out.createOrReplace(filename, fileOptions).getBufferSizeBytes());
 
     out = GcsServiceFactory.createGcsService(
-        new GcsServiceOptions.Builder().withDefaultWriteBufferSize(chunkSizeBytes * 2).build());
+        new GcsServiceOptions.Builder().setDefaultWriteBufferSize(chunkSizeBytes * 2).build());
     assertEquals(chunkSizeBytes * 2,
         out.createOrReplace(filename, fileOptions).getBufferSizeBytes());
 
     out = GcsServiceFactory.createGcsService(
-        new GcsServiceOptions.Builder().withDefaultWriteBufferSize(Integer.MAX_VALUE).build());
+        new GcsServiceOptions.Builder().setDefaultWriteBufferSize(Integer.MAX_VALUE).build());
     assertEquals((raw.getMaxWriteSizeByte() / chunkSizeBytes) * chunkSizeBytes,
         out.createOrReplace(filename, fileOptions).getBufferSizeBytes());
   }

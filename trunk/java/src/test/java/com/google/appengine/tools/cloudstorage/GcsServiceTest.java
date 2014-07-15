@@ -29,6 +29,7 @@ import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestC
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 
 import org.junit.After;
@@ -43,7 +44,9 @@ import java.nio.CharBuffer;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.NavigableMap;
 import java.util.Random;
+import java.util.TreeMap;
 
 /**
  * End to end test to test the basics of the GcsService. This class uses the in-process
@@ -57,8 +60,8 @@ public class GcsServiceTest {
       new LocalTaskQueueTestConfig(), new LocalFileServiceTestConfig(),
       new LocalBlobstoreServiceTestConfig(), new LocalDatastoreServiceTestConfig());
   private GcsService gcsService;
-  private GcsFileOptions options;
   private List<GcsFilename> toDelete = new ArrayList<>();
+  private GcsFileOptions options;
 
   @Before
   public void setUp() throws Exception {
@@ -189,6 +192,112 @@ public class GcsServiceTest {
       verifyContent(content, channel, 13);
     }
     gcsService.delete(dest);
+  }
+
+  @Test
+  public void testList() throws IOException {
+    String[] prefixes = {"", "/", "f", "dir1", "dir1/", "dir1/f", "dir1/dir3", "dir1/dir3/"};
+
+    NavigableMap<String, ListItem> items = setupForListTests(true);
+    ListResult result = gcsService.list("testList", null);
+    verifyListResult(items, null, false, result);
+    for (String prefix : prefixes) {
+      ListOptions options = new ListOptions.Builder().setPrefix(prefix).setRecursive(true).build();
+      result = gcsService.list("testList", options);
+      verifyListResult(items, prefix, false, result);
+    }
+
+    items = setupForListTests(true);
+    for (String prefix : prefixes) {
+      ListOptions options = new ListOptions.Builder().setPrefix(prefix).setRecursive(false).build();
+      result = gcsService.list("testList", options);
+      verifyListResult(items, prefix, true, result);
+    }
+  }
+
+  private void verifyListResult(NavigableMap<String, ListItem> items, String prefix,
+      boolean recursive, ListResult result) {
+    prefix = Strings.nullToEmpty(prefix);
+    if (!prefix.isEmpty()) {
+      String endPrefix = prefix.substring(0, prefix.length() - 1)
+          + (char) (prefix.charAt(prefix.length() - 1) + 1);
+      items = items.subMap(prefix, true, endPrefix, false);
+    }
+    if (recursive) {
+      TreeMap<String, ListItem> temp = new TreeMap<>();
+      for (ListItem item : items.values()) {
+        String name = item.getName();
+        int idx = name.indexOf('/', prefix.length());
+        if (idx != -1) {
+          name = name.substring(0, idx + 1);
+          item = new ListItem.Builder().setName(name).setDirectory(true).build();
+        }
+        temp.put(name, item);
+      }
+      items = temp;
+    } else {
+      items = new TreeMap<>(items);
+    }
+    while (result.hasNext()) {
+      ListItem item = result.next();
+      ListItem expected = items.remove(item.getName());
+      assertEquals(expected, item);
+    }
+    assertTrue(items.isEmpty());
+  }
+
+  private NavigableMap<String, ListItem> setupForListTests(boolean recursive) throws IOException {
+    NavigableMap<String, ListItem> items = new TreeMap<>();
+    String[] filenames = { "foo", "bla/file", "file", "file1", "file2", "s", "s1",
+        "dir1/", "dir1/dir2/dir_2_2/", "dir1/dir3/", "dir1/dir3/file"};
+    for (String filename : filenames) {
+      ListItem item = createObject(filename, recursive);
+      items.put(item.getName(), item);
+    }
+    for (int i = 1; i <= 100; i++) {
+      ListItem item = createObject("dir1/f", i);
+      items.put(item.getName(), item);
+      if (i <= 10) {
+        item = createObject("dir1/f" + i + "/", recursive);
+        items.put(item.getName(), item);
+      }
+    }
+    for (int i = 101; i <= 180; i++) {
+      ListItem item = createObject("dir1/folder1/f", i);
+      items.put(item.getName(), item);
+    }
+    for (int i = 181; i <= 190; i++) {
+      ListItem item = createObject("dir1/folder2/f", i);
+      items.put(item.getName(), item);
+    }
+    for (int i = 191; i <= 200; i++) {
+      ListItem item = createObject("dir1/f" + i + "/", recursive);
+      items.put(item.getName(), item);
+    }
+    return items;
+  }
+
+  private ListItem createObject(String name, boolean recursive) throws IOException {
+    if (name.endsWith("/") && !recursive) {
+      GcsFilename filename = new GcsFilename("testList", name);
+      createFile(filename, 0, false);
+      return new ListItem.Builder().setName(name).setDirectory(true).build();
+    }
+    int size = new Random().nextInt(100);
+    GcsFilename filename = new GcsFilename("testList", name);
+    createFile(filename, size, false);
+    GcsFileMetadata metadata = gcsService.getMetadata(filename);
+    return new ListItem.Builder().setName(name).setLength(size).setEtag(metadata.getEtag())
+        .setLastModified(metadata.getLastModified()).build();
+  }
+
+  private ListItem createObject(String prefix, int idx) throws IOException {
+    String name = prefix + idx;
+    GcsFilename filename = new GcsFilename("testList", name);
+    createFile(filename, idx, false);
+    GcsFileMetadata metadata = gcsService.getMetadata(filename);
+    return new ListItem.Builder().setName(name).setLength(idx).setEtag(metadata.getEtag())
+        .setLastModified(metadata.getLastModified()).build();
   }
 
   @Test

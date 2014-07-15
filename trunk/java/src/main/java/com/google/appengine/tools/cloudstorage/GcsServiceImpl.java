@@ -18,14 +18,14 @@ package com.google.appengine.tools.cloudstorage;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.appengine.api.urlfetch.HTTPHeader;
+import com.google.appengine.tools.cloudstorage.RawGcsService.ListItemBatch;
 import com.google.appengine.tools.cloudstorage.RawGcsService.RawGcsCreationToken;
 import com.google.apphosting.api.ApiProxy.ApiDeadlineExceededException;
 import com.google.apphosting.api.ApiProxy.OverQuotaException;
 import com.google.apphosting.api.ApiProxy.RPCFailedException;
 import com.google.apphosting.api.ApiProxy.UnknownException;
+import com.google.common.base.Strings;
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableSet;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -34,7 +34,7 @@ import java.net.MalformedURLException;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
-import java.util.Map;
+import java.util.Iterator;
 import java.util.concurrent.Callable;
 
 /**
@@ -43,8 +43,8 @@ import java.util.concurrent.Callable;
 final class GcsServiceImpl implements GcsService {
 
   private final RawGcsService raw;
-  private final Integer defaultBufferSize;
-  private final RetryParams retryParams;
+  private final GcsServiceOptions options;
+  private static final int MAX_RESULTS_PER_BATCH = 100;
   static final ExceptionHandler exceptionHandler = new ExceptionHandler.Builder()
       .retryOn(UnknownException.class, RPCFailedException.class, ApiDeadlineExceededException.class,
           IOException.class, SocketTimeoutException.class, OverQuotaException.class)
@@ -53,29 +53,30 @@ final class GcsServiceImpl implements GcsService {
           InterruptedIOException.class)
       .build();
 
-  GcsServiceImpl(RawGcsService raw, RetryParams retryParams, Integer defaultBufferSize) {
-    this.defaultBufferSize = defaultBufferSize;
+  GcsServiceImpl(RawGcsService raw, GcsServiceOptions options) {
     this.raw = checkNotNull(raw, "Null raw");
-    this.retryParams = new RetryParams.Builder(retryParams).requestTimeoutRetryFactor(1.2).build();
+    this.options = options;
   }
 
   @Override
   public String toString() {
-    return "GcsServiceImpl [retryParams=" + retryParams + "]";
+    return "GcsServiceImpl [serviceOptions=" + options + "]";
   }
 
   @Override
   public GcsOutputChannel createOrReplace(
-      final GcsFilename filename, final GcsFileOptions options) throws IOException {
+      final GcsFilename filename, final GcsFileOptions fileOptions) throws IOException {
     try {
       RawGcsCreationToken token = RetryHelper.runWithRetries(new Callable<RawGcsCreationToken>() {
         @Override
         public RawGcsCreationToken call() throws IOException {
-          return raw.beginObjectCreation(
-              filename, options, retryParams.getRequestTimeoutMillisForCurrentAttempt());
+          long timeout = options.getRetryParams().getRequestTimeoutMillisForCurrentAttempt();
+          return raw.beginObjectCreation(filename, fileOptions, timeout);
         }
-      }, retryParams, exceptionHandler);
-      return new GcsOutputChannelImpl(raw, token, retryParams, defaultBufferSize);
+      }, options.getRetryParams(), exceptionHandler);
+      return new GcsOutputChannelImpl(
+          raw, token, options.getRetryParams(), options.getDefaultWriteBufferSize(),
+          options.getHttpHeaders());
     } catch (RetryInterruptedException ex) {
       throw new ClosedByInterruptException();
     } catch (NonRetriableException e) {
@@ -85,11 +86,11 @@ final class GcsServiceImpl implements GcsService {
   }
 
   @Override
-  public void createOrReplace(final GcsFilename filename, final GcsFileOptions options,
+  public void createOrReplace(final GcsFilename filename, final GcsFileOptions fileOptions,
       final ByteBuffer src) throws IOException {
     if (src.remaining() > raw.getMaxWriteSizeByte()) {
       @SuppressWarnings("resource")
-      GcsOutputChannel channel = createOrReplace(filename, options);
+      GcsOutputChannel channel = createOrReplace(filename, fileOptions);
       channel.write(src);
       channel.close();
       return;
@@ -99,10 +100,11 @@ final class GcsServiceImpl implements GcsService {
       RetryHelper.runWithRetries(new Callable<Void>() {
           @Override
           public Void call() throws IOException {
-            raw.putObject(filename, options, src, retryParams.getRequestTimeoutMillis());
+            long timeout = options.getRetryParams().getRequestTimeoutMillisForCurrentAttempt();
+            raw.putObject(filename, fileOptions, src, timeout);
             return null;
           }
-        }, retryParams, exceptionHandler);
+        }, options.getRetryParams(), exceptionHandler);
     } catch (RetryInterruptedException ex) {
       throw new ClosedByInterruptException();
     } catch (NonRetriableException e) {
@@ -113,14 +115,15 @@ final class GcsServiceImpl implements GcsService {
 
   @Override
   public GcsInputChannel openReadChannel(GcsFilename filename, long startPosition) {
-    return new SimpleGcsInputChannelImpl(raw, filename, startPosition, retryParams);
+    return new SimpleGcsInputChannelImpl(raw, filename, startPosition, options.getRetryParams(),
+        options.getHttpHeaders());
   }
 
   @Override
   public GcsInputChannel openPrefetchingReadChannel(
       GcsFilename filename, long startPosition, int blockSize) {
-    return new PrefetchingGcsInputChannelImpl(
-        raw, filename, blockSize, startPosition, retryParams);
+    return new PrefetchingGcsInputChannelImpl(raw, filename, blockSize, startPosition,
+        options.getRetryParams(), options.getHttpHeaders());
   }
 
   @Override
@@ -129,10 +132,10 @@ final class GcsServiceImpl implements GcsService {
       return RetryHelper.runWithRetries(new Callable<GcsFileMetadata>() {
         @Override
         public GcsFileMetadata call() throws IOException {
-          return raw.getObjectMetadata(
-              filename, retryParams.getRequestTimeoutMillisForCurrentAttempt());
+          long timeout = options.getRetryParams().getRequestTimeoutMillisForCurrentAttempt();
+          return raw.getObjectMetadata(filename, timeout);
         }
-      }, retryParams, exceptionHandler);
+      }, options.getRetryParams(), exceptionHandler);
     } catch (RetryInterruptedException ex) {
       throw new ClosedByInterruptException();
     } catch (NonRetriableException e) {
@@ -147,9 +150,10 @@ final class GcsServiceImpl implements GcsService {
       return RetryHelper.runWithRetries(new Callable<Boolean>() {
         @Override
         public Boolean call() throws IOException {
-          return raw.deleteObject(filename, retryParams.getRequestTimeoutMillisForCurrentAttempt());
+          long timeout = options.getRetryParams().getRequestTimeoutMillisForCurrentAttempt();
+          return raw.deleteObject(filename, timeout);
         }
-      }, retryParams, exceptionHandler);
+      }, options.getRetryParams(), exceptionHandler);
     } catch (RetryInterruptedException ex) {
       throw new ClosedByInterruptException();
     } catch (NonRetriableException e) {
@@ -162,14 +166,14 @@ final class GcsServiceImpl implements GcsService {
   public void compose(final Iterable<String> source, final GcsFilename dest)
       throws IOException {
     try {
-      final long timeout = retryParams.getRequestTimeoutMillisForCurrentAttempt();
       RetryHelper.runWithRetries(new Callable<Void>() {
         @Override
         public Void call() throws IOException {
+          long timeout = options.getRetryParams().getRequestTimeoutMillisForCurrentAttempt();
           raw.composeObject(source, dest, timeout);
           return null;
         }
-      }, retryParams, exceptionHandler);
+      }, options.getRetryParams(), exceptionHandler);
     } catch (RetryInterruptedException ex) {
       throw new ClosedByInterruptException();
     } catch (NonRetriableException e) {
@@ -182,14 +186,14 @@ final class GcsServiceImpl implements GcsService {
   public void copy(final GcsFilename source, final GcsFilename dest)
       throws IOException {
     try {
-      final long timeout = retryParams.getRequestTimeoutMillisForCurrentAttempt();
       RetryHelper.runWithRetries(new Callable<Void>() {
         @Override
         public Void call() throws IOException {
+          long timeout = options.getRetryParams().getRequestTimeoutMillisForCurrentAttempt();
           raw.copyObject(source, dest, timeout);
           return null;
         }
-      }, retryParams, exceptionHandler);
+      }, options.getRetryParams(), exceptionHandler);
     } catch (RetryInterruptedException ex) {
       throw new ClosedByInterruptException();
     } catch (NonRetriableException e) {
@@ -199,13 +203,40 @@ final class GcsServiceImpl implements GcsService {
   }
 
   @Override
-  public void setHttpHeaders(Map<String, String> headers) {
-    ImmutableSet.Builder<HTTPHeader> builder = ImmutableSet.builder();
-    if (headers != null) {
-      for (Map.Entry<String, String> header : headers.entrySet()) {
-        builder.add(new HTTPHeader(header.getKey(), header.getValue()));
-      }
+  public ListResult list(final String bucket, ListOptions listOptions) throws IOException {
+    if (listOptions == null) {
+      listOptions = ListOptions.DEFAULT;
     }
-    raw.setHttpHeaders(builder.build());
+    final String prefix = listOptions.getPrefix();
+    final String delimiter = listOptions.isRecursive() ? null : options.getPathDelimiter();
+    Callable<Iterator<ListItem>> batcher = new Callable<Iterator<ListItem>>() {
+      private String nextMarker = "";
+
+      @Override
+      public Iterator<ListItem> call() throws IOException {
+        if (nextMarker == null) {
+          return null;
+        }
+        ListItemBatch batch;
+        try {
+          batch = RetryHelper.runWithRetries(new Callable<ListItemBatch>() {
+            @Override
+            public ListItemBatch call() throws IOException {
+              long timeout = options.getRetryParams().getRequestTimeoutMillisForCurrentAttempt();
+              String marker = Strings.emptyToNull(nextMarker);
+              return raw.list(bucket, prefix, delimiter, marker, MAX_RESULTS_PER_BATCH, timeout);
+            }
+          }, options.getRetryParams(), exceptionHandler);
+        } catch (RetryInterruptedException ex) {
+          throw new ClosedByInterruptException();
+        } catch (NonRetriableException e) {
+          Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
+          throw e;
+        }
+        nextMarker = batch.getNextMarker();
+        return batch.getItems().iterator();
+      }
+    };
+    return new ListResult(batcher);
   }
 }

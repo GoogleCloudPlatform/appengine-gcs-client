@@ -18,7 +18,6 @@ package com.google.appengine.tools.cloudstorage;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Map;
 
 /**
  * Allows creating and accessing files in Google Cloud Storage.
@@ -102,8 +101,13 @@ public interface GcsService {
    */
   void copy(GcsFilename source, GcsFilename dest) throws IOException;
 
+
   /**
-   * Set HTTP headers that will be provided in any GCS request.
+   * Lists content of a bucket.
+   *
+   * @param bucket the name of the bucket.
+   * @param options optional directions (could be null) on what to include in the result.
+   * @throws IOException if list operation failed
    */
-  void setHttpHeaders(Map<String, String> headers);
+  ListResult list(String bucket, ListOptions options) throws IOException;
 }

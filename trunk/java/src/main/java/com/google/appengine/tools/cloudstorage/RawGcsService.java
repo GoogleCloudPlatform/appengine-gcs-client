@@ -16,12 +16,10 @@
 
 package com.google.appengine.tools.cloudstorage;
 
-import com.google.appengine.api.urlfetch.HTTPHeader;
-import com.google.common.collect.ImmutableSet;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.concurrent.Future;
 
 /**
@@ -153,8 +151,31 @@ public interface RawGcsService {
    */
   void copyObject(GcsFilename source, GcsFilename dest, long timeoutMillis) throws IOException;
 
+
   /**
-   * Set of HTTP headers that will be provided in any GCS request.
+   * A batch of list items.
    */
-  void setHttpHeaders(ImmutableSet<HTTPHeader> headers);
+  public static class ListItemBatch implements Serializable {
+
+    private static final long serialVersionUID = 368663923020291108L;
+
+    private final List<ListItem> items;
+    private final String nextMarker;
+
+    public ListItemBatch(List<ListItem> items, String nextMarker) {
+      this.items = items;
+      this.nextMarker = nextMarker;
+    }
+
+    public List<ListItem> getItems() {
+      return items;
+    }
+
+    public String getNextMarker() {
+      return nextMarker;
+    }
+  }
+
+  ListItemBatch list(String bucket, String prefix, String delimiter, String marker,
+      int maxResults, long timeoutMillis) throws IOException;
 }
