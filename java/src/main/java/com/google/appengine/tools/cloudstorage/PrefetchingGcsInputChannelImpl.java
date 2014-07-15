@@ -28,6 +28,7 @@ import java.io.ObjectInputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -69,16 +70,18 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
   private transient ByteBuffer next;
 
   private final RetryParams retryParams;
+  private final Map<String, String> headers;
 
 
   PrefetchingGcsInputChannelImpl(RawGcsService raw, GcsFilename filename, int blockSizeBytes,
-      long startPosition, RetryParams retryParams) {
+      long startPosition, RetryParams retryParams, Map<String, String> headers) {
     this.raw = checkNotNull(raw, "Null raw");
     this.filename = checkNotNull(filename, "Null filename");
     checkArgument(
         blockSizeBytes >= 1024, "Block size must be at least 1kb. Was: " + blockSizeBytes);
     this.blockSizeBytes = blockSizeBytes;
     this.retryParams = retryParams;
+    this.headers = headers;
     checkArgument(startPosition >= 0, "Start position cannot be negitive");
     this.readPosition = startPosition;
     this.fetchPosition = startPosition;
@@ -89,7 +92,7 @@ final class PrefetchingGcsInputChannelImpl implements GcsInputChannel {
       throws ClassNotFoundException, IOException {
     aInputStream.defaultReadObject();
     lock = new Object();
-    raw = GcsServiceFactory.createRawGcsService();
+    raw = GcsServiceFactory.createRawGcsService(headers);
     fetchPosition = readPosition;
     current = EMPTY_BUFFER;
     eofHit = length != -1 && readPosition >= length;

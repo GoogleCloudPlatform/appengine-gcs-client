@@ -16,17 +16,24 @@
 
 package com.google.appengine.tools.cloudstorage.dev;
 
+import static com.google.appengine.api.datastore.Entity.KEY_RESERVED_PROPERTY;
+import static com.google.appengine.api.datastore.Query.FilterOperator.GREATER_THAN_OR_EQUAL;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.api.NamespaceManager;
 import com.google.appengine.api.ThreadManager;
 import com.google.appengine.api.datastore.Blob;
+import com.google.appengine.api.datastore.Cursor;
 import com.google.appengine.api.datastore.DatastoreService;
 import com.google.appengine.api.datastore.DatastoreServiceFactory;
 import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.EntityNotFoundException;
+import com.google.appengine.api.datastore.FetchOptions;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.KeyFactory;
+import com.google.appengine.api.datastore.Query;
+import com.google.appengine.api.datastore.Query.FilterPredicate;
+import com.google.appengine.api.datastore.QueryResultIterator;
 import com.google.appengine.api.datastore.Transaction;
 import com.google.appengine.api.files.AppEngineFile;
 import com.google.appengine.api.files.FileReadChannel;
@@ -36,16 +43,16 @@ import com.google.appengine.api.files.FileStat;
 import com.google.appengine.api.files.FileWriteChannel;
 import com.google.appengine.api.files.GSFileOptions;
 import com.google.appengine.api.files.GSFileOptions.GSFileOptionsBuilder;
-import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.tools.cloudstorage.BadRangeException;
 import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
+import com.google.appengine.tools.cloudstorage.ListItem;
 import com.google.appengine.tools.cloudstorage.RawGcsService;
 import com.google.apphosting.api.ApiProxy;
 import com.google.apphosting.api.ApiProxy.Environment;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableSet;
+import com.google.common.base.Strings;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.Futures;
 
@@ -56,9 +63,13 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -79,6 +90,7 @@ final class LocalRawGcsService implements RawGcsService {
   private static final String ENTITY_KIND_PREFIX = "_ah_FakeCloudStorage__";
   private static final String OPTIONS_PROP = "options";
   private static final String CREATION_TIME_PROP = "time";
+  private static final String FILE_LENGTH_PROP = "length";
 
   static final class Token implements RawGcsCreationToken {
     private static final long serialVersionUID = 954846981243798905L;
@@ -204,11 +216,24 @@ final class LocalRawGcsService implements RawGcsService {
   }
 
   private Key makeKey(GcsFilename filename) {
+    return makeKey(filename.getBucketName(), filename.getObjectName());
+  }
+
+  private Key makeKey(String bucket, String object) {
     String origNamespace = NamespaceManager.get();
     try {
       NamespaceManager.set("");
-      return KeyFactory.createKey(
-          ENTITY_KIND_PREFIX + filename.getBucketName(), filename.getObjectName());
+      return KeyFactory.createKey(ENTITY_KIND_PREFIX + bucket, object);
+    } finally {
+      NamespaceManager.set(origNamespace);
+    }
+  }
+
+  private Query makeQuery(String bucket) {
+    String origNamespace = NamespaceManager.get();
+    try {
+      NamespaceManager.set("");
+      return new Query(ENTITY_KIND_PREFIX + bucket);
     } finally {
       NamespaceManager.set(origNamespace);
     }
@@ -219,6 +244,7 @@ final class LocalRawGcsService implements RawGcsService {
       throws IOException {
     Token t = append(token, chunk);
     FILES.openWriteChannel(t.file, true).closeFinally();
+    FileStat stats = FILES.stat(t.file);
     Entity e = new Entity(makeKey(t.filename));
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
     try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
@@ -226,6 +252,7 @@ final class LocalRawGcsService implements RawGcsService {
     }
     e.setUnindexedProperty(OPTIONS_PROP, new Blob(bout.toByteArray()));
     e.setUnindexedProperty(CREATION_TIME_PROP, System.currentTimeMillis());
+    e.setUnindexedProperty(FILE_LENGTH_PROP, stats.getLength());
     DATASTORE.put(null, e);
   }
 
@@ -237,26 +264,36 @@ final class LocalRawGcsService implements RawGcsService {
   @Override
   public GcsFileMetadata getObjectMetadata(GcsFilename filename, long timeoutMillis)
       throws IOException {
-    Entity e;
+    Entity entity;
     try {
-      e = DATASTORE.get(null, makeKey(filename));
+      entity = DATASTORE.get(null, makeKey(filename));
     } catch (EntityNotFoundException ex) {
       return null;
     }
-    AppEngineFile file = nameToAppEngineFile(filename);
+    return createGcsFileMetadata(entity, filename);
+  }
+
+  private GcsFileMetadata createGcsFileMetadata(Entity entity, GcsFilename filename)
+      throws IOException {
     GcsFileOptions options;
     try (ObjectInputStream in = new ObjectInputStream(
-        new ByteArrayInputStream(((Blob) e.getProperty(OPTIONS_PROP)).getBytes()))) {
+        new ByteArrayInputStream(((Blob) entity.getProperty(OPTIONS_PROP)).getBytes()))) {
       options = (GcsFileOptions) in.readObject();
     } catch (ClassNotFoundException e1) {
       throw new RuntimeException(e1);
     }
     Date creationTime = null;
-    if (e.getProperty(CREATION_TIME_PROP) != null) {
-      creationTime = new Date((Long) e.getProperty(CREATION_TIME_PROP));
+    if (entity.getProperty(CREATION_TIME_PROP) != null) {
+      creationTime = new Date((Long) entity.getProperty(CREATION_TIME_PROP));
     }
-    FileStat stat = FILES.stat(file);
-    return new GcsFileMetadata(filename, options, null, stat.getLength(), creationTime);
+    long length;
+    if (entity.getProperty(FILE_LENGTH_PROP) != null) {
+      length = (Long) entity.getProperty(FILE_LENGTH_PROP);
+    } else {
+      AppEngineFile file = nameToAppEngineFile(filename);
+      length = FILES.stat(file).getLength();
+    }
+    return new GcsFileMetadata(filename, options, null, length, creationTime);
   }
 
   @Override
@@ -367,11 +404,62 @@ final class LocalRawGcsService implements RawGcsService {
   }
 
   @Override
-  public int getMaxWriteSizeByte() {
-    return 10_000_000;
+  public ListItemBatch list(String bucket, String prefix, String delimiter,
+      String marker, int maxResults, long timeoutMillis) throws IOException {
+    Query query = makeQuery(bucket);
+    int prefixLength;
+    if (!Strings.isNullOrEmpty(prefix)) {
+      Key keyPrefix = makeKey(bucket, prefix);
+      query.setFilter(new FilterPredicate(KEY_RESERVED_PROPERTY, GREATER_THAN_OR_EQUAL, keyPrefix));
+      prefixLength = prefix.length();
+    } else {
+      prefixLength = 0;
+    }
+    FetchOptions fetchOptions = FetchOptions.Builder.withDefaults();
+    if (marker != null) {
+      fetchOptions.startCursor(Cursor.fromWebSafeString(marker));
+    }
+    List<ListItem> items = new ArrayList<>(maxResults);
+    Set<String> prefixes = new HashSet<>();
+    QueryResultIterator<Entity> dsResults =
+        DATASTORE.prepare(query).asQueryResultIterator(fetchOptions);
+    while (items.size() < maxResults && dsResults.hasNext()) {
+      Entity entity = dsResults.next();
+      String name = entity.getKey().getName();
+      if (prefixLength > 0 && !name.startsWith(prefix)) {
+        break;
+      }
+      if (!Strings.isNullOrEmpty(delimiter)) {
+        int delimiterIdx = name.indexOf(delimiter, prefixLength);
+        if (delimiterIdx > 0) {
+          name = name.substring(0, delimiterIdx + 1);
+          if (prefixes.add(name)) {
+            items.add(new ListItem.Builder().setName(name).setDirectory(true).build());
+          }
+          continue;
+        }
+      }
+      GcsFilename filename = new GcsFilename(bucket, name);
+      GcsFileMetadata metadata = createGcsFileMetadata(entity, filename);
+      ListItem listItem = new ListItem.Builder()
+          .setName(name)
+          .setLength(metadata.getLength())
+          .setLastModified(metadata.getLastModified())
+          .build();
+      items.add(listItem);
+    }
+    Cursor cursor = dsResults.getCursor();
+    String nextMarker = null;
+    if (items.size() == maxResults && cursor != null) {
+      nextMarker = cursor.toWebSafeString();
+    }
+    if (marker != null && marker.equals(nextMarker)) {
+    }
+    return new ListItemBatch(items, nextMarker);
   }
 
   @Override
-  public void setHttpHeaders(ImmutableSet<HTTPHeader> headers) {
+  public int getMaxWriteSizeByte() {
+    return 10_000_000;
   }
 }

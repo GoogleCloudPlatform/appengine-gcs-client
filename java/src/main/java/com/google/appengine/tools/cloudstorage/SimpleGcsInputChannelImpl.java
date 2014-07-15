@@ -27,6 +27,7 @@ import java.io.ObjectInputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
@@ -40,21 +41,23 @@ final class SimpleGcsInputChannelImpl implements GcsInputChannel {
   private boolean closed = false;
   private boolean eofHit = false;
   private final RetryParams retryParams;
+  private final Map<String, String> headers;
 
-  SimpleGcsInputChannelImpl(
-      RawGcsService raw, GcsFilename filename, long startPosition, RetryParams retryParams) {
+  SimpleGcsInputChannelImpl(RawGcsService raw, GcsFilename filename, long startPosition,
+      RetryParams retryParams, Map<String, String> headers) {
     this.raw = checkNotNull(raw, "Null raw");
     this.filename = checkNotNull(filename, "Null filename");
     checkArgument(startPosition >= 0, "Start position cannot be negitive");
     this.position = startPosition;
     this.retryParams = retryParams;
+    this.headers = headers;
   }
 
   private void readObject(ObjectInputStream aInputStream)
       throws ClassNotFoundException, IOException {
     aInputStream.defaultReadObject();
     lock = new Object();
-    raw = GcsServiceFactory.createRawGcsService();
+    raw = GcsServiceFactory.createRawGcsService(headers);
   }
 
   @Override

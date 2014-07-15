@@ -20,12 +20,14 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.tools.cloudstorage.oauth.OauthRawGcsServiceFactory;
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
+import com.google.common.collect.ImmutableSet;
 
 import org.junit.After;
 import org.junit.Before;
@@ -53,7 +55,6 @@ public class SerializationTest {
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
       new LocalTaskQueueTestConfig(), new LocalFileServiceTestConfig(),
       new LocalBlobstoreServiceTestConfig(), new LocalDatastoreServiceTestConfig());
-
 
   private enum TestFile {
     SMALL(new GcsFilename("unit-tests", "smallFile"), 100),
@@ -127,9 +128,9 @@ public class SerializationTest {
   @SuppressWarnings("resource")
   @Test
   public void testOauthSerializes() throws IOException, ClassNotFoundException {
-    RawGcsService rawGcsService = OauthRawGcsServiceFactory.createOauthRawGcsService();
-    GcsService gcsService =
-        new GcsServiceImpl(rawGcsService, RetryParams.getDefaultInstance(), null);
+    RawGcsService rawGcsService =
+        OauthRawGcsServiceFactory.createOauthRawGcsService(ImmutableSet.<HTTPHeader>of());
+    GcsService gcsService = new GcsServiceImpl(rawGcsService, GcsServiceOptions.DEFAULT);
     GcsInputChannel readChannel = gcsService.openReadChannel(TestFile.SMALL.filename, 0);
     GcsInputChannel reconstruct = reconstruct(readChannel);
     readChannel.close();

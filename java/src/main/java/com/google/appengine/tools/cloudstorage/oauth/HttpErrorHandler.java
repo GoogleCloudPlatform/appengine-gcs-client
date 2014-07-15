@@ -47,7 +47,7 @@ class HttpErrorHandler {
     }
   }
 
-  private static RuntimeException createException(String msg, String description) {
+  static RuntimeException createException(String msg, String description) {
     if (Strings.isNullOrEmpty(description)) {
       return new RuntimeException(msg);
     } else {

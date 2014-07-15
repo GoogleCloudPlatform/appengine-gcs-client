@@ -19,6 +19,7 @@ package com.google.appengine.tools.cloudstorage;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Parameters for configuring exponential backoff. See {@link RetryHelper}. The initial request is
@@ -326,8 +327,37 @@ public final class RetryParams implements Serializable {
   }
 
   @Override
+  public int hashCode() {
+    return Objects.hash(requestTimeoutMillis, requestTimeoutRetryFactor, maxRequestTimeout,
+        retryMinAttempts, retryMaxAttempts, initialRetryDelayMillis, maxRetryDelayMillis,
+        retryDelayBackoffFactor, totalRetryPeriodMillis);
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (obj == this) {
+      return true;
+    }
+    if (!(obj instanceof RetryParams)) {
+      return false;
+    }
+    RetryParams other = (RetryParams) obj;
+    return requestTimeoutMillis == other.requestTimeoutMillis
+        && requestTimeoutRetryFactor == other.requestTimeoutRetryFactor
+        && maxRequestTimeout == other.maxRequestTimeout
+        && retryMinAttempts == other.retryMinAttempts
+        && retryMaxAttempts == other.retryMaxAttempts
+        && initialRetryDelayMillis == other.initialRetryDelayMillis
+        && maxRetryDelayMillis == other.maxRetryDelayMillis
+        && retryDelayBackoffFactor == other.retryDelayBackoffFactor
+        && totalRetryPeriodMillis == other.totalRetryPeriodMillis;
+  }
+
+  @Override
   public String toString() {
     return getClass().getSimpleName() + " [requestTimeoutMillis=" + requestTimeoutMillis
+        + ", requestTimeoutRetryFactor=" + requestTimeoutRetryFactor
+        + ", maxRequestTimeout=" + maxRequestTimeout
         + ", retryMinAttempts=" + retryMinAttempts + ", retryMaxAttempts=" + retryMaxAttempts
         + ", initialRetryDelayMillis=" + initialRetryDelayMillis + ", maxRetryDelayMillis="
         + maxRetryDelayMillis + ", retryDelayBackoffFactor=" + retryDelayBackoffFactor

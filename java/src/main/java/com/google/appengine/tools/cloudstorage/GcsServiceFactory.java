@@ -16,12 +16,16 @@
 
 package com.google.appengine.tools.cloudstorage;
 
+import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.api.utils.SystemProperty;
 import com.google.appengine.api.utils.SystemProperty.Environment.Value;
 import com.google.appengine.tools.cloudstorage.dev.LocalRawGcsServiceFactory;
 import com.google.appengine.tools.cloudstorage.oauth.OauthRawGcsServiceFactory;
 import com.google.apphosting.api.ApiProxy;
 import com.google.apphosting.api.ApiProxy.Delegate;
+import com.google.common.collect.ImmutableSet;
+
+import java.util.Map;
 
 /**
  * Provides implementations of {@link GcsService}.
@@ -31,20 +35,25 @@ public final class GcsServiceFactory {
   private GcsServiceFactory() {}
 
   public static GcsService createGcsService(RetryParams params) {
-    return createGcsService(new GcsServiceOptions.Builder().withRetryParams(params).build());
+    return createGcsService(new GcsServiceOptions.Builder().setRetryParams(params).build());
   }
 
   public static GcsService createGcsService(GcsServiceOptions options) {
-    RawGcsService rawGcsService = createRawGcsService();
-    return new GcsServiceImpl(rawGcsService, options.getRetryParams(),
-        options.getDefaultWriteBufferSize());
+    RawGcsService rawGcsService = createRawGcsService(options.getHttpHeaders());
+    return new GcsServiceImpl(rawGcsService, options);
   }
 
-  static RawGcsService createRawGcsService() {
+  static RawGcsService createRawGcsService(Map<String, String> headers) {
+    ImmutableSet.Builder<HTTPHeader> builder = ImmutableSet.builder();
+    if (headers != null) {
+      for (Map.Entry<String, String> header : headers.entrySet()) {
+        builder.add(new HTTPHeader(header.getKey(), header.getValue()));
+      }
+    }
     RawGcsService rawGcsService;
     Value location = SystemProperty.environment.value();
     if (location == SystemProperty.Environment.Value.Production) {
-      rawGcsService = OauthRawGcsServiceFactory.createOauthRawGcsService();
+      rawGcsService = OauthRawGcsServiceFactory.createOauthRawGcsService(builder.build());
     } else if (location == SystemProperty.Environment.Value.Development) {
       rawGcsService = LocalRawGcsServiceFactory.createLocalRawGcsService();
     } else {
@@ -53,7 +62,7 @@ public final class GcsServiceFactory {
           || delegate.getClass().getName().startsWith("com.google.appengine.tools.development")) {
         rawGcsService = LocalRawGcsServiceFactory.createLocalRawGcsService();
       } else {
-        rawGcsService = OauthRawGcsServiceFactory.createOauthRawGcsService();
+        rawGcsService = OauthRawGcsServiceFactory.createOauthRawGcsService(builder.build());
       }
     }
     return rawGcsService;

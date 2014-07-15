@@ -16,7 +16,13 @@
 
 package com.google.appengine.tools.cloudstorage.oauth;
 
+import static com.google.appengine.api.urlfetch.HTTPMethod.DELETE;
+import static com.google.appengine.api.urlfetch.HTTPMethod.GET;
+import static com.google.appengine.api.urlfetch.HTTPMethod.HEAD;
+import static com.google.appengine.api.urlfetch.HTTPMethod.POST;
+import static com.google.appengine.api.urlfetch.HTTPMethod.PUT;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.api.client.extensions.appengine.http.UrlFetchTransport;
 import com.google.api.client.googleapis.extensions.appengine.auth.oauth2.AppIdentityCredential;
@@ -35,24 +41,31 @@ import com.google.appengine.tools.cloudstorage.BadRangeException;
 import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
+import com.google.appengine.tools.cloudstorage.ListItem;
 import com.google.appengine.tools.cloudstorage.RawGcsService;
 import com.google.appengine.tools.cloudstorage.oauth.URLFetchUtils.HTTPRequestInfo;
+import com.google.appengine.tools.cloudstorage.oauth.XmlHandler.EventType;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -60,6 +73,9 @@ import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import javax.xml.bind.DatatypeConverter;
+import javax.xml.stream.XMLStreamException;
 
 /**
  * A wrapper around the Google Cloud Storage REST API.  The subset of features
@@ -80,6 +96,10 @@ final class OauthRawGcsService implements RawGcsService {
   private static final String LOCATION = "Location";
   private static final String RANGE = "Range";
   private static final String UPLOAD_ID = "upload_id";
+  private static final String PREFIX = "prefix";
+  private static final String MARKER = "marker";
+  private static final String MAX_KEYS = "max-keys";
+  private static final String DELIMITER = "delimiter";
   private static final String X_GOOG_META = "x-goog-meta-";
   private static final String X_GOOG_CONTENT_LENGTH =  "x-goog-stored-content-length";
   private static final String X_GOOG_COPY_SOURCE = "x-goog-copy-source";
@@ -87,7 +107,9 @@ final class OauthRawGcsService implements RawGcsService {
   private static final HTTPHeader RESUMABLE_HEADER = new HTTPHeader("x-goog-resumable", "start");
   private static final HTTPHeader USER_AGENT =
       new HTTPHeader("User-Agent", "App Engine GCS Client");
-
+  private static final HTTPHeader ZERO_CONTENT_LENGTH = new HTTPHeader(CONTENT_LENGTH, "0");
+  private static final Map<String, String> COMPOSE_QUERY_STRINGS =
+      Collections.singletonMap("compose", null);
   private static final Logger log = Logger.getLogger(OauthRawGcsService.class.getName());
 
   public static final List<String> OAUTH_SCOPES =
@@ -131,10 +153,11 @@ final class OauthRawGcsService implements RawGcsService {
 
   private final OAuthURLFetchService urlfetch;
   private final Storage storage;
-  private volatile ImmutableSet<HTTPHeader> headers = ImmutableSet.of();
+  private final ImmutableSet<HTTPHeader> headers;
 
-  OauthRawGcsService(OAuthURLFetchService urlfetch) {
+  OauthRawGcsService(OAuthURLFetchService urlfetch, ImmutableSet<HTTPHeader> headers) {
     this.urlfetch = checkNotNull(urlfetch, "Null urlfetch");
+    this.headers = checkNotNull(headers, "Null headers");
     AppIdentityCredential cred = new AppIdentityCredential(OAUTH_SCOPES);
     storage = new Storage.Builder(new UrlFetchTransport(), new JacksonFactory(), cred)
         .setApplicationName(SystemProperty.applicationId.get()).build();
@@ -153,19 +176,32 @@ final class OauthRawGcsService implements RawGcsService {
   }
 
   @VisibleForTesting
-  static URL makeUrl(GcsFilename filename, String queryString) {
+  static URL makeUrl(GcsFilename filename, Map<String, String> queryStrings) {
     String path = makePath(filename);
     try {
-      return new URI("https", null, STORAGE_API_HOSTNAME, -1, path, queryString, null).toURL();
-    } catch (MalformedURLException | URISyntaxException e) {
+      StringBuilder url =
+          new StringBuilder().append(new URI("https", STORAGE_API_HOSTNAME, path, null));
+      if (queryStrings != null && !queryStrings.isEmpty()) {
+        url.append('?');
+        for (Map.Entry<String, String> entry : queryStrings.entrySet()) {
+          url.append(URLEncoder.encode(entry.getKey(), UTF_8.name()));
+          if (entry.getValue() != null) {
+            url.append('=').append(URLEncoder.encode(entry.getValue(), UTF_8.name()));
+          }
+          url.append('&');
+        }
+        url.setLength(url.length() - 1);
+      }
+      return new URL(url.toString());
+    } catch (MalformedURLException | URISyntaxException | UnsupportedEncodingException e) {
       throw new RuntimeException(
-          "Could not create a URL for " + filename + " with query " + queryString, e);
+          "Could not create a URL for " + filename + " with query " + queryStrings, e);
     }
   }
 
-  private static HTTPRequest makeRequest(GcsFilename filename, String queryString,
+  private static HTTPRequest makeRequest(GcsFilename filename, Map<String, String> queryStrings,
       HTTPMethod method, long timeoutMillis, Set<HTTPHeader> headers) {
-    HTTPRequest request = new HTTPRequest(makeUrl(filename, queryString), method,
+    HTTPRequest request = new HTTPRequest(makeUrl(filename, queryStrings), method,
         FetchOptions.Builder.disallowTruncate()
             .doNotFollowRedirects()
             .validateCertificate()
@@ -185,7 +221,7 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public RawGcsCreationToken beginObjectCreation(
       GcsFilename filename, GcsFileOptions options, long timeoutMillis) throws IOException {
-    HTTPRequest req = makeRequest(filename, null, HTTPMethod.POST, timeoutMillis, headers);
+    HTTPRequest req = makeRequest(filename, null, POST, timeoutMillis, headers);
     req.setHeader(RESUMABLE_HEADER);
     addOptionsHeaders(req, options);
     HTTPResponse resp;
@@ -253,7 +289,7 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public void putObject(GcsFilename filename, GcsFileOptions options, ByteBuffer content,
       long timeoutMillis) throws IOException {
-    HTTPRequest req = makeRequest(filename, null, HTTPMethod.PUT, timeoutMillis, headers);
+    HTTPRequest req = makeRequest(filename, null, PUT, timeoutMillis, headers);
     req.setHeader(new HTTPHeader(CONTENT_LENGTH, String.valueOf(content.remaining())));
     req.setPayload(peekBytes(content));
     addOptionsHeaders(req, options);
@@ -286,9 +322,8 @@ final class OauthRawGcsService implements RawGcsService {
           + "; isFinalChunk: " + isFinalChunk + ")");
     }
     long limit = offset + length;
-    String queryString = new StringBuilder(UPLOAD_ID).append('=').append(token.uploadId).toString();
-    final HTTPRequest req =
-        makeRequest(token.filename, queryString, HTTPMethod.PUT, timeoutMillis, headers);
+    Map<String, String> queryStrings = Collections.singletonMap(UPLOAD_ID, token.uploadId);
+    final HTTPRequest req = makeRequest(token.filename, queryStrings, PUT, timeoutMillis, headers);
     req.setHeader(
         new HTTPHeader(CONTENT_RANGE,
             "bytes " + (length == 0 ? "*" : offset + "-" + (limit - 1))
@@ -384,7 +419,7 @@ final class OauthRawGcsService implements RawGcsService {
   /** True if deleted, false if not found. */
   @Override
   public boolean deleteObject(GcsFilename filename, long timeoutMillis) throws IOException {
-    HTTPRequest req = makeRequest(filename, null, HTTPMethod.DELETE, timeoutMillis, headers);
+    HTTPRequest req = makeRequest(filename, null, DELETE, timeoutMillis, headers);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
@@ -425,7 +460,7 @@ final class OauthRawGcsService implements RawGcsService {
     Preconditions.checkArgument(n > 0, "%s: dst full: %s", this, dst);
     final int want = Math.min(READ_LIMIT_BYTES, n);
 
-    final HTTPRequest req = makeRequest(filename, null, HTTPMethod.GET, timeoutMillis, headers);
+    final HTTPRequest req = makeRequest(filename, null, GET, timeoutMillis, headers);
     req.setHeader(
         new HTTPHeader(RANGE, "bytes=" + startOffsetBytes + "-" + (startOffsetBytes + want - 1)));
     final HTTPRequestInfo info = new HTTPRequestInfo(req);
@@ -473,7 +508,7 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public GcsFileMetadata getObjectMetadata(GcsFilename filename, long timeoutMillis)
       throws IOException {
-    HTTPRequest req = makeRequest(filename, null, HTTPMethod.HEAD, timeoutMillis, headers);
+    HTTPRequest req = makeRequest(filename, null, HEAD, timeoutMillis, headers);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
@@ -541,7 +576,8 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public void composeObject(Iterable<String> source, GcsFilename dest, long timeoutMillis)
       throws IOException {
-    HTTPRequest req = makeRequest(dest, "compose", HTTPMethod.PUT, timeoutMillis, headers);
+    HTTPRequest req =
+        makeRequest(dest, COMPOSE_QUERY_STRINGS, PUT, timeoutMillis, headers);
     StringBuilder xmlContent = new StringBuilder(Iterables.size(source) * 50);
     xmlContent.append("<ComposeRequest>");
     Escaper escaper = XmlEscapers.xmlContentEscaper();
@@ -551,7 +587,7 @@ final class OauthRawGcsService implements RawGcsService {
       xmlContent.append("</Name></Component>");
     }
     xmlContent.append("</ComposeRequest>");
-    byte[] payload = xmlContent.toString().getBytes(StandardCharsets.UTF_8);
+    byte[] payload = xmlContent.toString().getBytes(UTF_8);
     req.setHeader(new HTTPHeader(CONTENT_LENGTH, String.valueOf(payload.length)));
     req.setPayload(payload);
     HTTPResponse resp;
@@ -568,9 +604,9 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public void copyObject(GcsFilename source, GcsFilename dest, long timeoutMillis)
       throws IOException {
-    HTTPRequest req = makeRequest(dest, null, HTTPMethod.PUT, timeoutMillis, headers);
+    HTTPRequest req = makeRequest(dest, null, PUT, timeoutMillis, headers);
     req.setHeader(new HTTPHeader(X_GOOG_COPY_SOURCE, makePath(source)));
-    req.setHeader(new HTTPHeader(CONTENT_LENGTH, "0"));
+    req.setHeader(ZERO_CONTENT_LENGTH);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
@@ -582,8 +618,106 @@ final class OauthRawGcsService implements RawGcsService {
     }
   }
 
+  static final List<String> NEXT_MARKER = ImmutableList.of("ListBucketResult", "NextMarker");
+  static final List<String> CONTENTS_KEY = ImmutableList.of("ListBucketResult", "Contents", "Key");
+  static final List<String> CONTENTS_LAST_MODIFIED =
+      ImmutableList.of("ListBucketResult", "Contents", "LastModified");
+  static final List<String> CONTENTS_ETAG =
+      ImmutableList.of("ListBucketResult", "Contents", "ETag");
+  static final List<String> CONTENTS_SIZE =
+      ImmutableList.of("ListBucketResult", "Contents", "Size");
+  static final List<String> COMMON_PREFIXES_PREFIX =
+      ImmutableList.of("ListBucketResult", "CommonPrefixes", "Prefix");
+
+  @SuppressWarnings("unchecked")
+  static final Set<List<String>> PATHS = ImmutableSet.of(NEXT_MARKER, CONTENTS_KEY,
+      CONTENTS_LAST_MODIFIED, CONTENTS_ETAG, CONTENTS_SIZE, COMMON_PREFIXES_PREFIX);
+
   @Override
-  public void setHttpHeaders(ImmutableSet<HTTPHeader> headers) {
-    this.headers = headers;
+  public ListItemBatch list(String bucket, String prefix, String delimiter, String marker,
+      int maxResults,
+      long timeoutMillis) throws IOException {
+    GcsFilename filename = new GcsFilename(bucket, "");
+    Map<String, String> queryStrings = new LinkedHashMap<>();
+    if (!Strings.isNullOrEmpty(prefix)) {
+      queryStrings.put(PREFIX, prefix);
+    }
+    if (!Strings.isNullOrEmpty(delimiter)) {
+      queryStrings.put(DELIMITER, delimiter);
+    }
+    if (!Strings.isNullOrEmpty(marker)) {
+      queryStrings.put(MARKER, marker);
+    }
+    if (maxResults >= 0) {
+      queryStrings.put(MAX_KEYS, String.valueOf(maxResults));
+    }
+    HTTPRequest req = makeRequest(filename, queryStrings, GET, timeoutMillis, headers);
+    req.setHeader(ZERO_CONTENT_LENGTH);
+    HTTPResponse resp;
+    try {
+      resp = urlfetch.fetch(req);
+    } catch (IOException e) {
+      throw createIOException(new HTTPRequestInfo(req), e);
+    }
+    if (resp.getResponseCode() != 200) {
+      throw HttpErrorHandler.error(new HTTPRequestInfo(req), resp);
+    }
+    String nextMarker = null;
+    List<ListItem> items = new ArrayList<>();
+    try {
+      XmlHandler xmlHandler = new XmlHandler(resp.getContent(), PATHS);
+      while (xmlHandler.hasNext()) {
+        XmlHandler.XmlEvent event = xmlHandler.next();
+        if (event.getEventType() == EventType.CLOSE_ELEMENT) {
+          switch (event.getName()) {
+            case "NextMarker":
+              nextMarker = event.getValue();
+              break;
+            case "Prefix":
+              String name = event.getValue();
+              items.add(new ListItem.Builder().setName(name).setDirectory(true).build());
+              break;
+            default:
+              break;
+          }
+        } else if (event.getName().equals("Contents")) {
+          items.add(parseContents(xmlHandler));
+        }
+      }
+    } catch (XMLStreamException e) {
+      throw HttpErrorHandler.createException("Failed to parse response", e.getMessage());
+    }
+    return new ListItemBatch(items, nextMarker);
+  }
+
+  private ListItem parseContents(XmlHandler xmlHandler) throws XMLStreamException {
+    ListItem.Builder builder = new ListItem.Builder();
+    boolean isDone = false;
+    while (!isDone && xmlHandler.hasNext()) {
+      XmlHandler.XmlEvent event = xmlHandler.next();
+      if (event.getEventType() == EventType.OPEN_ELEMENT) {
+        continue;
+      }
+      switch (event.getName()) {
+        case "Key":
+          builder.setName(event.getValue());
+          break;
+        case "LastModified":
+          builder.setLastModified(DatatypeConverter.parseDateTime(event.getValue()).getTime());
+          break;
+        case "ETag":
+          builder.setEtag(event.getValue());
+          break;
+        case "Size":
+          builder.setLength(DatatypeConverter.parseLong(event.getValue()));
+          break;
+        case "Contents":
+          isDone = true;
+          break;
+        default:
+          break;
+      }
+    }
+    return builder.build();
   }
 }
