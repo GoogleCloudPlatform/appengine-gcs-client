@@ -85,8 +85,7 @@ public interface GcsService {
   boolean delete(GcsFilename filename) throws IOException;
 
   /**
-   * Compose a file from the given files. All given files must belong
-   * to the same bucket as the composed file.
+   * Concatenates a list of existing files into a new file in the same bucket.
    * @param source the files to compose from
    * @param dest the composed file
    * @throws IOException if for any reason the file can't be composed
@@ -94,7 +93,7 @@ public interface GcsService {
   void compose(Iterable<String> source, GcsFilename dest) throws IOException;
 
   /**
-   * Copy a file.
+   * Copies a file to a specified location.
    * @param source the file to copy from
    * @param dest the file to copy to
    * @throws IOException if for any reason the file can't be copied
@@ -103,8 +102,7 @@ public interface GcsService {
 
 
   /**
-   * Lists content of a bucket.
-   *
+   * Retrieves a list of objects.
    * @param bucket the name of the bucket.
    * @param options optional directions (could be null) on what to include in the result.
    * @throws IOException if list operation failed
