@@ -14,15 +14,15 @@ final class AppIdentityAccessTokenProvider implements AccessTokenProvider {
   private final AppIdentityService appIdentityService;
 
   public AppIdentityAccessTokenProvider() {
-    if (SystemProperty.environment.value() == SystemProperty.Environment.Value.Development) {
-      throw new IllegalStateException(
-          "The access token from AppIdentity won't work in the development environment.");
-    }
     this.appIdentityService = AppIdentityServiceFactory.getAppIdentityService();
   }
 
   @Override
   public GetAccessTokenResult getNewAccessToken(List<String> scopes) {
+    if (SystemProperty.environment.value() == SystemProperty.Environment.Value.Development) {
+      throw new IllegalStateException(
+          "The access token from AppIdentity won't work in the development environment.");
+    }
     return appIdentityService.getAccessToken(scopes);
   }
 }
