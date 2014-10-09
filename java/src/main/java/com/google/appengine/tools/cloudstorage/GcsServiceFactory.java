@@ -20,9 +20,11 @@ import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.api.utils.SystemProperty;
 import com.google.appengine.api.utils.SystemProperty.Environment.Value;
 import com.google.appengine.tools.cloudstorage.dev.LocalRawGcsServiceFactory;
+import com.google.appengine.tools.cloudstorage.oauth.AccessTokenProvider;
 import com.google.appengine.tools.cloudstorage.oauth.OauthRawGcsServiceFactory;
 import com.google.apphosting.api.ApiProxy;
 import com.google.apphosting.api.ApiProxy.Delegate;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 
 import java.util.Map;
@@ -50,9 +52,10 @@ public final class GcsServiceFactory {
         builder.add(new HTTPHeader(header.getKey(), header.getValue()));
       }
     }
+
     RawGcsService rawGcsService;
     Value location = SystemProperty.environment.value();
-    if (location == SystemProperty.Environment.Value.Production) {
+    if (location == SystemProperty.Environment.Value.Production || hasCustomAccessTokenProvider()) {
       rawGcsService = OauthRawGcsServiceFactory.createOauthRawGcsService(builder.build());
     } else if (location == SystemProperty.Environment.Value.Development) {
       rawGcsService = LocalRawGcsServiceFactory.createLocalRawGcsService();
@@ -70,5 +73,9 @@ public final class GcsServiceFactory {
 
   public static GcsService createGcsService() {
     return createGcsService(RetryParams.getDefaultInstance());
+  }
+
+  private static boolean hasCustomAccessTokenProvider() {
+    return !Strings.isNullOrEmpty(System.getProperty(AccessTokenProvider.SYSTEM_PROPERTY_NAME));
   }
 }

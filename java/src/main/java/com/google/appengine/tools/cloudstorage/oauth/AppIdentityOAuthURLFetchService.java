@@ -16,9 +16,8 @@ package com.google.appengine.tools.cloudstorage.oauth;
 
 import com.google.appengine.api.appidentity.AppIdentityService;
 import com.google.appengine.api.appidentity.AppIdentityService.GetAccessTokenResult;
-import com.google.appengine.api.appidentity.AppIdentityServiceFactory;
 import com.google.appengine.api.urlfetch.URLFetchService;
-import com.google.appengine.api.utils.SystemProperty;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 
 import java.util.List;
@@ -28,6 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Logger;
 
 /**
  * {@link OAuthURLFetchService} based on {@link AppIdentityService}. This will work in production
@@ -36,6 +36,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * Storage.
  */
 final class AppIdentityOAuthURLFetchService extends AbstractOAuthURLFetchService {
+  private static final Logger logger =
+      Logger.getLogger(AppIdentityOAuthURLFetchService.class.getCanonicalName());
 
   /**
    * A range of time is provided for the refresh so that multiple instance don't all attempt to
@@ -46,8 +48,7 @@ final class AppIdentityOAuthURLFetchService extends AbstractOAuthURLFetchService
 
   private final Random rand = new Random();
   private final Lock lock = new ReentrantLock();
-  private final AppIdentityService appIdentityService =
-      AppIdentityServiceFactory.getAppIdentityService();
+  private final AccessTokenProvider accessTokenProvider;
   private final List<String> oauthScopes;
   private final AtomicReference<GetAccessTokenResult> accessToken = new AtomicReference<>();
   private final AtomicInteger cacheExpirationHeadroom =
@@ -61,6 +62,7 @@ final class AppIdentityOAuthURLFetchService extends AbstractOAuthURLFetchService
   AppIdentityOAuthURLFetchService(URLFetchService urlFetch, List<String> oauthScopes) {
     super(urlFetch);
     this.oauthScopes = ImmutableList.copyOf(oauthScopes);
+    this.accessTokenProvider = createAccessTokenProvider();
   }
 
   /**
@@ -73,7 +75,6 @@ final class AppIdentityOAuthURLFetchService extends AbstractOAuthURLFetchService
    */
   @Override
   protected String getToken() {
-    verifyProdOnly();
     GetAccessTokenResult token = accessToken.get();
     if (token == null || isExpired(token)
         || (isAboutToExpire(token) && refreshInProgress.compareAndSet(false, true))) {
@@ -81,7 +82,7 @@ final class AppIdentityOAuthURLFetchService extends AbstractOAuthURLFetchService
       try {
         token = accessToken.get();
         if (token == null || isAboutToExpire(token)) {
-          token = appIdentityService.getAccessToken(oauthScopes);
+          token = accessTokenProvider.getNewAccessToken(oauthScopes);
           accessToken.set(token);
           cacheExpirationHeadroom.set(getNextCacheExpirationHeadroom());
         }
@@ -93,11 +94,26 @@ final class AppIdentityOAuthURLFetchService extends AbstractOAuthURLFetchService
     return token.getAccessToken();
   }
 
-  private void verifyProdOnly() {
-    if (SystemProperty.environment.value() == SystemProperty.Environment.Value.Development) {
-      throw new IllegalStateException(
-          "The access token from the development environment won't work in production");
+  private AccessTokenProvider createAccessTokenProvider() {
+    String providerClassName =
+        Strings.emptyToNull(System.getProperty(AccessTokenProvider.SYSTEM_PROPERTY_NAME));
+
+    if (providerClassName != null) {
+      try {
+        @SuppressWarnings("unchecked")
+        Class<AccessTokenProvider> providerClass = (Class<AccessTokenProvider>)
+            Class.forName(providerClassName);
+
+        return providerClass.newInstance();
+      } catch (ClassCastException | ClassNotFoundException | InstantiationException
+          | IllegalAccessException e) {
+        logger.warning(String.format(
+            "Unable to create AccessTokenProvider '%s'; falling back to default. Exception: %s\b",
+            providerClassName, e));
+      }
     }
+
+    return new AppIdentityAccessTokenProvider();
   }
 
   private boolean isExpired(GetAccessTokenResult token) {
