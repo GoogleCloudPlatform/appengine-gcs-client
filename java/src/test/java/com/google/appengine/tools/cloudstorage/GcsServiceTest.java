@@ -24,6 +24,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.appengine.api.NamespaceManager;
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
@@ -180,6 +181,22 @@ public class GcsServiceTest {
       verifyContent(composedContent, channel, 13);
     }
     gcsService.delete(composed);
+  }
+
+  @Test
+  public void testWriteReadWithNamespaceChange() throws IOException {
+    NamespaceManager.set("ns1");
+    GcsFilename source = new GcsFilename("testCompose", "file1");
+    byte[] content = createFile(source, 280, false);
+    GcsFilename dest = new GcsFilename("testCopy", "file2");
+    NamespaceManager.set("ns2");
+    gcsService.copy(source, dest);
+    NamespaceManager.set("ns3");
+    try (GcsInputChannel channel = gcsService.openPrefetchingReadChannel(source, 0, 512 * 1024)) {
+      verifyContent(content, channel, 13);
+    }
+    NamespaceManager.set("");
+    gcsService.delete(dest);
   }
 
   @Test

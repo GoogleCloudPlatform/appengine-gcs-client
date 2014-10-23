@@ -358,8 +358,12 @@ final class LocalRawGcsService implements RawGcsService {
   @Override
   public void composeObject(Iterable<String> source, GcsFilename dest, long timeoutMillis)
       throws IOException {
-    if (Iterables.size(source) > 32) {
+    int size = Iterables.size(source);
+    if (size > 32) {
       throw new IOException("Compose attempted with too many components. Limit is 32");
+    }
+    if (size < 2) {
+      throw new IOException("You must provide at least two source components.");
     }
     ByteBuffer chunk = ByteBuffer.allocate(1024);
     Token token = beginObjectCreation(dest, GcsFileOptions.getDefaultInstance(), timeoutMillis);
