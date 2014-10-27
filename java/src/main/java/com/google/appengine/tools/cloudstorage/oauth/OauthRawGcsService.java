@@ -105,6 +105,8 @@ final class OauthRawGcsService implements RawGcsService {
   private static final String X_GOOG_COPY_SOURCE = "x-goog-copy-source";
   private static final String STORAGE_API_HOSTNAME = "storage.googleapis.com";
   private static final HTTPHeader RESUMABLE_HEADER = new HTTPHeader("x-goog-resumable", "start");
+  private static final HTTPHeader REPLACE_METADATA_HEADER =
+      new HTTPHeader("x-goog-metadata-directive", "REPLACE");
   private static final HTTPHeader USER_AGENT =
       new HTTPHeader("User-Agent", "App Engine GCS Client");
   private static final HTTPHeader ZERO_CONTENT_LENGTH = new HTTPHeader(CONTENT_LENGTH, "0");
@@ -113,7 +115,7 @@ final class OauthRawGcsService implements RawGcsService {
   private static final Logger log = Logger.getLogger(OauthRawGcsService.class.getName());
 
   public static final List<String> OAUTH_SCOPES =
-      ImmutableList.of("https://www.googleapis.com/auth/devstorage.read_write");
+      ImmutableList.of("https://www.googleapis.com/auth/devstorage.full_control");
 
   private static final int READ_LIMIT_BYTES = 31 * 1024 * 1024;
   public static final int WRITE_LIMIT_BYTES = 10_000_000;
@@ -152,6 +154,7 @@ final class OauthRawGcsService implements RawGcsService {
   }
 
   private final OAuthURLFetchService urlfetch;
+  @SuppressWarnings("unused")
   private final Storage storage;
   private final ImmutableSet<HTTPHeader> headers;
 
@@ -602,10 +605,14 @@ final class OauthRawGcsService implements RawGcsService {
   }
 
   @Override
-  public void copyObject(GcsFilename source, GcsFilename dest, long timeoutMillis)
-      throws IOException {
+  public void copyObject(GcsFilename source, GcsFilename dest, GcsFileOptions fileOptions,
+      long timeoutMillis) throws IOException {
     HTTPRequest req = makeRequest(dest, null, PUT, timeoutMillis, headers);
     req.setHeader(new HTTPHeader(X_GOOG_COPY_SOURCE, makePath(source)));
+    if (fileOptions != null) {
+      req.setHeader(REPLACE_METADATA_HEADER);
+      addOptionsHeaders(req, fileOptions);
+    }
     req.setHeader(ZERO_CONTENT_LENGTH);
     HTTPResponse resp;
     try {

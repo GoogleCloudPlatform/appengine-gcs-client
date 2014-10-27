@@ -387,14 +387,17 @@ final class LocalRawGcsService implements RawGcsService {
   }
 
   @Override
-  public void copyObject(GcsFilename source, GcsFilename dest, long timeoutMillis)
-      throws IOException {
+  public void copyObject(GcsFilename source, GcsFilename dest, GcsFileOptions fileOptions,
+      long timeoutMillis) throws IOException {
     GcsFileMetadata meta = getObjectMetadata(source, timeoutMillis);
     if (meta == null) {
       throw new FileNotFoundException(this + ": No such file: " + source);
     }
+    if (fileOptions == null) {
+      fileOptions = GcsFileOptions.getDefaultInstance();
+    }
     ByteBuffer chunk = ByteBuffer.allocate(1024);
-    Token token = beginObjectCreation(dest, GcsFileOptions.getDefaultInstance(), timeoutMillis);
+    Token token = beginObjectCreation(dest, fileOptions, timeoutMillis);
     AppEngineFile file = nameToAppEngineFile(source);
     try (FileReadChannel readChannel = FILES.openReadChannel(file, false)) {
       readChannel.position(0);

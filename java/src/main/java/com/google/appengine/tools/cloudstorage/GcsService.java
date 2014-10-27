@@ -102,6 +102,16 @@ public interface GcsService {
 
 
   /**
+   * Updates a file's metadata with the given options.
+   *
+   * @param source the file to update
+   * @param options the updated metadata
+   * @throws IOException if for any reason the operation failed
+   */
+  void update(GcsFilename source, GcsFileOptions options) throws IOException;
+
+
+  /**
    * Retrieves a list of objects.
    * @param bucket the name of the bucket.
    * @param options optional directions (could be null) on what to include in the result.

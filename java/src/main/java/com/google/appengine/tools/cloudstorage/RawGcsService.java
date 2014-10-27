@@ -149,8 +149,8 @@ public interface RawGcsService {
   /**
    * Copy source file to dest.
    */
-  void copyObject(GcsFilename source, GcsFilename dest, long timeoutMillis) throws IOException;
-
+  void copyObject(GcsFilename source, GcsFilename dest, GcsFileOptions fileOptions,
+      long timeoutMillis) throws IOException;
 
   /**
    * A batch of list items.

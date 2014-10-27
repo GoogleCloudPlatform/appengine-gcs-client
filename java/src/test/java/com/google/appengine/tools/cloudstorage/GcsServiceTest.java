@@ -61,7 +61,7 @@ public class GcsServiceTest {
       new LocalTaskQueueTestConfig(), new LocalFileServiceTestConfig(),
       new LocalBlobstoreServiceTestConfig(), new LocalDatastoreServiceTestConfig());
   private GcsService gcsService;
-  private List<GcsFilename> toDelete = new ArrayList<>();
+  private final List<GcsFilename> toDelete = new ArrayList<>();
   private GcsFileOptions options;
 
   @Before
@@ -209,6 +209,21 @@ public class GcsServiceTest {
       verifyContent(content, channel, 13);
     }
     gcsService.delete(dest);
+  }
+
+  @Test
+  public void testUpdate() throws IOException {
+    GcsFilename file = new GcsFilename("testUpdate", "file1");
+    byte[] content = createFile(file, 280, false);
+    GcsFileOptions options = gcsService.getMetadata(file).getOptions();
+    assertNull(options.getMimeType());
+    options = new GcsFileOptions.Builder().mimeType("bla").build();
+    gcsService.update(file, options);
+    assertEquals("bla", options.getMimeType());
+    try (GcsInputChannel channel = gcsService.openPrefetchingReadChannel(file, 0, 512 * 1024)) {
+      verifyContent(content, channel, 13);
+    }
+    gcsService.delete(file);
   }
 
   @Test

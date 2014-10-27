@@ -85,5 +85,4 @@ public final class GcsFileMetadata {
   public final int hashCode() {
     return Objects.hash(filename, options, etag, length);
   }
-
 }

@@ -190,7 +190,7 @@ final class GcsServiceImpl implements GcsService {
         @Override
         public Void call() throws IOException {
           long timeout = options.getRetryParams().getRequestTimeoutMillisForCurrentAttempt();
-          raw.copyObject(source, dest, timeout);
+          raw.copyObject(source, dest, null, timeout);
           return null;
         }
       }, options.getRetryParams(), exceptionHandler);
@@ -238,5 +238,25 @@ final class GcsServiceImpl implements GcsService {
       }
     };
     return new ListResult(batcher);
+  }
+
+  @Override
+  public void update(final GcsFilename source, final GcsFileOptions fileOptions)
+      throws IOException {
+    try {
+      RetryHelper.runWithRetries(new Callable<Void>() {
+        @Override
+        public Void call() throws IOException {
+          long timeout = options.getRetryParams().getRequestTimeoutMillisForCurrentAttempt();
+          raw.copyObject(source, source, fileOptions, timeout);
+          return null;
+        }
+      }, options.getRetryParams(), exceptionHandler);
+    } catch (RetryInterruptedException ex) {
+      throw new ClosedByInterruptException();
+    } catch (NonRetriableException e) {
+      Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
+      throw e;
+    }
   }
 }
