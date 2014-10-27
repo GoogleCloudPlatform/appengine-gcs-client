@@ -68,7 +68,11 @@ public class GcsServiceTest {
   public void setUp() throws Exception {
     helper.setUp();
     gcsService = GcsServiceFactory.createGcsService();
-    options = GcsFileOptions.getDefaultInstance();
+    options = new GcsFileOptions.Builder()
+        .mimeType("text/json")
+        .acl("public")
+        .addUserMetadata("bla-name", "bla-value")
+        .build();
   }
 
   @After
@@ -208,6 +212,7 @@ public class GcsServiceTest {
     try (GcsInputChannel channel = gcsService.openPrefetchingReadChannel(source, 0, 512 * 1024)) {
       verifyContent(content, channel, 13);
     }
+    assertEquals(options, gcsService.getMetadata(dest).getOptions());
     gcsService.delete(dest);
   }
 
@@ -216,7 +221,7 @@ public class GcsServiceTest {
     GcsFilename file = new GcsFilename("testUpdate", "file1");
     byte[] content = createFile(file, 280, false);
     GcsFileOptions options = gcsService.getMetadata(file).getOptions();
-    assertNull(options.getMimeType());
+    assertEquals("text/json", options.getMimeType());
     options = new GcsFileOptions.Builder().mimeType("bla").build();
     gcsService.update(file, options);
     assertEquals("bla", options.getMimeType());

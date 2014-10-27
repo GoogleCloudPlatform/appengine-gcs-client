@@ -394,7 +394,7 @@ final class LocalRawGcsService implements RawGcsService {
       throw new FileNotFoundException(this + ": No such file: " + source);
     }
     if (fileOptions == null) {
-      fileOptions = GcsFileOptions.getDefaultInstance();
+      fileOptions = meta.getOptions();
     }
     ByteBuffer chunk = ByteBuffer.allocate(1024);
     Token token = beginObjectCreation(dest, fileOptions, timeoutMillis);
