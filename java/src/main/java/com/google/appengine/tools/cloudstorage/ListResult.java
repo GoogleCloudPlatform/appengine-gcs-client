@@ -32,7 +32,7 @@ public final class ListResult extends AbstractIterator<ListItem> {
   private final Callable<Iterator<ListItem>> batcher;
   private Iterator<ListItem> currentBatch;
 
-  ListResult(Callable<Iterator<ListItem>> batcher) throws IOException {
+  public ListResult(Callable<Iterator<ListItem>> batcher) throws IOException {
     this.batcher = batcher;
     try {
       currentBatch = batcher.call();
