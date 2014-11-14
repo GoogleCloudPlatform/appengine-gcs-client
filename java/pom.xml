@@ -4,7 +4,7 @@
   <groupId>com.google.appengine.tools</groupId>
   <artifactId>appengine-gcs-client</artifactId>
   <name>App Engine Client for Google Cloud Storage</name>
-  <url>http://code.google.com/p/appengine-gcs-client/</url>
+  <url>https://github.com/GoogleCloudPlatform/appengine-gcs-client/</url>
   <organization>
     <name>Google</name>
   </organization>

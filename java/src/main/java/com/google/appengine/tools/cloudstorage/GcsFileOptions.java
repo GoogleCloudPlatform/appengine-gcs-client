@@ -36,7 +36,7 @@ import java.util.Objects;
  * If you require specific settings, explicitly create an instance of {@code GcsFileOptions} with
  * the required settings.
  *
- * @see <a href="http://code.google.com/apis/storage/">Google Storage API</a>
+ * @see <a href="https://cloud.google.com/storage/docs">Google Storage API</a>
  */
 public final class GcsFileOptions implements Serializable {
   private static final long serialVersionUID = -7350111525144535653L;
@@ -159,7 +159,7 @@ public final class GcsFileOptions implements Serializable {
     /**
      * Sets the mime type of the object. If not set, default Google Storage mime type is used when
      * served out of Google Storage.
-     * {@link "http://code.google.com/apis/storage/docs/reference-headers.html#contenttype"}
+     * {@link "https://cloud.google.com/storage/docs/reference-headers?csw=1#contenttype"}
      *
      * @param mimeType of the Google Storage object.
      * @return this builder for chaining.
@@ -171,7 +171,7 @@ public final class GcsFileOptions implements Serializable {
 
     /**
      * Sets the acl of the object. If not set, defaults to none (i.e., bucket default).
-     * {@link "http://code.google.com/apis/storage/docs/accesscontrol.html"}
+     * {@link "https://cloud.google.com/storage/docs/accesscontrol"}
      *
      * @param acl to use for the Google Storage object.
      * @return this builder for chaining.
@@ -183,7 +183,7 @@ public final class GcsFileOptions implements Serializable {
 
     /**
      * Sets the cache control for the object. If not set, default value is used.
-     * {@link "http://code.google.com/apis/storage/docs/reference-headers.html#cachecontrol"}
+     * {@link "https://cloud.google.com/storage/docs/reference-headers?csw=1#cachecontrol"}
      *
      * @param cacheControl to use for the Google Storage object.
      * @return this builder for chaining.
@@ -195,7 +195,7 @@ public final class GcsFileOptions implements Serializable {
 
     /**
      * Sets the content encoding for the object. If not set, default value is used.
-     * {@link "http://code.google.com/apis/storage/docs/reference-headers.html#contentencoding"}
+     * {@link "https://cloud.google.com/storage/docs/reference-headers?csw=1#contentencoding"}
      *
      * @param contentEncoding to use for the Google Storage object.
      * @return this builder for chaining.
@@ -207,7 +207,7 @@ public final class GcsFileOptions implements Serializable {
 
     /**
      * Sets the content disposition for the object. If not set, default value is used.
-     * {@link "http://code.google.com/apis/storage/docs/reference-headers.html#contentdisposition"}
+     * {@link "https://cloud.google.com/storage/docs/reference-headers?csw=1#contentdisposition"}
      *
      * @param contentDisposition to use for the Google Storage object.
      * @return this builder for chaining.
@@ -219,7 +219,7 @@ public final class GcsFileOptions implements Serializable {
 
     /**
      * Adds user specific metadata that will be added to object headers when served through Google
-     * Storage: {@link "http://code.google.com/apis/storage/docs/reference-headers.html#xgoogmeta"}
+     * Storage: {@link "https://cloud.google.com/storage/docs/reference-headers?csw=1#xgoogmeta"}
      * Each entry will be prefixed with x-goog-meta- when serving out. For example, if you add
      * 'foo'->'bar' entry to userMetadata map, it will be served out as a header: 'x-goog-meta-foo:
      * bar'.
