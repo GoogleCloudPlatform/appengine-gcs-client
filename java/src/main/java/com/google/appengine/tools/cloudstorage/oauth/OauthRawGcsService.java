@@ -53,7 +53,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.io.BaseEncoding;
-import com.google.common.logging.FormattingLogger;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -76,6 +75,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
 import javax.xml.bind.DatatypeConverter;
@@ -118,9 +118,7 @@ final class OauthRawGcsService implements RawGcsService {
   private static final Map<String, String> COMPOSE_QUERY_STRINGS =
       Collections.singletonMap("compose", null);
   private static final byte[] EMPTY_PAYLOAD = new byte[0];
-
-  private static final FormattingLogger log = FormattingLogger.getLogger(
-      OauthRawGcsService.class.getName());
+  private static final Logger log = Logger.getLogger(OauthRawGcsService.class.getName());
 
   public static final List<String> OAUTH_SCOPES =
       ImmutableList.of("https://www.googleapis.com/auth/devstorage.full_control");
@@ -239,7 +237,8 @@ final class OauthRawGcsService implements RawGcsService {
         request.setHeader(new HTTPHeader(CONTENT_MD5,
             BaseEncoding.base64().encode(MessageDigest.getInstance("MD5").digest(payload))));
       } catch (NoSuchAlgorithmException e) {
-        log.severe(e, "Unable to get a MessageDigest instance, no Content-MD5 header sent.");
+        log.severe(
+            "Unable to get a MessageDigest instance, no Content-MD5 header sent.\n" + e.toString());
       }
       request.setPayload(payload);
     } else {
