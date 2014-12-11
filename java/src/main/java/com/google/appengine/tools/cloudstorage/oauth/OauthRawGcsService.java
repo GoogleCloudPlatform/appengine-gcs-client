@@ -52,6 +52,8 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.io.BaseEncoding;
+import com.google.common.logging.FormattingLogger;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -62,6 +64,8 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.ByteBuffer;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -72,8 +76,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
+import javax.annotation.Nullable;
 import javax.xml.bind.DatatypeConverter;
 import javax.xml.stream.XMLStreamException;
 
@@ -91,6 +95,7 @@ final class OauthRawGcsService implements RawGcsService {
   private static final String CONTENT_TYPE = "Content-Type";
   private static final String CONTENT_RANGE = "Content-Range";
   private static final String CONTENT_LENGTH = "Content-Length";
+  private static final String CONTENT_MD5 = "Content-MD5";
   private static final String ETAG = "ETag";
   private static final String LAST_MODIFIED = "Last-Modified";
   private static final String LOCATION = "Location";
@@ -112,7 +117,10 @@ final class OauthRawGcsService implements RawGcsService {
   private static final HTTPHeader ZERO_CONTENT_LENGTH = new HTTPHeader(CONTENT_LENGTH, "0");
   private static final Map<String, String> COMPOSE_QUERY_STRINGS =
       Collections.singletonMap("compose", null);
-  private static final Logger log = Logger.getLogger(OauthRawGcsService.class.getName());
+  private static final byte[] EMPTY_PAYLOAD = new byte[0];
+
+  private static final FormattingLogger log = FormattingLogger.getLogger(
+      OauthRawGcsService.class.getName());
 
   public static final List<String> OAUTH_SCOPES =
       ImmutableList.of("https://www.googleapis.com/auth/devstorage.full_control");
@@ -179,7 +187,7 @@ final class OauthRawGcsService implements RawGcsService {
   }
 
   @VisibleForTesting
-  static URL makeUrl(GcsFilename filename, Map<String, String> queryStrings) {
+  static URL makeUrl(GcsFilename filename, @Nullable Map<String, String> queryStrings) {
     String path = makePath(filename);
     try {
       StringBuilder url =
@@ -202,8 +210,20 @@ final class OauthRawGcsService implements RawGcsService {
     }
   }
 
-  private static HTTPRequest makeRequest(GcsFilename filename, Map<String, String> queryStrings,
-      HTTPMethod method, long timeoutMillis, Set<HTTPHeader> headers) {
+  @VisibleForTesting
+  HTTPRequest makeRequest(GcsFilename filename, @Nullable Map<String, String> queryStrings,
+      HTTPMethod method, long timeoutMillis) {
+    return makeRequest(filename, queryStrings, method, timeoutMillis, EMPTY_PAYLOAD);
+  }
+
+  private HTTPRequest makeRequest(GcsFilename filename, @Nullable Map<String, String> queryStrings,
+      HTTPMethod method, long timeoutMillis, ByteBuffer payload) {
+    return makeRequest(filename, queryStrings, method, timeoutMillis, peekBytes(payload));
+  }
+
+  @VisibleForTesting
+  HTTPRequest makeRequest(GcsFilename filename, @Nullable Map<String, String> queryStrings,
+      HTTPMethod method, long timeoutMillis, byte[] payload) {
     HTTPRequest request = new HTTPRequest(makeUrl(filename, queryStrings), method,
         FetchOptions.Builder.disallowTruncate()
             .doNotFollowRedirects()
@@ -213,6 +233,18 @@ final class OauthRawGcsService implements RawGcsService {
       request.addHeader(header);
     }
     request.addHeader(USER_AGENT);
+    if (payload != null && payload.length > 0) {
+      request.setHeader(new HTTPHeader(CONTENT_LENGTH, String.valueOf(payload.length)));
+      try {
+        request.setHeader(new HTTPHeader(CONTENT_MD5,
+            BaseEncoding.base64().encode(MessageDigest.getInstance("MD5").digest(payload))));
+      } catch (NoSuchAlgorithmException e) {
+        log.severe(e, "Unable to get a MessageDigest instance, no Content-MD5 header sent.");
+      }
+      request.setPayload(payload);
+    } else {
+      request.setHeader(ZERO_CONTENT_LENGTH);
+    }
     return request;
   }
 
@@ -224,7 +256,7 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public RawGcsCreationToken beginObjectCreation(
       GcsFilename filename, GcsFileOptions options, long timeoutMillis) throws IOException {
-    HTTPRequest req = makeRequest(filename, null, POST, timeoutMillis, headers);
+    HTTPRequest req = makeRequest(filename, null, POST, timeoutMillis);
     req.setHeader(RESUMABLE_HEADER);
     addOptionsHeaders(req, options);
     HTTPResponse resp;
@@ -292,9 +324,7 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public void putObject(GcsFilename filename, GcsFileOptions options, ByteBuffer content,
       long timeoutMillis) throws IOException {
-    HTTPRequest req = makeRequest(filename, null, PUT, timeoutMillis, headers);
-    req.setHeader(new HTTPHeader(CONTENT_LENGTH, String.valueOf(content.remaining())));
-    req.setPayload(peekBytes(content));
+    HTTPRequest req = makeRequest(filename, null, PUT, timeoutMillis, content);
     addOptionsHeaders(req, options);
     HTTPResponse resp;
     try {
@@ -326,12 +356,12 @@ final class OauthRawGcsService implements RawGcsService {
     }
     long limit = offset + length;
     Map<String, String> queryStrings = Collections.singletonMap(UPLOAD_ID, token.uploadId);
-    final HTTPRequest req = makeRequest(token.filename, queryStrings, PUT, timeoutMillis, headers);
+    final HTTPRequest req =
+        makeRequest(token.filename, queryStrings, PUT, timeoutMillis, chunk);
     req.setHeader(
         new HTTPHeader(CONTENT_RANGE,
             "bytes " + (length == 0 ? "*" : offset + "-" + (limit - 1))
             + (isFinalChunk ? "/" + limit : "/*")));
-    req.setPayload(peekBytes(chunk));
     return req;
   }
 
@@ -422,7 +452,7 @@ final class OauthRawGcsService implements RawGcsService {
   /** True if deleted, false if not found. */
   @Override
   public boolean deleteObject(GcsFilename filename, long timeoutMillis) throws IOException {
-    HTTPRequest req = makeRequest(filename, null, DELETE, timeoutMillis, headers);
+    HTTPRequest req = makeRequest(filename, null, DELETE, timeoutMillis);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
@@ -463,7 +493,7 @@ final class OauthRawGcsService implements RawGcsService {
     Preconditions.checkArgument(n > 0, "%s: dst full: %s", this, dst);
     final int want = Math.min(READ_LIMIT_BYTES, n);
 
-    final HTTPRequest req = makeRequest(filename, null, GET, timeoutMillis, headers);
+    final HTTPRequest req = makeRequest(filename, null, GET, timeoutMillis);
     req.setHeader(
         new HTTPHeader(RANGE, "bytes=" + startOffsetBytes + "-" + (startOffsetBytes + want - 1)));
     final HTTPRequestInfo info = new HTTPRequestInfo(req);
@@ -511,7 +541,7 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public GcsFileMetadata getObjectMetadata(GcsFilename filename, long timeoutMillis)
       throws IOException {
-    HTTPRequest req = makeRequest(filename, null, HEAD, timeoutMillis, headers);
+    HTTPRequest req = makeRequest(filename, null, HEAD, timeoutMillis);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
@@ -579,20 +609,17 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public void composeObject(Iterable<String> source, GcsFilename dest, long timeoutMillis)
       throws IOException {
-    HTTPRequest req =
-        makeRequest(dest, COMPOSE_QUERY_STRINGS, PUT, timeoutMillis, headers);
     StringBuilder xmlContent = new StringBuilder(Iterables.size(source) * 50);
-    xmlContent.append("<ComposeRequest>");
     Escaper escaper = XmlEscapers.xmlContentEscaper();
+    xmlContent.append("<ComposeRequest>");
     for (String srcFileName : source) {
-      xmlContent.append("<Component><Name>");
-      xmlContent.append(escaper.escape(srcFileName));
-      xmlContent.append("</Name></Component>");
+      xmlContent.append("<Component><Name>")
+          .append(escaper.escape(srcFileName))
+          .append("</Name></Component>");
     }
     xmlContent.append("</ComposeRequest>");
-    byte[] payload = xmlContent.toString().getBytes(UTF_8);
-    req.setHeader(new HTTPHeader(CONTENT_LENGTH, String.valueOf(payload.length)));
-    req.setPayload(payload);
+    HTTPRequest req = makeRequest(
+        dest, COMPOSE_QUERY_STRINGS, PUT, timeoutMillis, xmlContent.toString().getBytes(UTF_8));
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
@@ -607,13 +634,12 @@ final class OauthRawGcsService implements RawGcsService {
   @Override
   public void copyObject(GcsFilename source, GcsFilename dest, GcsFileOptions fileOptions,
       long timeoutMillis) throws IOException {
-    HTTPRequest req = makeRequest(dest, null, PUT, timeoutMillis, headers);
+    HTTPRequest req = makeRequest(dest, null, PUT, timeoutMillis);
     req.setHeader(new HTTPHeader(X_GOOG_COPY_SOURCE, makePath(source)));
     if (fileOptions != null) {
       req.setHeader(REPLACE_METADATA_HEADER);
       addOptionsHeaders(req, fileOptions);
     }
-    req.setHeader(ZERO_CONTENT_LENGTH);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
@@ -658,8 +684,7 @@ final class OauthRawGcsService implements RawGcsService {
     if (maxResults >= 0) {
       queryStrings.put(MAX_KEYS, String.valueOf(maxResults));
     }
-    HTTPRequest req = makeRequest(filename, queryStrings, GET, timeoutMillis, headers);
-    req.setHeader(ZERO_CONTENT_LENGTH);
+    HTTPRequest req = makeRequest(filename, queryStrings, GET, timeoutMillis);
     HTTPResponse resp;
     try {
       resp = urlfetch.fetch(req);
