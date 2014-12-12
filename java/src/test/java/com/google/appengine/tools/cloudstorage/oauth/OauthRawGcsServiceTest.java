@@ -32,7 +32,6 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
-import com.google.testing.testsize.SmallTest;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -46,7 +45,6 @@ import java.util.List;
 import java.util.Map;
 
 /** Verify behaviors of {@link OauthRawGcsService}. */
-@SmallTest
 @RunWith(JUnit4.class)
 public class OauthRawGcsServiceTest {
 
