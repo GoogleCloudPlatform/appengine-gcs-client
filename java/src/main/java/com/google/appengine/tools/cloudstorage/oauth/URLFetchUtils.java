@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map.Entry;
 
 /**
@@ -43,7 +44,8 @@ final class URLFetchUtils {
 
   @VisibleForTesting
   static final DateTimeFormatter DATE_FORMAT =
-      DateTimeFormat.forPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'").withZoneUTC();
+      DateTimeFormat.forPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'")
+                    .withZoneUTC().withLocale(Locale.US);
 
   private URLFetchUtils() {}
 

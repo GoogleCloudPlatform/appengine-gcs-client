@@ -29,6 +29,7 @@ import org.junit.runners.JUnit4;
 import java.net.URL;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.NoSuchElementException;
 
 
@@ -52,7 +53,8 @@ public class URLFetchUtilsTest {
     assertNotNull(date);
 
     DateTimeFormatter gcsFormat =
-        DateTimeFormat.forPattern("EEE, dd MMM yyyy HH:mm:ss z").withZoneUTC();
+        DateTimeFormat.forPattern("EEE, dd MMM yyyy HH:mm:ss z").withZoneUTC()
+            .withLocale(Locale.US);
     assertEquals(printed.substring(0, printed.length() - 4),
         gcsFormat.print(date.getTime()).substring(0, printed.length() - 4));
   }
