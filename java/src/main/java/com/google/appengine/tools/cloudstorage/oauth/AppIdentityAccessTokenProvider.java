@@ -19,10 +19,6 @@ final class AppIdentityAccessTokenProvider implements AccessTokenProvider {
 
   @Override
   public GetAccessTokenResult getNewAccessToken(List<String> scopes) {
-    if (SystemProperty.environment.value() == SystemProperty.Environment.Value.Development) {
-      throw new IllegalStateException(
-          "The access token from AppIdentity won't work in the development environment.");
-    }
     return appIdentityService.getAccessToken(scopes);
   }
 }
