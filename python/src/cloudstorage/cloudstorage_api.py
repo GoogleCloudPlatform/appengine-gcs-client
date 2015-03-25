@@ -31,7 +31,6 @@ import logging
 import StringIO
 import urllib
 import os
-import re
 import xml.etree.cElementTree as ET
 from . import api_utils
 from . import common
@@ -276,21 +275,19 @@ def listbucket(path_prefix, marker=None, prefix=None, max_keys=None,
   return _Bucket(api, bucket, options)
 
 
-#pylint: disable=too-many-locals, too-many-branches, too-many-statements
-def compose(list_of_files, destination_file, preserve_order=True,
+# pylint: disable=too-many-locals, too-many-branches, too-many-statements
+def compose(list_of_files, destination_file,
             content_type=None, retry_params=None, _account_id=None):
-  """Runs the GCS Compose on the inputed files.
-    Merges between 2 and 1024 files into one file. If any of the previous files had the merge
-    run on them it counts towards the 1024 limit.
-    Automatically breaks down the files into batches of 32.
-    There is an option to sort naturally.
+  '''
+    Runs the GCS Compose on the inputed files.
+    Merges between 2 and 32 files into one file. If any of the previous files had the merge
+    run on them it counts towards the 32 limit.
   Args:
-    list_of_files: list of dictionaries with the following format:
-      {"file_name" : REQUIRED name of the file to be merged. Do not include the bucket name,
-       "Generation" : OPTIONAL Used to specify what version of a file to use,
-       "IfGenerationMatch" : OPTIONAL Used to fail requests if versions don't match}
+    list_of_files: list of file name strings or dictionaries with the following format:
+      {'file_name': REQUIRED name of the file to be merged. Do not include the bucket name,
+       'Generation': OPTIONAL Used to specify what version of a file to use,
+       'IfGenerationMatch': OPTIONAL Used to fail requests if versions don't match}
     destination_file: Path to the desired output file. Must have the bucket in the path.
-    preserve_order: If false it will naturally sort files.
     content_type: Used to specify the content-header of the output.
                   If None will try to guess based off the first file.
     retry_params: An api_utils.RetryParams for this call to GCS. If None,
@@ -300,115 +297,68 @@ def compose(list_of_files, destination_file, preserve_order=True,
   Raises:
     TypeError: If the dictionary for the file list is malformed
     ValueError: If the number of files is outside the range of 2-1024
-    errors.NotFoundError: If any element in the file list is missing the "file_name" key
-  """
-  def _alphanum_key(input_string):
-    """
-      Internal use only.
-      Splits the file names up to allow natural sorting
-    """
-    return [ int(char) if char.isdigit() else char for char in re.split('([0-9]+)', input_string) ]
-  #pylint: disable=too-many-locals
-  def _make_api_call(bucket, file_list, destination_file, content_type, retry_params, _account_id):
-    """
-        Internal Only
-        Makes the actual calls.
-        Currently stubbed because the dev server cloudstorage_stub.py
-          does not handle compose requests.
-        TODO: When the dev server gets patch please remove the stub
-    Args:
-      bucket: Bucket where the files are kept
-      file_list: list of dicts with the file name (see compose argument "list_of_files" for format).
-      destination_file: Path to the destination file.
-      content_type: Content type for the destination file.
-      retry_params: An api_utils.RetryParams for this call to GCS. If None,
-                    the default one is used.
-      _account_id: Internal-use only.
-    """
-    if len(file_list) == 0:
-      raise ValueError("Unable to merge 0 files")
-    if len(file_list) == 1:
-      _copy2(bucket + file_list[0]["file_name"], destination_file)
-      return
-    '''
-    Needed until cloudstorage_stub.py is updated to accept compose requests
-    TODO: When patched remove the True flow from this if.
-    '''
-    if 'development' in os.environ.get('SERVER_SOFTWARE', '').lower():
+    errors.NotFoundError: If any element in the file list is missing the 'file_name' key
+  '''
+  api = storage_api._get_storage_api(retry_params=retry_params,
+                                   account_id=_account_id)
+  '''
+  Needed until cloudstorage_stub.py is updated to accept compose requests
+  TODO: When patched remove the True flow from this if.
+  '''
+  if 'development' in os.environ.get('SERVER_SOFTWARE', '').lower():
+    def _temp_func(bucket, file_list, destination_file, content_type):
       '''
-      Below is making the call to the Development server
+        Dev server stub, remove when the dev server accepts compose requests
+
       '''
-      with open(destination_file, "w", content_type=content_type) as gcs_merge:
+      with open(destination_file, 'w', content_type=content_type) as gcs_merge:
         for source_file in file_list:
           try:
-            with open(bucket + source_file['file_name'], "r") as gcs_source:
+            with open(bucket + source_file['file_name'], 'r') as gcs_source:
               gcs_merge.write(gcs_source.read())
           except errors.NotFoundError:
-            logging.warn("File not found %s, skipping", source_file['file_name'])
-    else:
-      '''
-      Below is making the call to the Production server
-      '''
-      xml = ""
-      for item in file_list:
-        generation = item.get("Generation", "")
-        generation_match = item.get("IfGenerationMatch", "")
-        if generation != "":
-          generation = "<Generation>%s</Generation>" % generation
-        if generation_match != "":
-          generation_match = "<IfGenerationMatch>%s</IfGenerationMatch>" % generation_match
-        xml += "<Component><Name>%s</Name>%s%s</Component>" % \
-                  (item["file_name"], generation, generation_match)
-      xml = "<ComposeRequest>%s</ComposeRequest>" % xml
-      logging.info(xml)
-      #pylint: disable=protected-access
-      api = storage_api._get_storage_api(retry_params=retry_params,
-                                   account_id=_account_id)
-      headers = {"Content-Type" : content_type}
-      #pylint: disable=no-member
-      status, resp_headers, content = api.put_object(
-                                         api_utils._quote_filename(destination_file) + "?compose",
-                                          payload=xml,
-                                          headers=headers)
-      errors.check_status(status, [200], destination_file, resp_headers, body=content)
-  '''
-    Actual start of the compose call. The above is inside to prevent calls to them directly
-  '''
-  temp_file_suffix = "____MergeTempFile"
-  # Make a copy of the list as they are passed reference
-  file_list = list_of_files[:]
-  if not isinstance(file_list, list):
-    raise TypeError("file_list must be a list of dictionaries")
-  list_len = len(file_list)
-  if list_len > 1024:
-    raise ValueError(
-          "Compose attempted to create composite with too many (%i) components; limit is (1024)." \
-                      % list_len)
-  if list_len <= 1:
-    raise ValueError("Compose operation requires at least two components; %i provided." % list_len)
+            logging.warn('File not found %s, skipping', source_file['file_name'])
+    compose_object = _temp_func
+  else:
+    compose_object = api.compose_object
+  file_list, _, content_type = _validate_compose_list(
+                                      destination_file,
+                                      list_of_files, content_type, 32)
+  compose_object(file_list, destination_file, content_type)
 
-  common.validate_file_path(destination_file)
-  bucket = "/" + destination_file.split("/")[1] + "/"
-  for source_file in file_list:
-    if not isinstance(source_file, dict):
-      raise TypeError("Each item of file_list must be dictionary")
-    file_name = source_file.get("file_name", None)
-    if file_name is None:
-      raise errors.NotFoundError("Each item in file_list must specify a file_name")
-    if file_name.startswith(bucket):
-      logging.warn("Detected bucket name at the start of the file, " + \
-                   "must not specify the bucket when listing file_names." + \
-                   " May cause files to be miss read")
-    common.validate_file_path(bucket + source_file['file_name'])
-  if content_type is None:
-    if file_exists(bucket + list_of_files[0]["file_name"]):
-      content_type = stat(bucket + list_of_files[0]["file_name"]).content_type
-    else:
-      logging.warn("Unable to read first file to divine content type, using text/plain")
-      content_type = "text/plain"
-  # Sort naturally if the flag is false
-  if not preserve_order:
-    file_list.sort(key=lambda x: _alphanum_key(x['file_name']))
+def compose_batch(list_of_files, destination_file,
+            content_type=None, retry_params=None, _account_id=None):
+  '''
+  Runs the GCS Compose on the inputed files in batches of 32.
+    Merges between 2 and 1024 files into one file. If any of the previous files had the merge
+    run on them it counts towards the 1024 limit.
+    Automatically breaks down the files into batches of 32.
+    This method is slower and could result in orphan files if it fails
+  Args:
+    list_of_files: list of file name strings or dictionaries with the following format:
+      {'file_name': REQUIRED name of the file to be merged. Do not include the bucket name,
+       'Generation': OPTIONAL Used to specify what version of a file to use,
+       'IfGenerationMatch': OPTIONAL Used to fail requests if versions don't match}
+    destination_file: Path to the desired output file. Must have the bucket in the path.
+    preserve_order: If true will not sort the files into natural order.
+    content_type: Used to specify the content-header of the output.
+                  If None will try to guess based off the first file.
+    retry_params: An api_utils.RetryParams for this call to GCS. If None,
+    the default one is used.
+    _account_id: Internal-use only.
+
+  Raises:
+    TypeError: If the dictionary for the file list is malformed
+    ValueError: If the number of files is outside the range of 2-1024
+    errors.NotFoundError: If any element in the file list is missing the 'file_name' key
+  '''
+
+  temp_file_suffix = '____MergeTempFile'
+
+  file_list, bucket, content_type = _validate_compose_list(
+                                      destination_file, list_of_files,
+                                   content_type, number_of_files=1024)
+
   '''
   Compose can only handle 32 files at a time. Breaks down the list into batches of 32
   (this will only need to happen once, since the file_list size restriction is 1024 = 32 * 32)
@@ -419,15 +369,19 @@ def compose(list_of_files, destination_file, preserve_order=True,
     segments_list = [file_list[i:i + 32] for i in range(0, len(file_list), 32)]
     file_list = []
     for segment in segments_list:
-      temp_file_name = destination_file + temp_file_suffix + str(temp_file_counter)
-      _make_api_call(bucket, segment, temp_file_name, content_type, retry_params, _account_id)
-      file_list.append({"file_name" : temp_file_name.replace(bucket, "", 1)})
-      temp_file_counter += 1
-      temp_list.append(temp_file_name)
+      if len(segment) > 1:
+        temp_file_name = destination_file + temp_file_suffix + str(temp_file_counter)
+        compose(segment, temp_file_name, content_type, retry_params, _account_id)
+        file_list.append({'file_name': temp_file_name.replace(bucket, '', 1)})
+        temp_file_counter += 1
+        temp_list.append(temp_file_name)
+      else:
+        file_list.append(segment[0])
   # There will always be 32 or less files to merge at this point
-  _make_api_call(bucket, file_list, destination_file, content_type, retry_params, _account_id)
-  
+  compose(file_list, destination_file, content_type, retry_params, _account_id)
+  # grab all temp files that were created during the merging of segments of 32
   temp_list = listbucket(destination_file + temp_file_suffix)
+  # delete all the now-unneeded temporary merge-files for the segments of 32 (if any)
   for item in temp_list:
     try:
       delete(item.filename)
@@ -435,20 +389,69 @@ def compose(list_of_files, destination_file, preserve_order=True,
       pass
 
 def file_exists(destination):
-  """Checks if a file exists.
+  '''Checks if a file exists.
     Tries to do a stat check on the file.
     If it succeeds returns True otherwise false
 
     Args:
-      destination: Full path to the file (ie. /bucket/object)
+      destination: Full path to the file (ie. /bucket/object) w/ leading slash
     Returns:
       True if the file is accessible otherwise False
-    """
+    '''
   try:
     stat(destination)
     return True
   except errors.NotFoundError:
     return False
+
+def _validate_compose_list(destination_file, file_list, content_type, number_of_files=32):
+  '''
+    Validates the compose list and extracts needed information from it
+    Args:
+      destination: Full path to the file (ie. /bucket/object),
+      file_list: list of files to compose, see compose for details,
+      content_type: content type specified by the user,
+      number_of_files=32: maximum number of files allowed in the list
+    Returns:
+      list_of_files: Ready to use dict version of the list,
+      bucket: bucket name extracted from the file paths,
+      content_type: either the specified content_type or one devined from the first file
+  '''
+  common.validate_file_path(destination_file)
+  bucket = '/' + destination_file.split('/')[1] + '/'
+  if not isinstance(file_list, list):
+    raise TypeError('file_list must be a list of strings or dictionaries')
+  list_len = len(file_list)
+  if list_len > number_of_files:
+    raise ValueError(
+          'Compose attempted to create composite with too many'
+           '(%i) components; limit is (%i).' % (list_len, number_of_files))
+  if list_len <= 1:
+    raise ValueError('Compose operation requires at least two components; %i provided.' % list_len)
+
+  if isinstance(file_list[0], str):
+    list_of_files = [{"file_name" : file_name.replace(bucket, "")}
+                   for file_name in file_list]
+  else:
+    list_of_files = file_list[:]
+  for source_file in list_of_files:
+    if not isinstance(source_file, dict):
+      raise TypeError('Each item of file_list must be a string or dictionary')
+    file_name = source_file.get('file_name', None)
+    if file_name is None:
+      raise errors.NotFoundError('Each item in file_list must specify a file_name')
+    if file_name.startswith(bucket):
+      logging.warn('Detected bucket name at the start of the file, '
+                   'must not specify the bucket when listing file_names.'
+                   ' May cause files to be miss read')
+    common.validate_file_path(bucket + source_file['file_name'])
+  if content_type is None:
+    if file_exists(bucket + list_of_files[0]['file_name']):
+      content_type = stat(bucket + list_of_files[0]['file_name']).content_type
+    else:
+      logging.warn('Unable to read first file to divine content type, using text/plain')
+      content_type = 'text/plain'
+  return list_of_files, bucket, content_type
   
 
 class _Bucket(object):

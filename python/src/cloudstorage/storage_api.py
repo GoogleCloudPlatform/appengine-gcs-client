@@ -168,7 +168,41 @@ class _StorageApi(rest_api._RestApi):
   def get_bucket_async(self, path, **kwds):
     """GET a bucket."""
     return self.do_request_async(self.api_url + path, 'GET', **kwds)
-
+  
+  # pylint: disable=too-many-locals
+  def compose_object(self, file_list, destination_file, content_type):
+    '''
+        Currently stubbed because the dev server cloudstorage_stub.py
+          does not handle compose requests.
+        TODO: When the dev server gets patch please remove the stub
+    Args:
+      bucket: Bucket where the files are kept
+      file_list: list of dicts with the file name (see compose argument 'list_of_files' for format).
+      destination_file: Path to the destination file.
+      content_type: Content type for the destination file.
+      retry_params: An api_utils.RetryParams for this call to GCS. If None,
+      the default one is used.
+    _account_id: Internal-use only.
+    '''
+    xml = ''
+    for item in file_list:
+      generation = item.get('Generation', '')
+      generation_match = item.get('IfGenerationMatch', '')
+      if generation != '':
+        generation = '<Generation>%s</Generation>' % generation
+      if generation_match != '':
+        generation_match = '<IfGenerationMatch>%s</IfGenerationMatch>' % generation_match
+      xml += ('<Component><Name>%s</Name>%s%s</Component>'
+              % (item['file_name'], generation, generation_match))
+    xml = '<ComposeRequest>%s</ComposeRequest>' % xml
+    # pylint: disable=protected-access
+    headers = {'Content-Type': content_type}
+    # pylint: disable=no-member
+    status, resp_headers, content = self.put_object(
+                                       api_utils._quote_filename(destination_file) + '?compose',
+                                        payload=xml,
+                                        headers=headers)
+    errors.check_status(status, [200], destination_file, resp_headers, body=content)
 
 _StorageApi = rest_api.add_sync_methods(_StorageApi)
 

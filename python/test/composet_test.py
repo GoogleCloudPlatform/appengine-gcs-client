@@ -24,16 +24,15 @@ class MainPage(webapp2.RequestHandler):
     """
     Main method to start the tests
     """
-    test_sizes_to_run = [1, 5, 30, 31, 32, 33, 200, 500, 1000, 1024, 1025]
+    test_sizes_to_run = [1, 2, 3, 31, 32, 33, 1024, 1025]
 
     bucket_name = app_identity.get_default_gcs_bucket_name()
-    final_file_name_template = "/" + bucket_name + "/merged_%i.txt"
     the_list = []
     for item in cloudstorage.listbucket("/%s/input/file" % bucket_name):
       the_list.append(item.filename)
 
     the_list = sorted(the_list, key=alphanum_key)
-    logging.info(the_list)
+
     the_list = the_list[:max(test_sizes_to_run)]
     for i in range(len(the_list), max(test_sizes_to_run)):
       file_name = "/" + bucket_name + "/input/file%i.txt" % i
@@ -42,54 +41,63 @@ class MainPage(webapp2.RequestHandler):
       with cloudstorage.open(file_name, "w") as gcs_file:
         gcs_file.write("%s\r\n" % str(i))
       the_list.append(file_name)
-    list_of_files = []
+    list_of_files_dict = []
+    list_of_files_string = []
     for item in the_list:
-      logging.info(item)
-      list_of_files.append({"file_name" : item.replace("/" + bucket_name + "/", "")})
+      file_name = item.replace("/" + bucket_name + "/", "")
+      list_of_files_dict.append({"file_name" : file_name})
+      list_of_files_string.append(file_name)
 
-    list_of_files.sort(key=lambda x: alphanum_key(x['file_name']))
+    list_of_files_dict.sort(key=lambda x: alphanum_key(x['file_name']))
+    list_of_files_string.sort(key=alphanum_key)
 
-    output = ""
-    stats = ""
-    preserve_order = True
-    random_list = list_of_files[:]
-    for test_size in test_sizes_to_run:
-      final_file = final_file_name_template % test_size
-      stats += "%s: " % final_file
+    stats, output = do_test(test_sizes_to_run, "/" + bucket_name
+                            + "/compose_%i.txt", list_of_files_dict,
+                            list_of_files_string, cloudstorage.compose)
+    stats, output = do_test(test_sizes_to_run, "/" + bucket_name +
+                            "/compose_batch_%i.txt", list_of_files_dict,
+                            list_of_files_string, cloudstorage.compose_batch,
+                            stats=stats, output=output)
+    self.response.out.write("<HTML><BODY>")
+    self.response.out.write(stats)
+    self.response.out.write("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@</p>")
+    self.response.out.write(output)
+    self.response.out.write("</BODY></HTML>")
+# pylint: disable=too-many-arguments
+def do_test(test_sizes_to_run, template, list_of_files_dict,
+            list_of_files_string, func_to_call, stats='', output=''):
+  '''
+  Runs the test
+  '''
+  for test_size in test_sizes_to_run:
+    final_file = template % test_size
+    if bool(random.getrandbits(1)):
+      list_to_use = list_of_files_dict
+    else:
+      list_to_use = list_of_files_string
+    stats += "%s: " % final_file
+    try:
+      func_to_call(list_to_use[:test_size], final_file)
+
       try:
-        if preserve_order:
-          random.shuffle(random_list)
-          cloudstorage.compose(random_list[:test_size], final_file, preserve_order=preserve_order)
-        else:
-          cloudstorage.compose(list_of_files[:test_size], final_file, preserve_order=preserve_order)
-        try:
-          output += final_file + "</p>"
-          output += "Sorted: " + str(not preserve_order) + "</p>"
-          preserve_order = not preserve_order
-          counter = 0
-          with cloudstorage.open(final_file, "r") as gcs_source:
+        output += final_file + "</p>"
+        counter = 0
+        with cloudstorage.open(final_file, "r") as gcs_source:
+          line = gcs_source.readline()
+          while line:
+            output += line + "</p>"
+            counter += 1
             line = gcs_source.readline()
-            while line:
-              output += line + "</p>"
-              counter += 1
-              line = gcs_source.readline()
-          stats += str(counter) + "</p>"
-        except errors.NotFoundError:
-          stats += "Error opening file" + "</p>"
-          output += "Error opening file"
-      except (errors.NotFoundError, ValueError, TypeError) as the_error:
-        stats += "Compose threw: %s" % str(the_error) + "</p>"
-        output += "Compose threw: %s" % str(the_error) + "</p>"
-      output += "********************************************************************</p>"
-    self.response.write(stats)
-    self.response.write("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@</p>")
-    self.response.write(output)
-
+        stats += str(counter) + "</p>"
+      except errors.NotFoundError:
+        stats += "Error opening file" + "</p>"
+        output += "Error opening file"
+    except (errors.NotFoundError, ValueError, TypeError) as the_error:
+      stats += "Compose threw: %s" % str(the_error) + "</p>"
+      output += "Compose threw: %s" % str(the_error) + "</p>"
+    output += "********************************************************************</p>"
+  return stats, output
 # pylint: disable=invalid-name
 app = webapp2.WSGIApplication([
     ('/', MainPage),
 ], debug=True)
-
-
-
-
