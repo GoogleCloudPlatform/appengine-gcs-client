@@ -176,7 +176,7 @@ class _StorageApi(rest_api._RestApi):
           does not handle compose requests.
         TODO: When the dev server gets patch please remove the stub
     Args:
-      file_list: file_list: list of dicts with the file name.
+      file_list: list of dicts with the file name.
       destination_file: Path to the destination file.
       content_type: Content type for the destination file.
       retry_params: An api_utils.RetryParams for this call to GCS. If None,
