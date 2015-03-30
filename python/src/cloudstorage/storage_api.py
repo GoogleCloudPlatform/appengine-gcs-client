@@ -174,8 +174,8 @@ class _StorageApi(rest_api._RestApi):
     """COMPOSE multiple objects together.
 
     Taking a list of files it calls the put object with the compose flag
-      this call merges all the files into the destination file
-    Currently stubbed because the dev server cloudstorage_stub.py
+      this call merges all the files into the destination file.
+    Stubbed because the dev server cloudstorage_stub.py
       does not handle compose requests.
     TODO: When the dev server gets patch please remove the stub
 
@@ -183,15 +183,12 @@ class _StorageApi(rest_api._RestApi):
       file_list: file_list: list of dicts with the file name.
       destination_file: Path to the destination file.
       content_type: Content type for the destination file.
-      retry_params: An api_utils.RetryParams for this call to GCS. If None,
-      the default one is used.
-    _account_id: Internal-use only.
     """
     xml = ''
     for meta_data in file_list:
-      xml_meta = ""
+      xml_meta = ''
       for meta in meta_data:
-        xml_meta += "<%s>%s</%s>" % (meta, meta_data[meta], meta)
+        xml_meta += '<%s>%s</%s>' % (meta, meta_data[meta], meta)
       xml += '<Component>%s</Component>' % xml_meta
     xml = '<ComposeRequest>%s</ComposeRequest>' % xml
     if content_type is not None:

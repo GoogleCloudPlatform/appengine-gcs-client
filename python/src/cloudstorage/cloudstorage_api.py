@@ -25,7 +25,6 @@ __all__ = ['delete',
            'open',
            'stat',
            'compose',
-           '_compose_batch',
           ]
 
 import logging
@@ -286,6 +285,7 @@ def compose(list_of_files, destination_file, files_metadata=None,
     be built from other existing composites, provided that the total
     component count does not exceed 1024. See here for details:
     https://cloud.google.com/storage/docs/composite-objects
+
   Args:
     list_of_files: List of file name strings with no leading slashes or bucket.
     destination_file: Path to the desired output file. Must have the bucket in the path.
@@ -312,11 +312,9 @@ def compose(list_of_files, destination_file, files_metadata=None,
       bucket = '/' + destination_file.split('/')[1] + '/'
       with open(destination_file, 'w', content_type=content_type) as gcs_merge:
         for source_file in file_list:
-          try:
-            with open(bucket + source_file['Name'], 'r') as gcs_source:
-              gcs_merge.write(gcs_source.read())
-          except errors.NotFoundError as error:
-            raise error
+          with open(bucket + source_file['Name'], 'r') as gcs_source:
+            gcs_merge.write(gcs_source.read())
+
     compose_object = _temp_func
   else:
     compose_object = api.compose_object
@@ -324,70 +322,6 @@ def compose(list_of_files, destination_file, files_metadata=None,
                                         list_of_files,
                                         files_metadata, 32)
   compose_object(file_list, destination_file, content_type)
-
-
-def _compose_batch(list_of_files, destination_file, files_metadata=None,
-            content_type=None, retry_params=None, _account_id=None):
-  """Runs the GCS Compose on the inputed files in batches of 32.
-
-  Merges between 2 and 1024 files into one file. Composite files may even
-    be built from other existing composites, provided that the total
-    component count does not exceed 1024. See here for details:
-    https://cloud.google.com/storage/docs/composite-objects
-  Automatically breaks down the files into batches of 32.
-  This method is slower and could result in orphan files if it fails.
-
-  Args:
-    See compose for details
-  Raises:
-    ValueError: If the number of files is outside the range of 2-1024.
-  """
-
-  temp_file_suffix = '____MergeTempFile'
-
-  _, bucket = _validate_compose_list(destination_file,
-                                     list_of_files,
-                                     files_metadata, 1024)
-  """
-  Compose can only handle 32 files at a time. Breaks down the list into batches of 32
-  (this will only need to happen once, since the file_list size restriction is 1024 = 32 * 32).
-  """
-  temp_list = []  # temporary storage for the filenames that store the merged segments of 32
-  if len(list_of_files) > 32:
-    temp_file_counter = 0
-    segments_list = [list_of_files[i:i + 32] for i in range(0, len(list_of_files), 32)]
-    if files_metadata is None:
-      files_metadata = []
-    meta_segments_list = [files_metadata[i:i + 32] for i in range(0, len(files_metadata), 32)]
-    files_metadata = []
-    list_of_files = []
-    for segment in segments_list:
-      if len(segment) > 1:
-        temp_file_name = destination_file + temp_file_suffix + str(temp_file_counter)
-        compose(segment, temp_file_name,
-                files_metadata=meta_segments_list,
-                content_type=content_type,
-                retry_params=retry_params,
-                _account_id=_account_id)
-        list_of_files.append(temp_file_name.replace(bucket, '', 1))
-        temp_file_counter += 1
-        temp_list.append(temp_file_name)
-      else:
-        list_of_files.append(segment[0])
-  # There will always be 32 or less files to merge at this point
-  compose(list_of_files, destination_file,
-          files_metadata=files_metadata,
-          content_type=content_type,
-          retry_params=retry_params,
-          _account_id=_account_id)
-  # Grab all temp files that were created during the merging of segments of 32
-  temp_list = listbucket(destination_file + temp_file_suffix)
-  # Delete all the now-unneeded temporary merge-files for the segments of 32 (if any)
-  for item in temp_list:
-    try:
-      delete(item.filename)
-    except errors.NotFoundError:
-      pass
 
 
 def _file_exists(destination):
@@ -403,20 +337,20 @@ def _file_exists(destination):
   """
   try:
     with open(destination, "r") as _:
-      pass
-    return True
+      return True
   except errors.NotFoundError:
     return False
 
 
 def _validate_compose_list(destination_file, file_list, files_metadata=None, number_of_files=32):
-  """Validates the compose list and builds and merges the file_list, files_metadata.
+  """Validates the file_list and merges the file_list, files_metadata.
 
   Args:
     destination: Full path to the file (ie. /destination_bucket/destination_file).
     file_list: List of files to compose, see compose for details.
     files_metadata: Meta details for the file.
     number_of_files: Maximum number of files allowed in the list.
+
   Returns:
     A tuple (list_of_files, bucket):
       list_of_files: Ready to use dict version of the list.
@@ -424,9 +358,11 @@ def _validate_compose_list(destination_file, file_list, files_metadata=None, num
   """
   common.validate_file_path(destination_file)
   bucket = destination_file[0:(destination_file.index('/', 1) + 1)]
-  if not isinstance(file_list, list):
+  try:
+    list_len = len(file_list)
+  except TypeError:
     raise TypeError('file_list must be a list')
-  list_len = len(file_list)
+
   if list_len > number_of_files:
     raise ValueError(
           'Compose attempted to create composite with too many'
@@ -440,7 +376,6 @@ def _validate_compose_list(destination_file, file_list, files_metadata=None, num
   if len(files_metadata) > list_len:
     raise ValueError("files_metadata contains more entries(%i) than file_list(%i)"
                      % (len(files_metadata), list_len))
-
   list_of_files = []
   for source_file, meta_data in itertools.izip_longest(file_list, files_metadata):
     if not isinstance(source_file, str):
@@ -456,6 +391,7 @@ def _validate_compose_list(destination_file, file_list, files_metadata=None, num
     common.validate_file_path(bucket + source_file)
 
     list_entry = {}
+    
     if meta_data is not None:
       list_entry.update(meta_data)
     list_entry["Name"] = source_file

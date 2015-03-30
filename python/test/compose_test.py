@@ -5,24 +5,21 @@ import re
 import cloudstorage
 from google.appengine.api import app_identity
 from cloudstorage import errors
-from cloudstorage import _compose_batch
 
 def alphanum_key(in_string):
-  """ Turn a string into a list of string and number chunks.
+  """Turn a string into a list of string and number chunks.
       "z23a" -> ["z", 23, "a"]
   """
-  return [ int(char) if char.isdigit() else char for char in re.split('([0-9]+)', in_string) ]
+  return [int(char) if char.isdigit() else char for char in re.split('([0-9]+)', in_string)]
+
+
 # pylint: disable=too-few-public-methods
 class MainPage(webapp2.RequestHandler):
-  """
-  Used to test the cloudstorage compose method
-  test_sizes_to_run is used to specify how many files to send.
-  """
+  """Used to test the cloudstorage compose method."""
+  
   # pylint: disable=too-many-locals, too-many-statements
   def get(self):
-    """
-    Main method to start the tests
-    """
+    """Main method to start the tests"""
     test_sizes_to_run = [1, 2, 3, 31, 32, 33, 1024, 1025]
 
     bucket_name = app_identity.get_default_gcs_bucket_name()
@@ -46,28 +43,24 @@ class MainPage(webapp2.RequestHandler):
       list_of_files_string.append(file_name)
 
     list_of_files_string.sort(key=alphanum_key)
-    stats=""
-    output=""
-    
+    stats = ""
+    output = ""
     stats, output = do_test(test_sizes_to_run, "/" + bucket_name
                             + "/results/compose_%i.txt",
                             list_of_files_string, cloudstorage.compose,
                             stats=stats, output=output)
-    stats, output = do_test(test_sizes_to_run, "/" + bucket_name +
-                            "/results/compose_batch_%i.txt",
-                            list_of_files_string, _compose_batch,
-                            stats=stats, output=output, content_type="text/plain")
+
     self.response.out.write("<HTML><BODY>")
     self.response.out.write(stats)
     self.response.out.write("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@</p>")
     self.response.out.write(output)
     self.response.out.write("</BODY></HTML>")
+    
+    
 # pylint: disable=too-many-arguments
 def do_test(test_sizes_to_run, template,
             list_of_files_string, func_to_call, stats='', output='', content_type=None):
-  '''
-  Runs the test
-  '''
+  """Runs the test"""
   for test_size in test_sizes_to_run:
     final_file = template % test_size
 
@@ -93,6 +86,8 @@ def do_test(test_sizes_to_run, template,
     output += "********************************************************************</p>"
 
   return stats, output
+
+
 # pylint: disable=invalid-name
 app = webapp2.WSGIApplication([
     ('/', MainPage),
