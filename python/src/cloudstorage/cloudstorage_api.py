@@ -280,36 +280,35 @@ def listbucket(path_prefix, marker=None, prefix=None, max_keys=None,
 # pylint: disable=too-many-locals, too-many-branches, too-many-statements
 def compose(list_of_files, destination_file, files_metadata=None,
             content_type=None, retry_params=None, _account_id=None):
-  """
-    Runs the GCS Compose on the given files.
-    Merges between 2 and 32 files into one file. Composite files may even
-      be built from other existing composites, provided that the total
-      component count does not exceed 1024. See here for details:
-      https://cloud.google.com/storage/docs/composite-objects
+  """Runs the GCS Compose on the given files.
+
+  Merges between 2 and 32 files into one file. Composite files may even
+    be built from other existing composites, provided that the total
+    component count does not exceed 1024. See here for details:
+    https://cloud.google.com/storage/docs/composite-objects
   Args:
     list_of_files: List of file name strings with no leading slashes or bucket.
     destination_file: Path to the desired output file. Must have the bucket in the path.
-    files_metadata: Optional file metadata, see link for available options:
-                    https://cloud.google.com/storage/docs/composite-objects#_Xml
-    content_type: Used to specify the content-header of the output file.
-    retry_params: An api_utils.RetryParams for this call to GCS. If None,
-    the default one is used.
+    files_metadata: Optional, file metadata, order must match list_of_files,
+      see link for available options:
+      https://cloud.google.com/storage/docs/composite-objects#_Xml
+    content_type: Optional, used to specify the content-header of the output file.
+    retry_params: Optional, an api_utils.RetryParams for this call to GCS. If None,
+      the default one is used.
     _account_id: Internal-use only.
 
   Raises:
     ValueError: If the number of files is outside the range of 2-32.
   """
   api = storage_api._get_storage_api(retry_params=retry_params,
-                                   account_id=_account_id)
+                                     account_id=_account_id)
   """
   Needed until cloudstorage_stub.py is updated to accept compose requests
   TODO: When patched remove the True flow from this if.
   """
-  if 'development' in os.environ.get('SERVER_SOFTWARE', '').lower():
-    def _temp_func(bucket, file_list, destination_file, content_type):
-      """
-        Dev server stub, remove when the dev server accepts compose requests.
-      """
+  if os.getenv('SERVER_SOFTWARE').startswith('Dev'):
+    def _temp_func(file_list, destination_file, content_type):
+      """Dev server stub, remove when the dev server accepts compose requests."""
       bucket = '/' + destination_file.split('/')[1] + '/'
       with open(destination_file, 'w', content_type=content_type) as gcs_merge:
         for source_file in file_list:
@@ -317,27 +316,27 @@ def compose(list_of_files, destination_file, files_metadata=None,
             with open(bucket + source_file['Name'], 'r') as gcs_source:
               gcs_merge.write(gcs_source.read())
           except errors.NotFoundError as error:
-            logging.warn('File not found %s, skipping', source_file['file_name'])
             raise error
     compose_object = _temp_func
   else:
     compose_object = api.compose_object
-  file_list, _ = _validate_compose_list(
-                                      destination_file,
-                                      list_of_files,
-                                      files_metadata, 32)
+  file_list, _ = _validate_compose_list(destination_file,
+                                        list_of_files,
+                                        files_metadata, 32)
   compose_object(file_list, destination_file, content_type)
+
 
 def _compose_batch(list_of_files, destination_file, files_metadata=None,
             content_type=None, retry_params=None, _account_id=None):
-  """
-  Runs the GCS Compose on the inputed files in batches of 32.
-    Merges between 2 and 1024 files into one file. Composite files may even
-      be built from other existing composites, provided that the total
-      component count does not exceed 1024. See here for details:
-      https://cloud.google.com/storage/docs/composite-objects
-    Automatically breaks down the files into batches of 32.
-    This method is slower and could result in orphan files if it fails.
+  """Runs the GCS Compose on the inputed files in batches of 32.
+
+  Merges between 2 and 1024 files into one file. Composite files may even
+    be built from other existing composites, provided that the total
+    component count does not exceed 1024. See here for details:
+    https://cloud.google.com/storage/docs/composite-objects
+  Automatically breaks down the files into batches of 32.
+  This method is slower and could result in orphan files if it fails.
+
   Args:
     See compose for details
   Raises:
@@ -346,9 +345,9 @@ def _compose_batch(list_of_files, destination_file, files_metadata=None,
 
   temp_file_suffix = '____MergeTempFile'
 
-  _, bucket = _validate_compose_list( destination_file,
-                                      list_of_files,
-                                      files_metadata, 1024)
+  _, bucket = _validate_compose_list(destination_file,
+                                     list_of_files,
+                                     files_metadata, 1024)
   """
   Compose can only handle 32 files at a time. Breaks down the list into batches of 32
   (this will only need to happen once, since the file_list size restriction is 1024 = 32 * 32).
@@ -357,6 +356,8 @@ def _compose_batch(list_of_files, destination_file, files_metadata=None,
   if len(list_of_files) > 32:
     temp_file_counter = 0
     segments_list = [list_of_files[i:i + 32] for i in range(0, len(list_of_files), 32)]
+    if files_metadata is None:
+      files_metadata = []
     meta_segments_list = [files_metadata[i:i + 32] for i in range(0, len(files_metadata), 32)]
     files_metadata = []
     list_of_files = []
@@ -375,28 +376,31 @@ def _compose_batch(list_of_files, destination_file, files_metadata=None,
         list_of_files.append(segment[0])
   # There will always be 32 or less files to merge at this point
   compose(list_of_files, destination_file,
-                files_metadata=files_metadata,
-                content_type=content_type,
-                retry_params=retry_params,
-                _account_id=_account_id)
-  # grab all temp files that were created during the merging of segments of 32
+          files_metadata=files_metadata,
+          content_type=content_type,
+          retry_params=retry_params,
+          _account_id=_account_id)
+  # Grab all temp files that were created during the merging of segments of 32
   temp_list = listbucket(destination_file + temp_file_suffix)
-  # delete all the now-unneeded temporary merge-files for the segments of 32 (if any)
+  # Delete all the now-unneeded temporary merge-files for the segments of 32 (if any)
   for item in temp_list:
     try:
       delete(item.filename)
     except errors.NotFoundError:
       pass
 
+
 def _file_exists(destination):
   """Checks if a file exists.
-    Tries to open the file.
-    If it succeeds returns True otherwise False.
-    Args:
-      destination: Full path to the file (ie. /bucket/object) with leading slash.
-    Returns:
-      True if the file is accessible otherwise False.
-    """
+  Tries to open the file.
+  If it succeeds returns True otherwise False.
+
+  Args:
+    destination: Full path to the file (ie. /bucket/object) with leading slash.
+
+  Returns:
+    True if the file is accessible otherwise False.
+  """
   try:
     with open(destination, "r") as _:
       pass
@@ -404,20 +408,22 @@ def _file_exists(destination):
   except errors.NotFoundError:
     return False
 
+
 def _validate_compose_list(destination_file, file_list, files_metadata=None, number_of_files=32):
-  """
-    Validates the compose list and builds and merges the file_list, files_metadata.
-    Args:
-      destination: Full path to the file (ie. /bucket/object).
-      file_list: list of files to compose, see compose for details.
-      files_metadata: Meta details for the file
-      number_of_files=32: maximum number of files allowed in the list.
-    Returns:
+  """Validates the compose list and builds and merges the file_list, files_metadata.
+
+  Args:
+    destination: Full path to the file (ie. /destination_bucket/destination_file).
+    file_list: List of files to compose, see compose for details.
+    files_metadata: Meta details for the file.
+    number_of_files: Maximum number of files allowed in the list.
+  Returns:
+    A tuple (list_of_files, bucket):
       list_of_files: Ready to use dict version of the list.
       bucket: bucket name extracted from the file paths.
   """
   common.validate_file_path(destination_file)
-  bucket = '/' + destination_file.split('/')[1] + '/'
+  bucket = destination_file[0:(destination_file.index('/', 1) + 1)]
   if not isinstance(file_list, list):
     raise TypeError('file_list must be a list')
   list_len = len(file_list)
@@ -431,11 +437,15 @@ def _validate_compose_list(destination_file, file_list, files_metadata=None, num
   if files_metadata is None:
     files_metadata = []
 
+  if len(files_metadata) > list_len:
+    raise ValueError("files_metadata contains more entries(%i) than file_list(%i)"
+                     % (len(files_metadata), list_len))
+
   list_of_files = []
   for source_file, meta_data in itertools.izip_longest(file_list, files_metadata):
     if not isinstance(source_file, str):
       raise TypeError('Each item of file_list must be a string')
-    if source_file.startswith("/"):
+    if source_file.startswith('/'):
       logging.warn('Detected a "/" at the start of the file, '
                    'Unless the file name contains a "/" it '
                    ' may cause files to be miss read')
@@ -447,8 +457,7 @@ def _validate_compose_list(destination_file, file_list, files_metadata=None, num
 
     list_entry = {}
     if meta_data is not None:
-      for meta in meta_data:
-        list_entry[meta] = meta_data[meta]
+      list_entry.update(meta_data)
     list_entry["Name"] = source_file
     list_of_files.append(list_entry)
 

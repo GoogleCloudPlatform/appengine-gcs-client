@@ -171,10 +171,14 @@ class _StorageApi(rest_api._RestApi):
 
   # pylint: disable=too-many-locals
   def compose_object(self, file_list, destination_file, content_type):
-    '''
-        Currently stubbed because the dev server cloudstorage_stub.py
-          does not handle compose requests.
-        TODO: When the dev server gets patch please remove the stub
+    """COMPOSE multiple objects together.
+
+    Taking a list of files it calls the put object with the compose flag
+      this call merges all the files into the destination file
+    Currently stubbed because the dev server cloudstorage_stub.py
+      does not handle compose requests.
+    TODO: When the dev server gets patch please remove the stub
+
     Args:
       file_list: file_list: list of dicts with the file name.
       destination_file: Path to the destination file.
@@ -182,7 +186,7 @@ class _StorageApi(rest_api._RestApi):
       retry_params: An api_utils.RetryParams for this call to GCS. If None,
       the default one is used.
     _account_id: Internal-use only.
-    '''
+    """
     xml = ''
     for meta_data in file_list:
       xml_meta = ""
@@ -193,7 +197,7 @@ class _StorageApi(rest_api._RestApi):
     if content_type is not None:
       headers = {'Content-Type': content_type}
     else:
-      headers=None
+      headers = None
     # pylint: disable=no-member
     status, resp_headers, content = self.put_object(
                                        api_utils._quote_filename(destination_file) + '?compose',
