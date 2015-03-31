@@ -16,11 +16,11 @@ def alphanum_key(in_string):
 # pylint: disable=too-few-public-methods
 class MainPage(webapp2.RequestHandler):
   """Used to test the cloudstorage compose method."""
-  
+
   # pylint: disable=too-many-locals, too-many-statements
   def get(self):
     """Main method to start the tests"""
-    test_sizes_to_run = [1, 2, 3, 31, 32, 33, 1024, 1025]
+    test_sizes_to_run = [1, 2, 3, 31, 32, 33]
 
     bucket_name = app_identity.get_default_gcs_bucket_name()
     the_list = []
@@ -55,8 +55,8 @@ class MainPage(webapp2.RequestHandler):
     self.response.out.write("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@</p>")
     self.response.out.write(output)
     self.response.out.write("</BODY></HTML>")
-    
-    
+
+
 # pylint: disable=too-many-arguments
 def do_test(test_sizes_to_run, template,
             list_of_files_string, func_to_call, stats='', output='', content_type=None):

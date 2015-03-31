@@ -391,7 +391,7 @@ def _validate_compose_list(destination_file, file_list, files_metadata=None, num
     common.validate_file_path(bucket + source_file)
 
     list_entry = {}
-    
+
     if meta_data is not None:
       list_entry.update(meta_data)
     list_entry["Name"] = source_file

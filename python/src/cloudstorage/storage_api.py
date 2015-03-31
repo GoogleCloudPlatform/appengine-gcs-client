@@ -184,13 +184,17 @@ class _StorageApi(rest_api._RestApi):
       destination_file: Path to the destination file.
       content_type: Content type for the destination file.
     """
-    xml = ''
+
+    xml_setting_list = ['<ComposeRequest>']
+
     for meta_data in file_list:
-      xml_meta = ''
-      for meta in meta_data:
-        xml_meta += '<%s>%s</%s>' % (meta, meta_data[meta], meta)
-      xml += '<Component>%s</Component>' % xml_meta
-    xml = '<ComposeRequest>%s</ComposeRequest>' % xml
+      xml_setting_list.append('<Component>')
+      for key, val in meta_data.iteritems():
+        xml_setting_list.append('<%s>%s</%s>' % (key, val, key))
+      xml_setting_list.append('</Component>')
+    xml_setting_list.append('</ComposeRequest>')
+    xml = ''.join(xml_setting_list)
+
     if content_type is not None:
       headers = {'Content-Type': content_type}
     else:
