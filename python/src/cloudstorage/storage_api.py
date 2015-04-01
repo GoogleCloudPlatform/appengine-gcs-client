@@ -174,13 +174,13 @@ class _StorageApi(rest_api._RestApi):
     """COMPOSE multiple objects together.
 
     Taking a list of files it calls the put object with the compose flag
-      this call merges all the files into the destination file.
+    this call merges all the files into the destination file.
     Stubbed because the dev server cloudstorage_stub.py
-      does not handle compose requests.
+    does not handle compose requests.
     TODO: When the dev server gets patch please remove the stub
 
     Args:
-      file_list: file_list: list of dicts with the file name.
+      file_list: list of dicts with the file name.
       destination_file: Path to the destination file.
       content_type: Content type for the destination file.
     """

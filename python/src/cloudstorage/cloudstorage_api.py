@@ -282,9 +282,9 @@ def compose(list_of_files, destination_file, files_metadata=None,
   """Runs the GCS Compose on the given files.
 
   Merges between 2 and 32 files into one file. Composite files may even
-    be built from other existing composites, provided that the total
-    component count does not exceed 1024. See here for details:
-    https://cloud.google.com/storage/docs/composite-objects
+  be built from other existing composites, provided that the total
+  component count does not exceed 1024. See here for details:
+  https://cloud.google.com/storage/docs/composite-objects
 
   Args:
     list_of_files: List of file name strings with no leading slashes or bucket.
@@ -302,10 +302,10 @@ def compose(list_of_files, destination_file, files_metadata=None,
   """
   api = storage_api._get_storage_api(retry_params=retry_params,
                                      account_id=_account_id)
-  """
-  Needed until cloudstorage_stub.py is updated to accept compose requests
-  TODO: When patched remove the True flow from this if.
-  """
+
+  # Needed until cloudstorage_stub.py is updated to accept compose requests
+  # TODO(rbruyere@gmail.com): When patched remove the True flow from this if.
+
   if os.getenv('SERVER_SOFTWARE').startswith('Dev'):
     def _temp_func(file_list, destination_file, content_type):
       """Dev server stub, remove when the dev server accepts compose requests."""
