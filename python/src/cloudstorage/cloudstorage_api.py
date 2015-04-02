@@ -275,7 +275,6 @@ def listbucket(path_prefix, marker=None, prefix=None, max_keys=None,
 
   return _Bucket(api, bucket, options)
 
-
 # pylint: disable=too-many-locals, too-many-branches, too-many-statements
 def compose(list_of_files, destination_file, files_metadata=None,
             content_type=None, retry_params=None, _account_id=None):
@@ -288,13 +287,13 @@ def compose(list_of_files, destination_file, files_metadata=None,
 
   Args:
     list_of_files: List of file name strings with no leading slashes or bucket.
-    destination_file: Path to the desired output file. Must have the bucket in the path.
+    destination_file: Path to the output file. Must have the bucket in the path.
     files_metadata: Optional, file metadata, order must match list_of_files,
       see link for available options:
       https://cloud.google.com/storage/docs/composite-objects#_Xml
-    content_type: Optional, used to specify the content-header of the output file.
-    retry_params: Optional, an api_utils.RetryParams for this call to GCS. If None,
-      the default one is used.
+    content_type: Optional, used to specify content-header of the output file.
+    retry_params: Optional, an api_utils.RetryParams for this call to GCS.
+      If None,the default one is used.
     _account_id: Internal-use only.
 
   Raises:
@@ -308,7 +307,7 @@ def compose(list_of_files, destination_file, files_metadata=None,
 
   if os.getenv('SERVER_SOFTWARE').startswith('Dev'):
     def _temp_func(file_list, destination_file, content_type):
-      """Dev server stub, remove when the dev server accepts compose requests."""
+      """Dev server stub remove when the dev server accepts compose requests."""
       bucket = '/' + destination_file.split('/')[1] + '/'
       with open(destination_file, 'w', content_type=content_type) as gcs_merge:
         for source_file in file_list:
@@ -336,19 +335,20 @@ def _file_exists(destination):
     True if the file is accessible otherwise False.
   """
   try:
-    with open(destination, "r") as _:
+    with open(destination, "r"):
       return True
   except errors.NotFoundError:
     return False
 
 
-def _validate_compose_list(destination_file, file_list, files_metadata=None, number_of_files=32):
+def _validate_compose_list(destination_file, file_list,
+                           files_metadata=None, number_of_files=32):
   """Validates the file_list and merges the file_list, files_metadata.
 
   Args:
-    destination: Full path to the file (ie. /destination_bucket/destination_file).
+    destination: Path to the file (ie. /destination_bucket/destination_file).
     file_list: List of files to compose, see compose for details.
-    files_metadata: Meta details for the file.
+    files_metadata: Meta details for each file in the file_list.
     number_of_files: Maximum number of files allowed in the list.
 
   Returns:
@@ -368,26 +368,29 @@ def _validate_compose_list(destination_file, file_list, files_metadata=None, num
           'Compose attempted to create composite with too many'
            '(%i) components; limit is (%i).' % (list_len, number_of_files))
   if list_len <= 1:
-    raise ValueError('Compose operation requires at least two components; %i provided.' % list_len)
+    raise ValueError('Compose operation requires at'
+                     ' least two components; %i provided.' % list_len)
 
   if files_metadata is None:
     files_metadata = []
 
   if len(files_metadata) > list_len:
-    raise ValueError("files_metadata contains more entries(%i) than file_list(%i)"
+    raise ValueError('files_metadata contains more entries(%i)'
+                     ' than file_list(%i)'
                      % (len(files_metadata), list_len))
   list_of_files = []
-  for source_file, meta_data in itertools.izip_longest(file_list, files_metadata):
+  for source_file, meta_data in itertools.izip_longest(file_list,
+                                                       files_metadata):
     if not isinstance(source_file, str):
       raise TypeError('Each item of file_list must be a string')
     if source_file.startswith('/'):
       logging.warn('Detected a "/" at the start of the file, '
                    'Unless the file name contains a "/" it '
-                   ' may cause files to be miss read')
+                   ' may cause files to be misread')
     if source_file.startswith(bucket):
       logging.warn('Detected bucket name at the start of the file, '
                    'must not specify the bucket when listing file_names.'
-                   ' May cause files to be miss read')
+                   ' May cause files to be misread')
     common.validate_file_path(bucket + source_file)
 
     list_entry = {}
