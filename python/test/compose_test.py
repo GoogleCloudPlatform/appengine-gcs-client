@@ -1,10 +1,16 @@
 """ cloudstorage compose tester"""
-import webapp2
 import logging
 import re
-import cloudstorage
+import webapp2
+
 from google.appengine.api import app_identity
-from cloudstorage import errors
+
+try:
+  import cloudstorage
+  from cloudstorage import errors
+except ImportError:
+  from google.appengine.ext import cloudstorage
+  from google.appengine.ext.cloudstorage import errors
 
 def alphanum_key(in_string):
   """Turn a string into a list of string and number chunks.

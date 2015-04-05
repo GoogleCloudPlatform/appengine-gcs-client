@@ -373,8 +373,7 @@ def _validate_compose_list(destination_file, file_list,
 
   if files_metadata is None:
     files_metadata = []
-
-  if len(files_metadata) > list_len:
+  elif len(files_metadata) > list_len:
     raise ValueError('files_metadata contains more entries(%i)'
                      ' than file_list(%i)'
                      % (len(files_metadata), list_len))
