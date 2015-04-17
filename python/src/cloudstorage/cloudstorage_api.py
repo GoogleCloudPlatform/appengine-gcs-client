@@ -359,6 +359,8 @@ def _validate_compose_list(destination_file, file_list,
   common.validate_file_path(destination_file)
   bucket = destination_file[0:(destination_file.index('/', 1) + 1)]
   try:
+    if isinstance(file_list, str):
+      raise TypeError
     list_len = len(file_list)
   except TypeError:
     raise TypeError('file_list must be a list')

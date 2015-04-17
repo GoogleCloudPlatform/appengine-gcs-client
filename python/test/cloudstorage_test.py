@@ -35,6 +35,8 @@ except ImportError:
 
 BUCKET = '/bucket'
 TESTFILE = BUCKET + '/testfile'
+DESTFILE = BUCKET + '/destfile'
+DEFAULT_COMPOSE_CONTENT = 'A'
 DEFAULT_CONTENT = ['a'*1024*257,
                    'b'*1024*257,
                    'c'*1024*257]
@@ -502,6 +504,68 @@ class CloudStorageTest(unittest.TestCase):
       except StopIteration:
         break
     self.assertEqual(expected, result)
+
+
+class CloudStorageComposeTest(unittest.TestCase):
+  """Test for Cloudstorage."""
+
+  def setUp(self):
+    """Setup for Cloudstorage testing"""
+    self.testbed = testbed.Testbed()
+    self.testbed.activate()
+    self.testbed.init_app_identity_stub()
+    self.testbed.init_blobstore_stub()
+    self.testbed.init_datastore_v3_stub()
+    self.testbed.init_memcache_stub()
+    self.testbed.init_urlfetch_stub()
+    self._old_max_keys = common._MAX_GET_BUCKET_RESULT
+    common._MAX_GET_BUCKET_RESULT = 2
+    self.start_time = time.time()
+    cloudstorage.set_default_retry_params(None)
+    with cloudstorage.open(TESTFILE, 'w') as gcs:
+      gcs.write(DEFAULT_COMPOSE_CONTENT)
+
+  def tearDown(self):
+    """ Tear down for Cloudstorage testing"""
+    common._MAX_GET_BUCKET_RESULT = self._old_max_keys
+    cloudstorage.delete(TESTFILE)
+    self.testbed.deactivate()
+
+  def testComposeStringForFileList(self):
+    """Test to ensure TypeError is thrown if a string is sent"""
+    self.assertRaises(TypeError, cloudstorage.compose, TESTFILE, DESTFILE)
+
+  def testComposeNoneIterableForFileList(self):
+    """Test to ensure TypeError is thrown if a non iterable is sent"""
+    self.assertRaises(TypeError, cloudstorage.compose, 1, DESTFILE)
+
+  def testComposeTooManyFilesFailure(self):
+    """Test to ensure ValueError is thrown if more than 32 files are sent"""
+    self.assertRaises(ValueError, cloudstorage.compose,
+                      [TESTFILE] * 33, DESTFILE)
+
+  def testComposeTooFewFilesFailure(self):
+    """Test to ensure ValueError is thrown if less than 2 are sent"""
+    self.assertRaises(ValueError, cloudstorage.compose, [TESTFILE], DESTFILE)
+
+  def testComposeFilesMetadataTooLargeFailure(self):
+    """Test to ensure ValueError is thrown if metadata is too long"""
+    self.assertRaises(ValueError, cloudstorage.compose, [TESTFILE] * 2,
+                      DESTFILE, files_metadata=['a'] * 3)
+
+  def testComposeInvalidItemInFileListFailure(self):
+    """Test to ensure ValueError is thrown if a more than 32 files are sent"""
+    self.assertRaises(TypeError, cloudstorage.compose, [1, 1], DESTFILE)
+
+  def testCompose32Files(self):
+    """Test to 32 files are composed properly"""
+    test_file = TESTFILE.replace(BUCKET + '/', '', 1)
+    cloudstorage.compose([test_file] * 32, DESTFILE, content_type='text/plain')
+
+    with cloudstorage.open(DESTFILE, 'r') as gcs:
+      results = gcs.read()
+    cloudstorage.delete(DESTFILE)
+    self.assertEqual(''.join([DEFAULT_COMPOSE_CONTENT] * 32), results)
 
 
 if __name__ == '__main__':
