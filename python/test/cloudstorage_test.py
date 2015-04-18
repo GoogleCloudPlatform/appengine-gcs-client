@@ -507,7 +507,7 @@ class CloudStorageTest(unittest.TestCase):
 
 
 class CloudStorageComposeTest(unittest.TestCase):
-  """Test for Cloudstorage."""
+  """Test for Cloudstorage compose method."""
 
   def setUp(self):
     """Setup for Cloudstorage testing"""
@@ -554,12 +554,12 @@ class CloudStorageComposeTest(unittest.TestCase):
                       DESTFILE, files_metadata=['a'] * 3)
 
   def testComposeInvalidItemInFileListFailure(self):
-    """Test to ensure ValueError is thrown if a more than 32 files are sent"""
+    """Test to ensure ValueError is thrown a none string is sent"""
     self.assertRaises(TypeError, cloudstorage.compose, [1, 1], DESTFILE)
 
   def testCompose32Files(self):
     """Test to 32 files are composed properly"""
-    test_file = TESTFILE.replace(BUCKET + '/', '', 1)
+    test_file = TESTFILE[len(BUCKET) + 1:]
     cloudstorage.compose([test_file] * 32, DESTFILE, content_type='text/plain')
 
     with cloudstorage.open(DESTFILE, 'r') as gcs:
