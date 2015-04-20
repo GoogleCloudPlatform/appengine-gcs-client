@@ -194,6 +194,8 @@ class ReadBuffer(object):
         one buffer. But there may be a pending future that contains
         a second buffer. This size must be less than max_request_size.
       max_request_size: Max bytes to request in one urlfetch.
+      offset: Number of bytes to skip at the start of the file. If None, 0 is
+        used.
     """
     self._api = api
     self._path = path

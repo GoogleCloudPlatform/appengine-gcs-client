@@ -67,6 +67,8 @@ def open(filename,
     retry_params: An instance of api_utils.RetryParams for subsequent calls
       to GCS from this file handle. If None, the default one is used.
     _account_id: Internal-use only.
+    offset: Number of bytes to skip at the start of the file. If None, 0 is
+      used.
 
   Returns:
     A reading or writing buffer that supports File-like interface. Buffer
