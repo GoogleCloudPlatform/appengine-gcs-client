@@ -182,6 +182,7 @@ class ReadBuffer(object):
   def __init__(self,
                api,
                path,
+               offset=0,
                buffer_size=DEFAULT_BUFFER_SIZE,
                max_request_size=MAX_REQUEST_SIZE):
     """Constructor.
@@ -193,6 +194,8 @@ class ReadBuffer(object):
         one buffer. But there may be a pending future that contains
         a second buffer. This size must be less than max_request_size.
       max_request_size: Max bytes to request in one urlfetch.
+      offset: Number of bytes to skip at the start of the file. If None, 0 is
+        used.
     """
     self._api = api
     self._path = path
@@ -202,11 +205,11 @@ class ReadBuffer(object):
     assert buffer_size <= max_request_size
     self._buffer_size = buffer_size
     self._max_request_size = max_request_size
-    self._offset = 0
+    self._offset = offset
     self._buffer = _Buffer()
     self._etag = None
 
-    get_future = self._get_segment(0, self._buffer_size, check_response=False)
+    get_future = self._get_segment(offset, self._buffer_size, check_response=False)
 
     status, headers, content = self._api.head_object(path)
     errors.check_status(status, [200], path, resp_headers=headers, body=content)

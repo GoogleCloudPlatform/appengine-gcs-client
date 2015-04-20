@@ -41,6 +41,7 @@ def open(filename,
          mode='r',
          content_type=None,
          options=None,
+         offset=0,
          read_buffer_size=storage_api.ReadBuffer.DEFAULT_BUFFER_SIZE,
          retry_params=None,
          _account_id=None):
@@ -66,6 +67,8 @@ def open(filename,
     retry_params: An instance of api_utils.RetryParams for subsequent calls
       to GCS from this file handle. If None, the default one is used.
     _account_id: Internal-use only.
+    offset: Number of bytes to skip at the start of the file. If None, 0 is
+      used.
 
   Returns:
     A reading or writing buffer that supports File-like interface. Buffer
@@ -91,6 +94,7 @@ def open(filename,
                        'for writing mode.')
     return storage_api.ReadBuffer(api,
                                   filename,
+                                  offset=offset,
                                   buffer_size=read_buffer_size)
   else:
     raise ValueError('Invalid mode %s.' % mode)
