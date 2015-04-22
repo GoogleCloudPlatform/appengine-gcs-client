@@ -555,7 +555,7 @@ class CloudStorageComposeTest(unittest.TestCase):
 
   def testComposeInvalidItemInFileListFailure(self):
     """Test to ensure ValueError is thrown if there are invalid entries"""
-    self.assertRaises(TypeError, cloudstorage.compose, ["1", 1], DESTFILE)
+    self.assertRaises(TypeError, cloudstorage.compose, ['1', 1], DESTFILE)
 
   def testCompose32Files(self):
     """Test to 32 files are composed properly"""
