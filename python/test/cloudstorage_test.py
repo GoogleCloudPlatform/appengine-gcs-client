@@ -554,8 +554,8 @@ class CloudStorageComposeTest(unittest.TestCase):
                       DESTFILE, files_metadata=['a'] * 3)
 
   def testComposeInvalidItemInFileListFailure(self):
-    """Test to ensure ValueError is thrown a none string is sent"""
-    self.assertRaises(TypeError, cloudstorage.compose, [1, 1], DESTFILE)
+    """Test to ensure ValueError is thrown if there are invalid entries"""
+    self.assertRaises(TypeError, cloudstorage.compose, ["1", 1], DESTFILE)
 
   def testCompose32Files(self):
     """Test to 32 files are composed properly"""

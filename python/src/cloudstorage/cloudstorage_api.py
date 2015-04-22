@@ -32,6 +32,7 @@ import StringIO
 import urllib
 import os
 import itertools
+import types
 import xml.etree.cElementTree as ET
 from . import api_utils
 from . import common
@@ -359,7 +360,7 @@ def _validate_compose_list(destination_file, file_list,
   common.validate_file_path(destination_file)
   bucket = destination_file[0:(destination_file.index('/', 1) + 1)]
   try:
-    if isinstance(file_list, str):
+    if isinstance(file_list, types.StringTypes):
       raise TypeError
     list_len = len(file_list)
   except TypeError:
