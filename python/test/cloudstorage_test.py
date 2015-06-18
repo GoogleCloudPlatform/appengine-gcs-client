@@ -209,7 +209,7 @@ class CloudStorageTest(unittest.TestCase):
 
     dst = TESTFILE + 'copy'
     self.assertRaises(cloudstorage.NotFoundError, cloudstorage.stat, dst)
-    cloudstorage_api._copy2(TESTFILE, dst)
+    cloudstorage_api.copy2(TESTFILE, dst)
 
     src_stat = cloudstorage.stat(TESTFILE)
     dst_stat = cloudstorage.stat(dst)
@@ -228,7 +228,7 @@ class CloudStorageTest(unittest.TestCase):
       f.write('abcde')
     src_stat = cloudstorage.stat(TESTFILE)
 
-    cloudstorage_api._copy2(TESTFILE, TESTFILE,
+    cloudstorage_api.copy2(TESTFILE, TESTFILE,
                             metadata={'x-goog-meta-foo': 'bar',
                                       'content-type': 'text/bar'})
 

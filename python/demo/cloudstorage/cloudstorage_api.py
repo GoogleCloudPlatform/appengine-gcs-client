@@ -20,7 +20,8 @@ from __future__ import with_statement
 
 
 
-__all__ = ['delete',
+__all__ = ['copy2',
+           'delete',
            'listbucket',
            'open',
            'stat',
@@ -151,10 +152,8 @@ def stat(filename, retry_params=None, _account_id=None):
   return file_stat
 
 
-def _copy2(src, dst, metadata=None, retry_params=None):
+def copy2(src, dst, metadata=None, retry_params=None):
   """Copy the file content from src to dst.
-
-  Internal use only!
 
   Args:
     src: /bucket/filename
