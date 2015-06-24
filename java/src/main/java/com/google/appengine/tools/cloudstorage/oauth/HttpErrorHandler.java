@@ -38,6 +38,8 @@ class HttpErrorHandler {
         throw createException("Server replied with 404, probably no such bucket", description);
       case 412:
         throw createException("Server replied with 412, precondition failure", description);
+      case 429:
+        throw new IOException("Response code 429 (slow down), retryable: " + description);
       default:
         if (responseCode >= 500 && responseCode < 600) {
           throw new IOException("Response code " + responseCode + ", retryable: " + description);

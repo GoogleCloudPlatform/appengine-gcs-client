@@ -169,13 +169,12 @@ class _StorageApi(rest_api._RestApi):
     """GET a bucket."""
     return self.do_request_async(self.api_url + path, 'GET', **kwds)
 
-  # pylint: disable=too-many-locals
   def compose_object(self, file_list, destination_file, content_type):
     """COMPOSE multiple objects together.
 
-    Using the given list of files calls the put object with the compose flag.
+    Using the given list of files, calls the put object with the compose flag.
     This call merges all the files into the destination file.
-        
+
     Args:
       file_list: list of dicts with the file name.
       destination_file: Path to the destination file.
@@ -196,12 +195,12 @@ class _StorageApi(rest_api._RestApi):
       headers = {'Content-Type': content_type}
     else:
       headers = None
-    # pylint: disable=no-member
     status, resp_headers, content = self.put_object(
         api_utils._quote_filename(destination_file) + '?compose',
         payload=xml,
         headers=headers)
-    errors.check_status(status, [200], destination_file, resp_headers, body=content)
+    errors.check_status(status, [200], destination_file, resp_headers,
+                        body=content)
 
 
 _StorageApi = rest_api.add_sync_methods(_StorageApi)
@@ -216,9 +215,9 @@ class ReadBuffer(object):
   def __init__(self,
                api,
                path,
-               offset=0,
                buffer_size=DEFAULT_BUFFER_SIZE,
-               max_request_size=MAX_REQUEST_SIZE):
+               max_request_size=MAX_REQUEST_SIZE,
+               offset=0):
     """Constructor.
 
     Args:
@@ -240,6 +239,7 @@ class ReadBuffer(object):
     self._buffer_size = buffer_size
     self._max_request_size = max_request_size
     self._offset = offset
+
     self._buffer = _Buffer()
     self._etag = None
 

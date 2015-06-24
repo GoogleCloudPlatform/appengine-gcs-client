@@ -16,8 +16,16 @@ from google.appengine.ext import testbed
 
 try:
   from cloudstorage import api_utils
+  from google.appengine.api import app_identity
+  from google.appengine.api import urlfetch
+  from google.appengine.api import urlfetch_errors
+  from google.appengine.runtime import apiproxy_errors
 except ImportError:
   from google.appengine.ext.cloudstorage import api_utils
+  from google.appengine.api import app_identity
+  from google.appengine.api import urlfetch
+  from google.appengine.api import urlfetch_errors
+  from google.appengine.runtime import apiproxy_errors
 
 
 
@@ -224,6 +232,19 @@ class RetriableTaskletTest(unittest.TestCase):
             self.tasklet_for_test, results=[-1, -1, -1, -1])
     r = fut.get_result()
     self.assertEqual(-1, r)
+
+  def testRetryDueToTransientError(self):
+    results = [urlfetch.DownloadError, apiproxy_errors.Error,
+               app_identity.InternalError, app_identity.BackendDeadlineExceeded,
+               urlfetch_errors.InternalTransientError, 1]
+
+    fut = api_utils._RetryWrapper(
+        api_utils.RetryParams(min_retries=1, max_retries=len(results)),
+        retriable_exceptions=api_utils._RETRIABLE_EXCEPTIONS).run(
+            self.tasklet_for_test,
+            results=results)
+    r = fut.get_result()
+    self.assertEqual(1, r)
 
   def testRetryDueToError(self):
     fut = api_utils._RetryWrapper(

@@ -46,10 +46,10 @@ def open(filename,
          mode='r',
          content_type=None,
          options=None,
-         offset=0,
          read_buffer_size=storage_api.ReadBuffer.DEFAULT_BUFFER_SIZE,
          retry_params=None,
-         _account_id=None):
+         _account_id=None,
+         offset=0):
   """Opens a Google Cloud Storage file and returns it as a File-like object.
 
   Args:
@@ -99,8 +99,8 @@ def open(filename,
                        'for writing mode.')
     return storage_api.ReadBuffer(api,
                                   filename,
-                                  offset=offset,
-                                  buffer_size=read_buffer_size)
+                                  buffer_size=read_buffer_size,
+                                  offset=offset)
   else:
     raise ValueError('Invalid mode %s.' % mode)
 
@@ -279,7 +279,6 @@ def listbucket(path_prefix, marker=None, prefix=None, max_keys=None,
 
   return _Bucket(api, bucket, options)
 
-# pylint: disable=too-many-locals, too-many-branches, too-many-statements
 def compose(list_of_files, destination_file, files_metadata=None,
             content_type=None, retry_params=None, _account_id=None):
   """Runs the GCS Compose on the given files.
@@ -306,12 +305,9 @@ def compose(list_of_files, destination_file, files_metadata=None,
   api = storage_api._get_storage_api(retry_params=retry_params,
                                      account_id=_account_id)
 
-  # Needed until cloudstorage_stub.py is updated to accept compose requests
-  # TODO(rbruyere@gmail.com): When patched remove the True flow from this if.
 
   if os.getenv('SERVER_SOFTWARE').startswith('Dev'):
     def _temp_func(file_list, destination_file, content_type):
-      """Dev server stub remove when the dev server accepts compose requests."""
       bucket = '/' + destination_file.split('/')[1] + '/'
       with open(destination_file, 'w', content_type=content_type) as gcs_merge:
         for source_file in file_list:
@@ -329,6 +325,7 @@ def compose(list_of_files, destination_file, files_metadata=None,
 
 def _file_exists(destination):
   """Checks if a file exists.
+
   Tries to open the file.
   If it succeeds returns True otherwise False.
 
@@ -402,7 +399,7 @@ def _validate_compose_list(destination_file, file_list,
 
     if meta_data is not None:
       list_entry.update(meta_data)
-    list_entry["Name"] = source_file
+    list_entry['Name'] = source_file
     list_of_files.append(list_entry)
 
   return list_of_files, bucket

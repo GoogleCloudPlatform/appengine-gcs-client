@@ -20,6 +20,8 @@
 
 __all__ = ['add_sync_methods']
 
+import logging
+import os
 import random
 import time
 
@@ -241,7 +243,15 @@ class _RestApi(object):
     """
     headers = {} if headers is None else dict(headers)
     headers.update(self.user_agent)
-    self.token = yield self.get_token_async()
+    try:
+      self.token = yield self.get_token_async()
+    except app_identity.InternalError, e:
+      if os.environ.get('DATACENTER', '').endswith('sandman'):
+        self.token = None
+        logging.warning('Could not fetch an authentication token in sandman '
+                     'based Appengine devel setup; proceeding without one.')
+      else:
+        raise e
     if self.token:
       headers['authorization'] = 'OAuth ' + self.token
 

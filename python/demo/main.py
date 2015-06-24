@@ -62,9 +62,6 @@ class MainPage(webapp2.RequestHandler):
       self.delete_files()
       self.response.write('\n\nThe demo ran successfully!\n')
       
-# When writing a file to Cloud Storage, you should not call finally:close() as
-# this can result in finalizing object uploads even if there was an exception
-# during a write.
   def create_file(self, filename):
     """Create a file.
 
