@@ -22,6 +22,11 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.appengine.api.NamespaceManager;
 import com.google.appengine.api.ThreadManager;
+import com.google.appengine.api.blobstore.BlobInfo;
+import com.google.appengine.api.blobstore.BlobInfoFactory;
+import com.google.appengine.api.blobstore.BlobKey;
+import com.google.appengine.api.blobstore.BlobstoreService;
+import com.google.appengine.api.blobstore.BlobstoreServiceFactory;
 import com.google.appengine.api.datastore.Blob;
 import com.google.appengine.api.datastore.Cursor;
 import com.google.appengine.api.datastore.DatastoreService;
@@ -35,14 +40,6 @@ import com.google.appengine.api.datastore.Query;
 import com.google.appengine.api.datastore.Query.FilterPredicate;
 import com.google.appengine.api.datastore.QueryResultIterator;
 import com.google.appengine.api.datastore.Transaction;
-import com.google.appengine.api.files.AppEngineFile;
-import com.google.appengine.api.files.FileReadChannel;
-import com.google.appengine.api.files.FileService;
-import com.google.appengine.api.files.FileServiceFactory;
-import com.google.appengine.api.files.FileStat;
-import com.google.appengine.api.files.FileWriteChannel;
-import com.google.appengine.api.files.GSFileOptions;
-import com.google.appengine.api.files.GSFileOptions.GSFileOptionsBuilder;
 import com.google.appengine.tools.cloudstorage.BadRangeException;
 import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
@@ -50,6 +47,7 @@ import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.ListItem;
 import com.google.appengine.tools.cloudstorage.RawGcsService;
 import com.google.apphosting.api.ApiProxy;
+import com.google.apphosting.api.ApiProxy.Delegate;
 import com.google.apphosting.api.ApiProxy.Environment;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
@@ -60,14 +58,23 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.OutputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -78,19 +85,116 @@ import java.util.concurrent.TimeUnit;
 /**
  * Implementation of {@code RawGcsService} for dev_appserver. For now, uses datastore and
  * fileService so that the viewers can be re-used.
+ *
+ * This class is not a perfect singleton. If methods are called concurrently from
+ * different threads, it is possible that multiple instances of BlobStorage may be used.
  */
 @SuppressWarnings("deprecation")
 final class LocalRawGcsService implements RawGcsService {
 
   static final int CHUNK_ALIGNMENT_BYTES = 256 * 1024;
 
-  private static final DatastoreService DATASTORE = DatastoreServiceFactory.getDatastoreService();
-  private static final FileService FILES = FileServiceFactory.getFileService();
+  private DatastoreService datastore;
+  private BlobStorageAdapter blobStorage;
+  private BlobstoreService blobstoreService;
 
+  private static final String GOOGLE_STORAGE_FILE_KIND = "__GsFileInfo__";
   private static final String ENTITY_KIND_PREFIX = "_ah_FakeCloudStorage__";
   private static final String OPTIONS_PROP = "options";
   private static final String CREATION_TIME_PROP = "time";
   private static final String FILE_LENGTH_PROP = "length";
+
+  private static HashMap<GcsFilename, List<ByteBuffer>> inMemoryData = new HashMap<>();
+
+  private static class BlobStorageAdapter {
+
+    private static final String BLOB_KEY_CLASS_NAME = BlobKey.class.getName();
+
+    private static BlobStorageAdapter instance;
+
+    private final Delegate<?> apiProxyDelegate;
+    private final Object delegate;
+    private final Method storeBlobMethod;
+    private final Method fetchBlobMethod;
+    private final Constructor<?> blobKeyConstructor;
+
+    BlobStorageAdapter(Delegate<?> apiProxyDelegate) throws Exception {
+      this.apiProxyDelegate = apiProxyDelegate;
+      Method m = apiProxyDelegate.getClass().getDeclaredMethod("getService", String.class);
+      m.setAccessible(true);
+      Object bs = m.invoke(apiProxyDelegate, "blobstore");
+      Field f = bs.getClass().getDeclaredField("blobStorage");
+      f.setAccessible(true);
+      delegate = f.get(bs);
+      Class<?> delegateClass = delegate.getClass();
+      Class<?> blobKeyClass = Class.forName(
+          BLOB_KEY_CLASS_NAME, true, delegateClass.getClassLoader());
+      blobKeyConstructor = blobKeyClass.getDeclaredConstructor(String.class);
+      storeBlobMethod = delegateClass.getDeclaredMethod("storeBlob", blobKeyClass);
+      storeBlobMethod.setAccessible(true);
+      fetchBlobMethod = delegateClass.getDeclaredMethod("fetchBlob", blobKeyClass);
+      fetchBlobMethod.setAccessible(true);
+    }
+
+    private Object getParam(BlobKey blobKey) throws IOException {
+      if (blobKey.getClass() == storeBlobMethod.getParameterTypes()[0]) {
+        return blobKey;
+      }
+      try {
+        return blobKeyConstructor.newInstance(blobKey.getKeyString());
+      } catch (Exception e) {
+        throw new IOException(e);
+      }
+    }
+
+    public OutputStream storeBlob(BlobKey blobKey) throws IOException {
+      Object param = getParam(blobKey);
+      try {
+        return (OutputStream) storeBlobMethod.invoke(delegate, param);
+      } catch (IllegalAccessException | IllegalArgumentException e) {
+        throw new IllegalStateException("Failed to invoke blobStorage", e);
+      } catch (InvocationTargetException e) {
+        Throwable targetException = e.getTargetException();
+        if (targetException instanceof IOException) {
+          throw ((IOException) targetException);
+        }
+        throw new IOException(e);
+      }
+    }
+
+    public InputStream fetchBlob(BlobKey blobKey) throws IOException {
+      Object param = getParam(blobKey);
+      try {
+        return (InputStream) fetchBlobMethod.invoke(delegate, param);
+      } catch (IllegalAccessException | IllegalArgumentException e) {
+        throw new IllegalStateException("Failed to invoke blobStorage", e);
+      } catch (InvocationTargetException e) {
+        Throwable targetException = e.getTargetException();
+        if (targetException instanceof IOException) {
+          throw ((IOException) targetException);
+        }
+        throw new IOException(e);
+      }
+    }
+
+    private static BlobStorageAdapter getInstance() throws IOException {
+      Delegate<?> apiProxyDelegate = ApiProxy.getDelegate();
+      if (instance == null || instance.apiProxyDelegate != apiProxyDelegate) {
+        try {
+          instance = new BlobStorageAdapter(apiProxyDelegate);
+        } catch (Exception e) {
+          throw new IOException(e);
+        }
+      }
+      return instance;
+    }
+  }
+
+  private void ensureInitialized() throws IOException {
+    blobStorage = BlobStorageAdapter.getInstance();
+    blobstoreService = BlobstoreServiceFactory.getBlobstoreService();
+    datastore = DatastoreServiceFactory.getDatastoreService();
+  }
 
   static final class Token implements RawGcsCreationToken {
     private static final long serialVersionUID = 954846981243798905L;
@@ -98,13 +202,11 @@ final class LocalRawGcsService implements RawGcsService {
     private final GcsFilename filename;
     private final GcsFileOptions options;
     private final long offset;
-    private final AppEngineFile file;
 
-    Token(GcsFilename filename, GcsFileOptions options, long offset, AppEngineFile file) {
+    Token(GcsFilename filename, GcsFileOptions options, long offset) {
       this.options = options;
       this.filename = checkNotNull(filename, "Null filename");
       this.offset = offset;
-      this.file = checkNotNull(file, "Null file");
     }
 
     @Override
@@ -144,46 +246,24 @@ final class LocalRawGcsService implements RawGcsService {
   @Override
   public Token beginObjectCreation(GcsFilename filename, GcsFileOptions options, long timeoutMillis)
       throws IOException {
-    return new Token(
-        filename, options, 0, FILES.createNewGSFile(gcsOptsToGsOpts(filename, options)));
+    ensureInitialized();
+    inMemoryData.put(filename, new ArrayList<ByteBuffer>());
+    return new Token(filename, options, 0);
   }
 
-  private GSFileOptions gcsOptsToGsOpts(GcsFilename filename, GcsFileOptions options) {
-    GSFileOptionsBuilder builder = new GSFileOptionsBuilder();
-    builder.setBucket(filename.getBucketName());
-    builder.setKey(filename.getObjectName());
-    if (options.getAcl() != null) {
-      builder.setAcl(options.getAcl());
-    }
-    if (options.getCacheControl() != null) {
-      builder.setCacheControl(options.getCacheControl());
-    }
-    if (options.getContentDisposition() != null) {
-      builder.setContentDisposition(options.getContentDisposition());
-    }
-    if (options.getContentEncoding() != null) {
-      builder.setContentEncoding(options.getContentEncoding());
-    }
-    if (options.getMimeType() != null) {
-      builder.setMimeType(options.getMimeType());
-    }
-    for (Entry<String, String> entry : options.getUserMetadata().entrySet()) {
-      builder.addUserMetadata(entry.getKey(), entry.getValue());
-    }
-    return builder.build();
-  }
-
-  private Token append(RawGcsCreationToken token, ByteBuffer chunk) throws IOException {
+  private Token append(RawGcsCreationToken token, ByteBuffer chunk) {
     Token t = (Token) token;
     if (!chunk.hasRemaining()) {
       return t;
     }
-    try (FileWriteChannel ch = FILES.openWriteChannel(t.file, false)) {
-      int n = chunk.remaining();
-      int r = ch.write(chunk);
-      Preconditions.checkState(r == n, "%s: Bad write: %s != %s", this, r, n);
-      return new Token(t.filename, t.options, t.offset + n, t.file);
-    }
+
+    int chunksize = chunk.remaining();
+    ByteBuffer inMemoryBuffer = ByteBuffer.allocate(chunksize);
+    inMemoryBuffer.put(chunk);
+    inMemoryBuffer.flip();
+    inMemoryData.get(t.filename).add(inMemoryBuffer);
+
+    return new Token(t.filename, t.options, t.offset + chunksize);
   }
 
   private static ScheduledThreadPoolExecutor writePool;
@@ -205,6 +285,11 @@ final class LocalRawGcsService implements RawGcsService {
   @Override
   public Future<RawGcsCreationToken> continueObjectCreationAsync(final RawGcsCreationToken token,
       final ByteBuffer chunk, long timeoutMillis) {
+    try {
+      ensureInitialized();
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
     final Environment environment = ApiProxy.getCurrentEnvironment();
     return writePool.schedule(new Callable<RawGcsCreationToken>() {
       @Override
@@ -242,9 +327,44 @@ final class LocalRawGcsService implements RawGcsService {
   @Override
   public void finishObjectCreation(RawGcsCreationToken token, ByteBuffer chunk, long timeoutMillis)
       throws IOException {
+    ensureInitialized();
     Token t = append(token, chunk);
-    FILES.openWriteChannel(t.file, true).closeFinally();
-    FileStat stats = FILES.stat(t.file);
+
+    int totalBytes = 0;
+
+    BlobKey blobKey = getBlobKeyForFilename(t.filename);
+    try (WritableByteChannel outputChannel = Channels.newChannel(blobStorage.storeBlob(blobKey))) {
+      for (ByteBuffer buffer : inMemoryData.get(t.filename)){
+        totalBytes += buffer.remaining();
+        outputChannel.write(buffer);
+      }
+      inMemoryData.remove(t.filename);
+    }
+
+    String mimeType = t.options.getMimeType();
+    if (Strings.isNullOrEmpty(mimeType)) {
+      mimeType = "application/octet-stream";
+    }
+
+    BlobInfo blobInfo = new BlobInfo(
+        blobKey, mimeType, new Date(), getPathForGcsFilename(t.filename),
+        totalBytes);
+
+    String namespace = NamespaceManager.get();
+    try {
+      NamespaceManager.set("");
+      String blobKeyString = blobInfo.getBlobKey().getKeyString();
+      Entity blobInfoEntity =
+          new Entity(GOOGLE_STORAGE_FILE_KIND, blobKeyString);
+      blobInfoEntity.setProperty(BlobInfoFactory.CONTENT_TYPE, blobInfo.getContentType());
+      blobInfoEntity.setProperty(BlobInfoFactory.CREATION, blobInfo.getCreation());
+      blobInfoEntity.setProperty(BlobInfoFactory.FILENAME, blobInfo.getFilename());
+      blobInfoEntity.setProperty(BlobInfoFactory.SIZE, blobInfo.getSize());
+      datastore.put(blobInfoEntity);
+    } finally {
+      NamespaceManager.set(namespace);
+    }
+
     Entity e = new Entity(makeKey(t.filename));
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
     try (ObjectOutputStream oout = new ObjectOutputStream(bout)) {
@@ -252,21 +372,17 @@ final class LocalRawGcsService implements RawGcsService {
     }
     e.setUnindexedProperty(OPTIONS_PROP, new Blob(bout.toByteArray()));
     e.setUnindexedProperty(CREATION_TIME_PROP, System.currentTimeMillis());
-    e.setUnindexedProperty(FILE_LENGTH_PROP, stats.getLength());
-    DATASTORE.put(null, e);
-  }
-
-  private AppEngineFile nameToAppEngineFile(GcsFilename filename) {
-    return new AppEngineFile(
-        AppEngineFile.FileSystem.GS, filename.getBucketName() + "/" + filename.getObjectName());
+    e.setUnindexedProperty(FILE_LENGTH_PROP, totalBytes);
+    datastore.put(null, e);
   }
 
   @Override
   public GcsFileMetadata getObjectMetadata(GcsFilename filename, long timeoutMillis)
       throws IOException {
+    ensureInitialized();
     Entity entity;
     try {
-      entity = DATASTORE.get(null, makeKey(filename));
+      entity = datastore.get(null, makeKey(filename));
     } catch (EntityNotFoundException ex) {
       return null;
     }
@@ -290,8 +406,20 @@ final class LocalRawGcsService implements RawGcsService {
     if (entity.getProperty(FILE_LENGTH_PROP) != null) {
       length = (Long) entity.getProperty(FILE_LENGTH_PROP);
     } else {
-      AppEngineFile file = nameToAppEngineFile(filename);
-      length = FILES.stat(file).getLength();
+      ByteBuffer chunk = ByteBuffer.allocate(1024);
+
+      long totalBytesRead = 0;
+      try (ReadableByteChannel readChannel = Channels.newChannel(
+          blobStorage.fetchBlob(getBlobKeyForFilename(filename)))) {
+        long bytesRead = 0;
+        bytesRead = readChannel.read(chunk);
+        while (bytesRead != -1) {
+          totalBytesRead += bytesRead;
+          chunk.clear();
+          bytesRead = readChannel.read(chunk);
+        }
+      }
+      length = totalBytesRead;
     }
     return new GcsFileMetadata(filename, options, null, length, creationTime);
   }
@@ -301,6 +429,7 @@ final class LocalRawGcsService implements RawGcsService {
       ByteBuffer dst, GcsFilename filename, long offset, long timeoutMillis) {
     Preconditions.checkArgument(offset >= 0, "%s: offset must be non-negative: %s", this, offset);
     try {
+      ensureInitialized();
       GcsFileMetadata meta = getObjectMetadata(filename, timeoutMillis);
       if (meta == null) {
         return Futures.immediateFailedFuture(
@@ -311,14 +440,35 @@ final class LocalRawGcsService implements RawGcsService {
             "The requested range cannot be satisfied. bytes=" + Long.toString(offset) + "-"
             + Long.toString(offset + dst.remaining()) + " the file is only " + meta.getLength()));
       }
-      AppEngineFile file = nameToAppEngineFile(filename);
-      try (FileReadChannel readChannel = FILES.openReadChannel(file, false)) {
-        readChannel.position(offset);
-        int read = 0;
+
+      int read = 0;
+
+      try (ReadableByteChannel readChannel = Channels.newChannel(
+          blobStorage.fetchBlob(getBlobKeyForFilename(filename)))) {
+        if (offset > 0) {
+          long bytesRemaining = offset;
+          ByteBuffer seekBuffer = ByteBuffer.allocate(1024);
+          while (bytesRemaining > 0) {
+            if (bytesRemaining < seekBuffer.limit()) {
+              seekBuffer.limit((int) bytesRemaining);
+            }
+            read = readChannel.read(seekBuffer);
+            if (read == -1) {
+              return Futures.immediateFailedFuture(new BadRangeException(
+                  "The requested range cannot be satisfied; seek failed with "
+                  + Long.toString(bytesRemaining) + " bytes remaining."));
+
+            }
+            bytesRemaining -= read;
+            seekBuffer.clear();
+          }
+          read = 0;
+        }
         while (read != -1 && dst.hasRemaining()) {
           read = readChannel.read(dst);
         }
       }
+
       return Futures.immediateFuture(meta);
     } catch (IOException e) {
       return Futures.immediateFailedFuture(e);
@@ -327,11 +477,13 @@ final class LocalRawGcsService implements RawGcsService {
 
   @Override
   public boolean deleteObject(GcsFilename filename, long timeoutMillis) throws IOException {
-    Transaction tx = DATASTORE.beginTransaction();
+    ensureInitialized();
+    Transaction tx = datastore.beginTransaction();
     Key key = makeKey(filename);
     try {
-      DATASTORE.get(tx, key);
-      DATASTORE.delete(tx, key);
+      datastore.get(tx, key);
+      datastore.delete(tx, key);
+      blobstoreService.delete(getBlobKeyForFilename(filename));
     } catch (EntityNotFoundException ex) {
       return false;
     } finally {
@@ -339,8 +491,21 @@ final class LocalRawGcsService implements RawGcsService {
         tx.commit();
       }
     }
-    FILES.delete(nameToAppEngineFile(filename));
+
     return true;
+  }
+
+  private String getPathForGcsFilename(GcsFilename filename) {
+    return new StringBuilder()
+        .append("/gs/")
+        .append(filename.getBucketName())
+        .append('/')
+        .append(filename.getObjectName())
+        .toString();
+  }
+
+  private BlobKey getBlobKeyForFilename(GcsFilename filename) {
+    return blobstoreService.createGsBlobKey(getPathForGcsFilename(filename));
   }
 
   @Override
@@ -351,6 +516,7 @@ final class LocalRawGcsService implements RawGcsService {
   @Override
   public void putObject(GcsFilename filename, GcsFileOptions options, ByteBuffer content,
       long timeoutMillis) throws IOException {
+    ensureInitialized();
     Token token = beginObjectCreation(filename, options, timeoutMillis);
     finishObjectCreation(token, content, timeoutMillis);
   }
@@ -358,6 +524,7 @@ final class LocalRawGcsService implements RawGcsService {
   @Override
   public void composeObject(Iterable<String> source, GcsFilename dest, long timeoutMillis)
       throws IOException {
+    ensureInitialized();
     int size = Iterables.size(source);
     if (size > 32) {
       throw new IOException("Compose attempted with too many components. Limit is 32");
@@ -365,30 +532,33 @@ final class LocalRawGcsService implements RawGcsService {
     if (size < 2) {
       throw new IOException("You must provide at least two source components.");
     }
-    ByteBuffer chunk = ByteBuffer.allocate(1024);
     Token token = beginObjectCreation(dest, GcsFileOptions.getDefaultInstance(), timeoutMillis);
+
     for (String filename : source) {
-      GcsFilename sourceFileName = new GcsFilename(dest.getBucketName(), filename);
-      GcsFileMetadata meta = getObjectMetadata(sourceFileName, timeoutMillis);
-      if (meta == null) {
-        throw new FileNotFoundException(this + ": No such file: " + filename);
-      }
-      AppEngineFile file = nameToAppEngineFile(sourceFileName);
-      try (FileReadChannel readChannel = FILES.openReadChannel(file, false)) {
-        readChannel.position(0);
-        while (readChannel.read(chunk) != -1) {
-          chunk.flip();
-          token = append(token, chunk);
-          chunk.clear();
-        }
-      }
+      GcsFilename sourceGcsFilename = new GcsFilename(dest.getBucketName(), filename);
+      appendFileContentsToToken(sourceGcsFilename, token);
     }
     finishObjectCreation(token, ByteBuffer.allocate(0), timeoutMillis);
+  }
+
+  private Token appendFileContentsToToken(GcsFilename source, Token token) throws IOException {
+    ByteBuffer chunk = ByteBuffer.allocate(1024);
+
+    try (ReadableByteChannel readChannel = Channels.newChannel(
+        blobStorage.fetchBlob(getBlobKeyForFilename(source)))) {
+      while (readChannel.read(chunk) != -1) {
+        chunk.flip();
+        token = append(token, chunk);
+        chunk.clear();
+      }
+    }
+    return token;
   }
 
   @Override
   public void copyObject(GcsFilename source, GcsFilename dest, GcsFileOptions fileOptions,
       long timeoutMillis) throws IOException {
+    ensureInitialized();
     GcsFileMetadata meta = getObjectMetadata(source, timeoutMillis);
     if (meta == null) {
       throw new FileNotFoundException(this + ": No such file: " + source);
@@ -396,23 +566,16 @@ final class LocalRawGcsService implements RawGcsService {
     if (fileOptions == null) {
       fileOptions = meta.getOptions();
     }
-    ByteBuffer chunk = ByteBuffer.allocate(1024);
+
     Token token = beginObjectCreation(dest, fileOptions, timeoutMillis);
-    AppEngineFile file = nameToAppEngineFile(source);
-    try (FileReadChannel readChannel = FILES.openReadChannel(file, false)) {
-      readChannel.position(0);
-      while (readChannel.read(chunk) != -1) {
-        chunk.flip();
-        token = append(token, chunk);
-        chunk.clear();
-      }
-    }
+    appendFileContentsToToken(source, token);
     finishObjectCreation(token, ByteBuffer.allocate(0), timeoutMillis);
   }
 
   @Override
   public ListItemBatch list(String bucket, String prefix, String delimiter,
       String marker, int maxResults, long timeoutMillis) throws IOException {
+    ensureInitialized();
     Query query = makeQuery(bucket);
     int prefixLength;
     if (!Strings.isNullOrEmpty(prefix)) {
@@ -429,7 +592,7 @@ final class LocalRawGcsService implements RawGcsService {
     List<ListItem> items = new ArrayList<>(maxResults);
     Set<String> prefixes = new HashSet<>();
     QueryResultIterator<Entity> dsResults =
-        DATASTORE.prepare(query).asQueryResultIterator(fetchOptions);
+        datastore.prepare(query).asQueryResultIterator(fetchOptions);
     while (items.size() < maxResults && dsResults.hasNext()) {
       Entity entity = dsResults.next();
       String name = entity.getKey().getName();

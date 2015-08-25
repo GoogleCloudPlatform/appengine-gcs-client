@@ -27,7 +27,6 @@ import static org.junit.Assert.fail;
 import com.google.appengine.api.NamespaceManager;
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
 import com.google.common.base.Strings;
@@ -58,8 +57,8 @@ import java.util.TreeMap;
 public class GcsServiceTest {
 
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
-      new LocalTaskQueueTestConfig(), new LocalFileServiceTestConfig(),
-      new LocalBlobstoreServiceTestConfig(), new LocalDatastoreServiceTestConfig());
+      new LocalTaskQueueTestConfig(), new LocalBlobstoreServiceTestConfig(),
+      new LocalDatastoreServiceTestConfig());
   private GcsService gcsService;
   private final List<GcsFilename> toDelete = new ArrayList<>();
   private GcsFileOptions options;

@@ -23,7 +23,6 @@ import static org.junit.Assert.assertTrue;
 
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
 import com.google.common.collect.ImmutableMap;
@@ -53,8 +52,8 @@ public class GcsOutputChannelTest {
 
   private static final int BUFFER_SIZE = 2 * 1024 * 1024;
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
-      new LocalTaskQueueTestConfig(), new LocalFileServiceTestConfig(),
-      new LocalBlobstoreServiceTestConfig(), new LocalDatastoreServiceTestConfig());
+      new LocalTaskQueueTestConfig(), new LocalBlobstoreServiceTestConfig(),
+      new LocalDatastoreServiceTestConfig());
 
   private final boolean reconstruct;
 

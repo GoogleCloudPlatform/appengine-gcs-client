@@ -24,7 +24,6 @@ import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.tools.cloudstorage.oauth.OauthRawGcsServiceFactory;
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
 import com.google.common.collect.ImmutableSet;
@@ -53,8 +52,8 @@ import java.util.Arrays;
 public class SerializationTest {
 
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
-      new LocalTaskQueueTestConfig(), new LocalFileServiceTestConfig(),
-      new LocalBlobstoreServiceTestConfig(), new LocalDatastoreServiceTestConfig());
+      new LocalTaskQueueTestConfig(), new LocalBlobstoreServiceTestConfig(),
+      new LocalDatastoreServiceTestConfig());
 
   private enum TestFile {
     SMALL(new GcsFilename("unit-tests", "smallFile"), 100),

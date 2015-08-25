@@ -21,7 +21,6 @@ import static org.junit.Assert.assertEquals;
 
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
-import com.google.appengine.tools.development.testing.LocalFileServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
 import com.google.appengine.tools.development.testing.LocalTaskQueueTestConfig;
 
@@ -46,8 +45,8 @@ import java.nio.charset.CharsetDecoder;
 @RunWith(JUnit4.class)
 public class GcsInputChannelTest {
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
-      new LocalTaskQueueTestConfig(), new LocalFileServiceTestConfig(),
-      new LocalBlobstoreServiceTestConfig(), new LocalDatastoreServiceTestConfig());
+      new LocalTaskQueueTestConfig(), new LocalBlobstoreServiceTestConfig(),
+      new LocalDatastoreServiceTestConfig());
 
   private enum ChannelType {
     SIMPLE_GCS_INPUT,

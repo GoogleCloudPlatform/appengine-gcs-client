@@ -9,12 +9,12 @@ import setuptools
 
 setuptools.setup(
     name="GoogleAppEngineCloudStorageClient",
-    version="1.9.21.0",
+    version="1.9.22.1",
     packages=setuptools.find_packages(),
     author="Google App Engine",
     author_email="app-engine-pipeline-api@googlegroups.com",
     keywords="google app engine cloud storage",
-    url="https://code.google.com/p/appengine-gcs-client/",
+    url="https://github.com/GoogleCloudPlatform/appengine-gcs-client",
     license="Apache License 2.0",
     description=("This library is the preferred way of accessing Google "
                  "Cloud Storage from App Engine. It was designed to "
