@@ -50,6 +50,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.io.BaseEncoding;
@@ -88,7 +89,8 @@ import javax.xml.stream.XMLStreamException;
  */
 final class OauthRawGcsService implements RawGcsService {
 
-  private static final String ACL = "x-goog-acl";
+  private static final String X_GOOG_PREFIX = "x-goog-";
+  private static final String ACL = X_GOOG_PREFIX + "acl";
   private static final String CACHE_CONTROL = "Cache-Control";
   private static final String CONTENT_ENCODING = "Content-Encoding";
   private static final String CONTENT_DISPOSITION = "Content-Disposition";
@@ -105,13 +107,14 @@ final class OauthRawGcsService implements RawGcsService {
   private static final String MARKER = "marker";
   private static final String MAX_KEYS = "max-keys";
   private static final String DELIMITER = "delimiter";
-  private static final String X_GOOG_META = "x-goog-meta-";
-  private static final String X_GOOG_CONTENT_LENGTH =  "x-goog-stored-content-length";
-  private static final String X_GOOG_COPY_SOURCE = "x-goog-copy-source";
+  private static final String X_GOOG_META = X_GOOG_PREFIX + "meta-";
+  private static final String X_GOOG_CONTENT_LENGTH =  X_GOOG_PREFIX + "stored-content-length";
+  private static final String X_GOOG_COPY_SOURCE = X_GOOG_PREFIX + "copy-source";
   private static final String STORAGE_API_HOSTNAME = "storage.googleapis.com";
-  private static final HTTPHeader RESUMABLE_HEADER = new HTTPHeader("x-goog-resumable", "start");
+  private static final HTTPHeader RESUMABLE_HEADER =
+      new HTTPHeader(X_GOOG_PREFIX + "resumable", "start");
   private static final HTTPHeader REPLACE_METADATA_HEADER =
-      new HTTPHeader("x-goog-metadata-directive", "REPLACE");
+      new HTTPHeader(X_GOOG_PREFIX + "metadata-directive", "REPLACE");
   private static final HTTPHeader USER_AGENT =
       new HTTPHeader("User-Agent", "App Engine GCS Client");
   private static final HTTPHeader ZERO_CONTENT_LENGTH = new HTTPHeader(CONTENT_LENGTH, "0");
@@ -564,11 +567,18 @@ final class OauthRawGcsService implements RawGcsService {
     GcsFileOptions.Builder optionsBuilder = new GcsFileOptions.Builder();
     String etag = null;
     Date lastModified = null;
+    ImmutableMap.Builder<String, String> xGoogHeaders = ImmutableMap.builder();
     for (HTTPHeader header : headers) {
-      if (header.getName().startsWith(X_GOOG_META)) {
-        String key = header.getName().substring(X_GOOG_META.length());
-        String value = header.getValue();
-        optionsBuilder.addUserMetadata(key, value);
+      if (header.getName().startsWith(X_GOOG_PREFIX)) {
+        if (header.getName().startsWith(X_GOOG_META)) {
+          String key = header.getName().substring(X_GOOG_META.length());
+          String value = header.getValue();
+          optionsBuilder.addUserMetadata(key, value);
+        } else {
+          String key = header.getName().substring(X_GOOG_PREFIX.length());
+          String value = header.getValue();
+          xGoogHeaders.put(key, value);
+        }
       } else {
         switch (header.getName()) {
           case ACL:
@@ -597,7 +607,7 @@ final class OauthRawGcsService implements RawGcsService {
       }
     }
     GcsFileOptions options = optionsBuilder.build();
-    return new GcsFileMetadata(filename, options, etag, length, lastModified);
+    return new GcsFileMetadata(filename, options, etag, length, lastModified, xGoogHeaders.build());
   }
 
   @Override
