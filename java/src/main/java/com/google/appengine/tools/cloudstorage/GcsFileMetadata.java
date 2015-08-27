@@ -73,7 +73,15 @@ public final class GcsFileMetadata {
     return lastModified;
   }
 
-  public Map<String, String> getXgoogHeaders() {
+  /**
+   * Returns the Google headers that were provided together with the metadata.
+   * Some of the headers such as 'x-goog-component-count' could be considered as
+   * an extended metadata set.
+   *
+   * @see <a href="https://cloud.google.com/storage/docs/reference-headers#extension">
+   *     Goog extension headers</a> for a complete list of headers.
+   */
+  public Map<String, String> getXGoogHeaders() {
     return xGoogHeaders;
   }
 
