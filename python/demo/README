@@ -1,0 +1,6 @@
+Documentation on using this demo can be found at:
+
+https://cloud.google.com/appengine/docs/python/googlecloudstorageclient/getstarted
+
+Especially of note: When running the demo, remember to install the cloudstorage library by
+making a copy of the python/cloudstorage into this directory.
