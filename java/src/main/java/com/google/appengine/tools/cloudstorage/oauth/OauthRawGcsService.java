@@ -511,7 +511,7 @@ final class OauthRawGcsService implements RawGcsService {
             totalLength = getLengthFromContentRange(resp);
             break;
           case 404:
-            throw new FileNotFoundException("Cound not find: " + filename);
+            throw new FileNotFoundException("Could not find: " + filename);
           case 416:
             throw new BadRangeException("Requested Range not satisfiable; perhaps read past EOF? "
                 + URLFetchUtils.describeRequestAndResponse(info, resp));
