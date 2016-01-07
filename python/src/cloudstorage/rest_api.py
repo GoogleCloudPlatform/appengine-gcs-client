@@ -227,6 +227,7 @@ class _RestApi(object):
       if timeout > 0:
         yield ts.put_async(memcache_timeout=timeout,
                            use_datastore=self.retry_params.save_access_token,
+                           force_writes=True,
                            use_cache=True,
                            use_memcache=self.retry_params.memcache_access_token)
     raise ndb.Return(ts.token)
