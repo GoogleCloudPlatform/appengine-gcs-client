@@ -1,5 +1,6 @@
 package com.google.appengine.tools.cloudstorage;
 
+import static com.google.appengine.tools.cloudstorage.RetryParams.DEFAULT_REQUEST_TIMEOUT_RETRY_FACTOR;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -66,7 +67,7 @@ public class GcsServiceOptions implements Serializable {
   private GcsServiceOptions(Builder builder) {
     retryParams = new RetryParams.Builder(
         firstNonNull(builder.retryParams, RetryParams.getDefaultInstance()))
-        .requestTimeoutRetryFactor(1.2)
+        .requestTimeoutRetryFactor(DEFAULT_REQUEST_TIMEOUT_RETRY_FACTOR)
         .build();
     defaultWriteBufferSize = builder.defaultWriteBufferSize;
     pathDelimiter = builder.pathDelimiter;

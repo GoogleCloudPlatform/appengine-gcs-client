@@ -48,7 +48,7 @@ public final class RetryParams implements Serializable {
   private static final long serialVersionUID = -8492751576749007700L;
 
   public static final long DEFAULT_REQUEST_TIMEOUT_MILLIS = 30_000L;
-  public static final double DEFAULT_REQUEST_TIMEOUT_RETRY_FACTOR = 1;
+  public static final double DEFAULT_REQUEST_TIMEOUT_RETRY_FACTOR = 1.2;
   public static final long DEFAULT_MAX_REQUEST_TIMEOUT = 2L * DEFAULT_REQUEST_TIMEOUT_MILLIS;
   public static final int DEFAULT_RETRY_MIN_ATTEMPTS = 3;
   public static final int DEFAULT_RETRY_MAX_ATTEMPTS = 6;
