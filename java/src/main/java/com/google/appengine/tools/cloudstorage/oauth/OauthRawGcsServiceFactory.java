@@ -16,7 +16,6 @@
 
 package com.google.appengine.tools.cloudstorage.oauth;
 
-import com.google.appengine.api.ThreadManager;
 import com.google.appengine.api.urlfetch.FetchOptions;
 import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.api.urlfetch.HTTPRequest;
@@ -24,6 +23,7 @@ import com.google.appengine.api.urlfetch.HTTPResponse;
 import com.google.appengine.api.urlfetch.URLFetchService;
 import com.google.appengine.api.urlfetch.URLFetchServiceFactory;
 import com.google.appengine.tools.cloudstorage.RawGcsService;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -61,20 +62,22 @@ public final class OauthRawGcsServiceFactory {
     return new OauthRawGcsService(appIdFetchService, headers);
   }
 
-  private static URLFetchService getUrlFetchService() {
+  @VisibleForTesting
+  static URLFetchService getUrlFetchService() {
     if (Boolean.parseBoolean(System.getenv("GAE_VM"))) {
       return new URLConnectionAdapter();
     }
     return URLFetchServiceFactory.getURLFetchService();
   }
 
-  private static class URLConnectionAdapter implements URLFetchService {
+  @VisibleForTesting
+  static class URLConnectionAdapter implements URLFetchService {
 
     private static final ExecutorService executor =
-        new ThreadPoolExecutor(1, 100,
+        new ThreadPoolExecutor(0, 100,
             0L, TimeUnit.MILLISECONDS,
             new SynchronousQueue<Runnable>(),
-            ThreadManager.currentRequestThreadFactory(),
+            Executors.defaultThreadFactory(), //ThreadManager.currentRequestThreadFactory(),
             new ThreadPoolExecutor.CallerRunsPolicy());
 
     @Override
