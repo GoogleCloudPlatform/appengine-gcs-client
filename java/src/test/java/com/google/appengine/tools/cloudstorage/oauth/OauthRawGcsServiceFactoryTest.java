@@ -46,6 +46,7 @@ public class OauthRawGcsServiceFactoryTest {
 
   private final static byte[] RESPONSE_1 = {'h', 'e', 'l', 'l', 'o'};
   private final static byte[] RESPONSE_2 = {'w', 'o', 'r', 'l', 'd'};
+  private final static byte[] RESPONSE_3 = {'n', 'o', 't', ' ', 'f', 'o', 'u', 'n', 'd'};
   private final LocalServiceTestHelper helper = new LocalServiceTestHelper(
       new LocalTaskQueueTestConfig(), new LocalBlobstoreServiceTestConfig(),
       new LocalDatastoreServiceTestConfig());
@@ -79,7 +80,10 @@ public class OauthRawGcsServiceFactoryTest {
       public void handle(HttpExchange exchange) throws IOException {
         byte[] response = RESPONSE_1;
         int code = 200;
-        if ("POST".equals(exchange.getRequestMethod())) {
+        if ("HEAD".equals(exchange.getRequestMethod())) {
+          code = 404;
+          response = null;
+        } else if ("POST".equals(exchange.getRequestMethod())) {
           ByteArrayOutputStream bytes = new ByteArrayOutputStream();
           ByteStreams.copy(exchange.getRequestBody(), bytes);
           if (Arrays.equals(RESPONSE_1, bytes.toByteArray())
@@ -87,6 +91,7 @@ public class OauthRawGcsServiceFactoryTest {
             response = RESPONSE_2;
           } else {
             code = 500;
+            response = RESPONSE_3;
           }
         }
         exchange.getResponseHeaders().add("Connection", "close");
@@ -94,9 +99,13 @@ public class OauthRawGcsServiceFactoryTest {
         exchange.getResponseHeaders().add("H1", "v1");
         exchange.getResponseHeaders().add("H2", "v2_1");
         exchange.getResponseHeaders().add("H2", "v2_2");
-        exchange.sendResponseHeaders(code, response.length);
-        exchange.getResponseBody().write(response);
-        exchange.getResponseBody().close();
+        if (response != null) {
+          exchange.sendResponseHeaders(code, response.length);
+          exchange.getResponseBody().write(response);
+          exchange.getResponseBody().close();
+        } else {
+          exchange.sendResponseHeaders(code, 0);
+        }
       }
     });
     server.start();
@@ -122,13 +131,13 @@ public class OauthRawGcsServiceFactoryTest {
   @Test
   public void testFetchService_fetchUrl() throws Exception {
     URLFetchService urlFetchService = OauthRawGcsServiceFactory.getUrlFetchService();
-    verifyResponse1(urlFetchService.fetch(url));
+    verifyResponse(urlFetchService.fetch(url), 200, RESPONSE_1);
   }
 
   @Test
   public void testFetchService_fetchUrlAsync() throws Exception {
     URLFetchService urlFetchService = OauthRawGcsServiceFactory.getUrlFetchService();
-    verifyResponse1(urlFetchService.fetchAsync(url).get());
+    verifyResponse(urlFetchService.fetchAsync(url).get(), 200, RESPONSE_1);
   }
 
   @Test
@@ -137,7 +146,14 @@ public class OauthRawGcsServiceFactoryTest {
     req.setHeader(new HTTPHeader("RH", "RV"));
     req.setPayload(RESPONSE_1);
     URLFetchService urlFetchService = OauthRawGcsServiceFactory.getUrlFetchService();
-    verifyResponse2(urlFetchService.fetch(req));
+    verifyResponse(urlFetchService.fetch(req), 200, RESPONSE_2);
+  }
+
+  @Test
+  public void testFetchService_fetchHttpRequestFailure() throws Exception {
+    HTTPRequest req = new HTTPRequest(url, HTTPMethod.HEAD);
+    URLFetchService urlFetchService = OauthRawGcsServiceFactory.getUrlFetchService();
+    verifyResponse(urlFetchService.fetch(req), 404, null);
   }
 
   @Test
@@ -146,20 +162,20 @@ public class OauthRawGcsServiceFactoryTest {
     req.setHeader(new HTTPHeader("RH", "RV"));
     req.setPayload(RESPONSE_1);
     URLFetchService urlFetchService = OauthRawGcsServiceFactory.getUrlFetchService();
-    verifyResponse2(urlFetchService.fetchAsync(req).get());
+    verifyResponse(urlFetchService.fetchAsync(req).get(), 200, RESPONSE_2);
   }
 
-  private void verifyResponse1(HTTPResponse response) throws IOException {
-    verifyResponse(response, RESPONSE_1);
+  @Test
+  public void testFetchService_fetchHttpRequestAsyncFailure() throws Exception {
+    HTTPRequest req = new HTTPRequest(url, HTTPMethod.POST);
+    req.setPayload(RESPONSE_1);
+    URLFetchService urlFetchService = OauthRawGcsServiceFactory.getUrlFetchService();
+    verifyResponse(urlFetchService.fetchAsync(req).get(), 500, RESPONSE_3);
   }
 
-  private void verifyResponse2(HTTPResponse response) throws IOException {
-    verifyResponse(response, RESPONSE_2);
-  }
-
-  private void verifyResponse(HTTPResponse response, byte[] expectedContent) {
+  private void verifyResponse(HTTPResponse response, int responseCode , byte[] expectedContent) {
     assertNull(response.getFinalUrl());
-    assertEquals(200, response.getResponseCode());
+    assertEquals(responseCode, response.getResponseCode());
     assertArrayEquals(expectedContent, response.getContent());
     Map<String, Set<String>> expected = new HashMap<>();
     expected.put("H1", Sets.newHashSet("v1"));

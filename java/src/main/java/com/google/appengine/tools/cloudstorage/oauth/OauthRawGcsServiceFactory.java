@@ -16,6 +16,7 @@
 
 package com.google.appengine.tools.cloudstorage.oauth;
 
+import com.google.appengine.api.ThreadManager;
 import com.google.appengine.api.urlfetch.FetchOptions;
 import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.api.urlfetch.HTTPRequest;
@@ -30,6 +31,7 @@ import com.google.common.io.ByteStreams;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -37,7 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -77,7 +78,7 @@ public final class OauthRawGcsServiceFactory {
         new ThreadPoolExecutor(0, 100,
             0L, TimeUnit.MILLISECONDS,
             new SynchronousQueue<Runnable>(),
-            Executors.defaultThreadFactory(), //ThreadManager.currentRequestThreadFactory(),
+            ThreadManager.currentRequestThreadFactory(),
             new ThreadPoolExecutor.CallerRunsPolicy());
 
     @Override
@@ -114,18 +115,28 @@ public final class OauthRawGcsServiceFactory {
       return createHttpResponse(connection);
     }
 
-    private HTTPResponse createHttpResponse(HttpURLConnection connection) throws IOException {
-      final int responseCode = connection.getResponseCode();
-      final byte[] content =
-          ByteStreams.toByteArray(new BufferedInputStream(connection.getInputStream()));
-      List<HTTPHeader> headers =
-          Lists.newArrayListWithCapacity(connection.getHeaderFields().size());
-      for (Map.Entry<String, List<String>> h : connection.getHeaderFields().entrySet()) {
+    private HTTPResponse createHttpResponse(HttpURLConnection conn) throws IOException {
+      int responseCode = conn.getResponseCode();
+      List<HTTPHeader> headers = Lists.newArrayListWithCapacity(conn.getHeaderFields().size());
+      for (Map.Entry<String, List<String>> h : conn.getHeaderFields().entrySet()) {
         for (String v : h.getValue()) {
           headers.add(new HTTPHeader(h.getKey(), v));
         }
       }
+      byte[] content = null;
+      if (!"HEAD".equals(conn.getRequestMethod())) {
+        InputStream in;
+        if (responseCode >= 400) {
+          in = conn.getErrorStream();
+        } else {
+          in = conn.getInputStream();
+        }
+        try (BufferedInputStream bIn = new BufferedInputStream(in)) {
+          content = ByteStreams.toByteArray(bIn);
+        }
+      }
       return new HTTPResponse(responseCode, content, null, headers);
+
     }
 
     @Override
