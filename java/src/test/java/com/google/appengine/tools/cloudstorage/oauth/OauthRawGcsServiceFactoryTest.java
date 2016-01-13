@@ -12,6 +12,7 @@ import com.google.appengine.api.urlfetch.HTTPMethod;
 import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
 import com.google.appengine.api.urlfetch.URLFetchService;
+import com.google.appengine.tools.cloudstorage.oauth.OauthRawGcsServiceFactory.URLConnectionAdapter;
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalServiceTestHelper;
@@ -109,7 +110,7 @@ public class OauthRawGcsServiceFactoryTest {
       }
     });
     server.start();
-    url = new URL("http", server.getAddress().getHostName(), server.getAddress().getPort(), "/bla");
+    url = new URL("http", "localhost", server.getAddress().getPort(), "/bla");
   }
 
   @After
@@ -119,17 +120,17 @@ public class OauthRawGcsServiceFactoryTest {
   }
 
   @Test
-  public void testGetUrlFetchService() throws Exception {
+  public void testGetUrlFetchService() throws IOException {
     URLFetchService urlFetch = OauthRawGcsServiceFactory.getUrlFetchService();
     if (vmEngine) {
-      assertSame(OauthRawGcsServiceFactory.URLConnectionAdapter.class, urlFetch.getClass());
+      assertSame(URLConnectionAdapter.class, urlFetch.getClass());
     } else {
-      assertNotSame(OauthRawGcsServiceFactory.URLConnectionAdapter.class, urlFetch.getClass());
+      assertNotSame(URLConnectionAdapter.class, urlFetch.getClass());
     }
   }
 
   @Test
-  public void testFetchService_fetchUrl() throws Exception {
+  public void testFetchService_fetchUrl() throws IOException {
     URLFetchService urlFetchService = OauthRawGcsServiceFactory.getUrlFetchService();
     verifyResponse(urlFetchService.fetch(url), 200, RESPONSE_1);
   }
@@ -141,7 +142,7 @@ public class OauthRawGcsServiceFactoryTest {
   }
 
   @Test
-  public void testFetchService_fetchHttpRequest() throws Exception {
+  public void testFetchService_fetchHttpRequest() throws IOException {
     HTTPRequest req = new HTTPRequest(url, HTTPMethod.POST);
     req.setHeader(new HTTPHeader("RH", "RV"));
     req.setPayload(RESPONSE_1);
@@ -150,7 +151,7 @@ public class OauthRawGcsServiceFactoryTest {
   }
 
   @Test
-  public void testFetchService_fetchHttpRequestFailure() throws Exception {
+  public void testFetchService_fetchHttpRequestFailure() throws IOException {
     HTTPRequest req = new HTTPRequest(url, HTTPMethod.HEAD);
     URLFetchService urlFetchService = OauthRawGcsServiceFactory.getUrlFetchService();
     verifyResponse(urlFetchService.fetch(req), 404, null);

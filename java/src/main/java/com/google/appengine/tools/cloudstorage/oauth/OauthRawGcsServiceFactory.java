@@ -16,7 +16,8 @@
 
 package com.google.appengine.tools.cloudstorage.oauth;
 
-import com.google.appengine.api.ThreadManager;
+import static com.google.appengine.api.ThreadManager.createThreadForCurrentRequest;
+
 import com.google.appengine.api.urlfetch.FetchOptions;
 import com.google.appengine.api.urlfetch.HTTPHeader;
 import com.google.appengine.api.urlfetch.HTTPRequest;
@@ -28,6 +29,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
+import com.google.common.util.concurrent.SettableFuture;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -37,12 +39,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -74,13 +71,6 @@ public final class OauthRawGcsServiceFactory {
   @VisibleForTesting
   static class URLConnectionAdapter implements URLFetchService {
 
-    private static final ExecutorService executor =
-        new ThreadPoolExecutor(0, 100,
-            0L, TimeUnit.MILLISECONDS,
-            new SynchronousQueue<Runnable>(),
-            ThreadManager.currentRequestThreadFactory(),
-            new ThreadPoolExecutor.CallerRunsPolicy());
-
     @Override
     public HTTPResponse fetch(URL url) throws IOException {
       return createHttpResponse((HttpURLConnection) url.openConnection());
@@ -106,6 +96,8 @@ public final class OauthRawGcsServiceFactory {
       }
       byte[] payload = req.getPayload();
       if (payload != null) {
+        connection.setRequestProperty("Content-Length", String.valueOf(payload.length));
+        connection.setFixedLengthStreamingMode(payload.length);
         connection.setDoOutput(true);
         OutputStream wr = connection.getOutputStream();
         wr.write(payload);
@@ -141,20 +133,32 @@ public final class OauthRawGcsServiceFactory {
 
     @Override
     public Future<HTTPResponse> fetchAsync(final URL url) {
-      return executor.submit(new Callable<HTTPResponse>() {
-        @Override public HTTPResponse call() throws Exception {
-          return fetch(url);
+      final SettableFuture<HTTPResponse> future = SettableFuture.create();
+      createThreadForCurrentRequest(new Runnable() {
+        @Override public void run() {
+          try {
+            future.set(fetch(url));
+          } catch (Exception ex) {
+            future.setException(ex);
+          }
         }
-      });
+      }).start();
+      return future;
     }
 
     @Override
     public Future<HTTPResponse> fetchAsync(final HTTPRequest request) {
-      return executor.submit(new Callable<HTTPResponse>() {
-        @Override public HTTPResponse call() throws Exception {
-          return fetch(request);
+      final SettableFuture<HTTPResponse> future = SettableFuture.create();
+      createThreadForCurrentRequest(new Runnable() {
+        @Override public void run() {
+          try {
+            future.set(fetch(request));
+          } catch (Exception ex) {
+            future.setException(ex);
+          }
         }
-      });
+      }).start();
+      return future;
     }
   }
 }
