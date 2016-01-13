@@ -16,11 +16,30 @@
 
 package com.google.appengine.tools.cloudstorage.oauth;
 
-import static com.google.appengine.api.urlfetch.URLFetchServiceFactory.getURLFetchService;
+import static com.google.appengine.api.ThreadManager.createThreadForCurrentRequest;
 
+import com.google.appengine.api.urlfetch.FetchOptions;
 import com.google.appengine.api.urlfetch.HTTPHeader;
+import com.google.appengine.api.urlfetch.HTTPRequest;
+import com.google.appengine.api.urlfetch.HTTPResponse;
+import com.google.appengine.api.urlfetch.URLFetchService;
+import com.google.appengine.api.urlfetch.URLFetchServiceFactory;
 import com.google.appengine.tools.cloudstorage.RawGcsService;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
+import com.google.common.io.ByteStreams;
+import com.google.common.util.concurrent.SettableFuture;
+
+import java.io.BufferedInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Future;
 
 
 /**
@@ -29,7 +48,7 @@ import com.google.common.collect.ImmutableSet;
 public final class OauthRawGcsServiceFactory {
 
   private static final AppIdentityOAuthURLFetchService appIdFetchService =
-      new AppIdentityOAuthURLFetchService(getURLFetchService(), OauthRawGcsService.OAUTH_SCOPES);
+      new AppIdentityOAuthURLFetchService(getUrlFetchService(), OauthRawGcsService.OAUTH_SCOPES);
 
   private OauthRawGcsServiceFactory() {}
 
@@ -39,5 +58,107 @@ public final class OauthRawGcsServiceFactory {
    */
   public static RawGcsService createOauthRawGcsService(ImmutableSet<HTTPHeader> headers) {
     return new OauthRawGcsService(appIdFetchService, headers);
+  }
+
+  @VisibleForTesting
+  static URLFetchService getUrlFetchService() {
+    if (Boolean.parseBoolean(System.getenv("GAE_VM"))) {
+      return new URLConnectionAdapter();
+    }
+    return URLFetchServiceFactory.getURLFetchService();
+  }
+
+  @VisibleForTesting
+  static class URLConnectionAdapter implements URLFetchService {
+
+    @Override
+    public HTTPResponse fetch(URL url) throws IOException {
+      return createHttpResponse((HttpURLConnection) url.openConnection());
+    }
+
+    @Override
+    public HTTPResponse fetch(HTTPRequest req) throws IOException {
+      URL url = req.getURL();
+      HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+      connection.setRequestMethod(req.getMethod().name());
+      for (HTTPHeader header : req.getHeaders()) {
+        connection.setRequestProperty(header.getName(), header.getValue());
+      }
+      FetchOptions fetchOptions = req.getFetchOptions();
+      connection.setInstanceFollowRedirects(fetchOptions.getFollowRedirects());
+      if (fetchOptions.getDeadline() != null) {
+        int timeout = (int) (fetchOptions.getDeadline() * 1000);
+        connection.setConnectTimeout(timeout);
+        connection.setReadTimeout(timeout);
+      } else {
+        connection.setConnectTimeout(20_000);
+        connection.setReadTimeout(30_000);
+      }
+      byte[] payload = req.getPayload();
+      if (payload != null) {
+        connection.setRequestProperty("Content-Length", String.valueOf(payload.length));
+        connection.setFixedLengthStreamingMode(payload.length);
+        connection.setDoOutput(true);
+        OutputStream wr = connection.getOutputStream();
+        wr.write(payload);
+        wr.flush();
+        wr.close();
+      }
+      return createHttpResponse(connection);
+    }
+
+    private HTTPResponse createHttpResponse(HttpURLConnection conn) throws IOException {
+      int responseCode = conn.getResponseCode();
+      List<HTTPHeader> headers = Lists.newArrayListWithCapacity(conn.getHeaderFields().size());
+      for (Map.Entry<String, List<String>> h : conn.getHeaderFields().entrySet()) {
+        for (String v : h.getValue()) {
+          headers.add(new HTTPHeader(h.getKey(), v));
+        }
+      }
+      byte[] content = null;
+      if (!"HEAD".equals(conn.getRequestMethod())) {
+        InputStream in;
+        if (responseCode >= 400) {
+          in = conn.getErrorStream();
+        } else {
+          in = conn.getInputStream();
+        }
+        try (BufferedInputStream bIn = new BufferedInputStream(in)) {
+          content = ByteStreams.toByteArray(bIn);
+        }
+      }
+      return new HTTPResponse(responseCode, content, null, headers);
+
+    }
+
+    @Override
+    public Future<HTTPResponse> fetchAsync(final URL url) {
+      final SettableFuture<HTTPResponse> future = SettableFuture.create();
+      createThreadForCurrentRequest(new Runnable() {
+        @Override public void run() {
+          try {
+            future.set(fetch(url));
+          } catch (Exception ex) {
+            future.setException(ex);
+          }
+        }
+      }).start();
+      return future;
+    }
+
+    @Override
+    public Future<HTTPResponse> fetchAsync(final HTTPRequest request) {
+      final SettableFuture<HTTPResponse> future = SettableFuture.create();
+      createThreadForCurrentRequest(new Runnable() {
+        @Override public void run() {
+          try {
+            future.set(fetch(request));
+          } catch (Exception ex) {
+            future.setException(ex);
+          }
+        }
+      }).start();
+      return future;
+    }
   }
 }

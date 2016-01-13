@@ -1,5 +1,8 @@
+*.iml
+.idea
 MANIFEST
 *.pyc
 .project
 .pydevproject
 .settings
+java/target
