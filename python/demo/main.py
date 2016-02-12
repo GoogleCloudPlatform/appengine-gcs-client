@@ -1,6 +1,6 @@
 # Copyright 2012 Google Inc. All Rights Reserved.
 
-
+#[START sample]
 """A sample app that uses GCS client to operate on bucket and file."""
 
 import logging
@@ -153,3 +153,4 @@ class MainPage(webapp2.RequestHandler):
 
 app = webapp2.WSGIApplication([('/', MainPage)],
                               debug=True)
+#[END sample]
