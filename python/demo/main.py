@@ -3,12 +3,14 @@
 #[START sample]
 """A sample app that uses GCS client to operate on bucket and file."""
 
+#[START imports]
 import logging
 import os
 import cloudstorage as gcs
 import webapp2
 
 from google.appengine.api import app_identity
+#[END imports]
 
 my_default_retry_params = gcs.RetryParams(initial_delay=0.2,
                                           max_delay=5.0,
@@ -61,7 +63,8 @@ class MainPage(webapp2.RequestHandler):
     else:
       self.delete_files()
       self.response.write('\n\nThe demo ran successfully!\n')
-      
+  
+#[START write]    
   def create_file(self, filename):
     """Create a file.
 
@@ -84,7 +87,9 @@ class MainPage(webapp2.RequestHandler):
     gcs_file.write('f'*1024*4 + '\n')
     gcs_file.close()
     self.tmp_filenames_to_clean_up.append(filename)
+#[END write]
 
+#[START read]
   def read_file(self, filename):
     self.response.write('Abbreviated file content (first line and last 1K):\n')
 
@@ -93,6 +98,7 @@ class MainPage(webapp2.RequestHandler):
     gcs_file.seek(-1024, os.SEEK_END)
     self.response.write(gcs_file.read())
     gcs_file.close()
+#[END read]
 
   def stat_file(self, filename):
     self.response.write('File stat:\n')
