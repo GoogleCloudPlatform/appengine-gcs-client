@@ -26,6 +26,8 @@ __all__ = ['copy2',
            'open',
            'stat',
            'compose',
+           'get_location',
+           'get_storage_class',
           ]
 
 import logging
@@ -124,6 +126,94 @@ def delete(filename, retry_params=None, _account_id=None):
   status, resp_headers, content = api.delete_object(filename)
   errors.check_status(status, [204], filename, resp_headers=resp_headers,
                       body=content)
+
+
+def get_location(bucket, retry_params=None, _account_id=None):
+  """Returns the location for the given bucket.
+
+  https://cloud.google.com/storage/docs/bucket-locations
+
+  Args:
+    bucket: A Google Cloud Storage bucket of form '/bucket'.
+    retry_params: An api_utils.RetryParams for this call to GCS. If None,
+      the default one is used.
+    _account_id: Internal-use only.
+
+  Returns:
+    The location as a string.
+
+  Raises:
+    errors.AuthorizationError: if authorization failed.
+    errors.NotFoundError: if the bucket does not exist.
+  """
+
+  return _get_bucket_attribute(bucket,
+                               'location',
+                               'LocationConstraint',
+                               retry_params=retry_params,
+                               _account_id=_account_id)
+
+
+def get_storage_class(bucket, retry_params=None, _account_id=None):
+  """Returns the storage class for the given bucket.
+
+  https://cloud.google.com/storage/docs/storage-classes
+
+  Args:
+    bucket: A Google Cloud Storage bucket of form '/bucket'.
+    retry_params: An api_utils.RetryParams for this call to GCS. If None,
+      the default one is used.
+    _account_id: Internal-use only.
+
+  Returns:
+    The storage class as a string.
+
+  Raises:
+    errors.AuthorizationError: if authorization failed.
+    errors.NotFoundError: if the bucket does not exist.
+  """
+
+  return _get_bucket_attribute(bucket,
+                               'storageClass',
+                               'StorageClass',
+                               retry_params=retry_params,
+                               _account_id=_account_id)
+
+
+def _get_bucket_attribute(bucket,
+                          query_param,
+                          xml_response_tag,
+                          retry_params=None,
+                          _account_id=None):
+  """Helper method to request a bucket parameter and parse the response.
+
+  Args:
+    bucket: A Google Cloud Storage bucket of form '/bucket'.
+    query_param: The query parameter to include in the get bucket request.
+    xml_response_tag: The expected tag in the xml response.
+    retry_params: An api_utils.RetryParams for this call to GCS. If None,
+      the default one is used.
+    _account_id: Internal-use only.
+
+  Returns:
+    The xml value as a string.  None if the returned xml does not match expected
+    format.
+
+  Raises:
+    errors.AuthorizationError: if authorization failed.
+    errors.NotFoundError: if the bucket does not exist.
+  """
+  api = storage_api._get_storage_api(retry_params=retry_params,
+                                     account_id=_account_id)
+  common.validate_bucket_path(bucket)
+  status, headers, content = api.get_bucket('%s?%s' % (bucket, query_param))
+
+  errors.check_status(status, [200], bucket, resp_headers=headers, body=content)
+
+  root = ET.fromstring(content)
+  if root.tag == xml_response_tag and root.text:
+    return root.text
+  return None
 
 
 def stat(filename, retry_params=None, _account_id=None):
