@@ -93,7 +93,7 @@ class RetryParamsTest(unittest.TestCase):
 
   def testInitialization(self):
     retry_params = api_utils._get_default_retry_params()
-    self.assertEqual('App Engine Python GCS Client', retry_params._user_agent)
+    self.assertEqual('AppEngine-Python-GCS', retry_params._user_agent)
 
     user_agent = 'Test User Agent String'
     retry_params = api_utils.RetryParams(_user_agent=user_agent)

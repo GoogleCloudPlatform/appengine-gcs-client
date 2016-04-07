@@ -72,7 +72,7 @@ public class OauthRawGcsServiceTest {
     URL url = new URL("https://storage.googleapis.com/sample-bucket/sample-object");
     HTTPRequest expected = new HTTPRequest(url, PUT, FETCH_OPTIONS);
     expected.addHeader(new HTTPHeader("Content-Length", "0"));
-    expected.addHeader(new HTTPHeader("User-Agent", "App Engine GCS Client"));
+    expected.addHeader(new HTTPHeader("User-Agent", OauthRawGcsService.USER_AGENT_PRODUCT));
     assertHttpRequestEquals(expected, service.makeRequest(GCS_FILENAME, null, PUT, 30000));
   }
 
@@ -81,7 +81,7 @@ public class OauthRawGcsServiceTest {
     URL url = new URL("https://storage.googleapis.com/sample-bucket/sample-object");
     HTTPRequest expected = new HTTPRequest(url, PUT, FETCH_OPTIONS);
     expected.addHeader(new HTTPHeader("Content-Length", "0"));
-    expected.addHeader(new HTTPHeader("User-Agent", "App Engine GCS Client"));
+    expected.addHeader(new HTTPHeader("User-Agent", OauthRawGcsService.USER_AGENT_PRODUCT));
     assertHttpRequestEquals(
         expected, service.makeRequest(GCS_FILENAME, null, PUT, 30000, new byte[0]));
   }
@@ -93,7 +93,7 @@ public class OauthRawGcsServiceTest {
     HTTPRequest expected = new HTTPRequest(url, PUT, FETCH_OPTIONS);
     expected.addHeader(new HTTPHeader("Content-Length", "5"));
     expected.addHeader(new HTTPHeader("Content-MD5", "XUFAKrxLKna5cZ2REBfFkg=="));
-    expected.addHeader(new HTTPHeader("User-Agent", "App Engine GCS Client"));
+    expected.addHeader(new HTTPHeader("User-Agent", OauthRawGcsService.USER_AGENT_PRODUCT));
     expected.setPayload(payload);
     assertHttpRequestEquals(expected, service.makeRequest(GCS_FILENAME, null, PUT, 30000, payload));
   }

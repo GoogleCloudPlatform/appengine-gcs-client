@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-//[START sample]
+
 package com.google.appengine.demos;
 
 import com.google.appengine.api.blobstore.BlobKey;
@@ -115,4 +115,3 @@ public class GcsExampleServlet extends HttpServlet {
     }
   }
 }
-//[END sample]

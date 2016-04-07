@@ -99,6 +99,9 @@ public class GcsInputChannelTest {
     assertEquals(result, -1);
   }
 
+  /**
+   * This is designed to mimic how data is read by the Mapreduce lineInputReader
+   */
   @Test
   public void readOneByteAtATime() throws IOException {
     GcsService gcsService = GcsServiceFactory.createGcsService();

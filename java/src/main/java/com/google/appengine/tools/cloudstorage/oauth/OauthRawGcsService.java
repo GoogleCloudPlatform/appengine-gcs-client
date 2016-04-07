@@ -111,12 +111,13 @@ final class OauthRawGcsService implements RawGcsService {
   private static final String X_GOOG_CONTENT_LENGTH =  X_GOOG_PREFIX + "stored-content-length";
   private static final String X_GOOG_COPY_SOURCE = X_GOOG_PREFIX + "copy-source";
   private static final String STORAGE_API_HOSTNAME = "storage.googleapis.com";
+  public static final String USER_AGENT_PRODUCT = "AppEngine-Java-GCS";
   private static final HTTPHeader RESUMABLE_HEADER =
       new HTTPHeader(X_GOOG_PREFIX + "resumable", "start");
   private static final HTTPHeader REPLACE_METADATA_HEADER =
       new HTTPHeader(X_GOOG_PREFIX + "metadata-directive", "REPLACE");
   private static final HTTPHeader USER_AGENT =
-      new HTTPHeader("User-Agent", "App Engine GCS Client");
+      new HTTPHeader("User-Agent", USER_AGENT_PRODUCT);
   private static final HTTPHeader ZERO_CONTENT_LENGTH = new HTTPHeader(CONTENT_LENGTH, "0");
   private static final Map<String, String> COMPOSE_QUERY_STRINGS =
       Collections.singletonMap("compose", null);

@@ -203,7 +203,7 @@ class _RetryWrapper(object):
 class RetryParams(object):
   """Retry configuration parameters."""
 
-  _DEFAULT_USER_AGENT = 'App Engine Python GCS Client'
+  _DEFAULT_USER_AGENT = 'AppEngine-Python-GCS'
 
   @datastore_rpc._positional(1)
   def __init__(self,

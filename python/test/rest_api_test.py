@@ -61,7 +61,7 @@ class RestApiTest(unittest.TestCase):
     ctx_urlfetch.assert_called_once_with(
         'http://example.com',
         headers={'authorization': 'OAuth blah',
-                 'User-Agent': 'App Engine Python GCS Client'},
+                 'User-Agent': 'AppEngine-Python-GCS'},
         follow_redirects=False,
         payload=None,
         method='GET',
@@ -118,7 +118,7 @@ class RestApiTest(unittest.TestCase):
     self.assertEqual(res, (200, {'foo': 'bar'}, 'yoohoo'))
     ctx_urlfetch.assert_called_once_with(
         'http://example.com',
-        headers={'User-Agent': 'App Engine Python GCS Client'},
+        headers={'User-Agent': 'AppEngine-Python-GCS'},
         follow_redirects=False,
         payload=None,
         method='GET',
