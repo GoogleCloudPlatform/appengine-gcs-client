@@ -18,8 +18,8 @@ package com.google.appengine.tools.cloudstorage;
 
 
 /**
- * Thrown from RawGcsService when a read operation begins at an offset that is >= the length of the
- * file. This is caught by GcsInputChannel.
+ * Thrown from RawGcsService when a read operation begins at an offset that is &gt;= the length of
+ * the file. This is caught by GcsInputChannel.
  */
 public final class BadRangeException extends RuntimeException {
   private static final long serialVersionUID = 780199686075408083L;

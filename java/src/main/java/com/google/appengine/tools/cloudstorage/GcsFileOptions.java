@@ -26,15 +26,19 @@ import java.util.Objects;
 /**
  * Container class for holding options for creating Google Storage files.
  *
+ * <p>
  * To construct {@code GcsFileOptions}, first create a {@link GcsFileOptions.Builder}. The builder
  * is mutable and each of the parameters can be set (any unset parameters will fallback to the
  * defaults). The {@code Builder} can be then used to create an immutable {@code GcsFileOptions}
  * object.
+ * </p>
  *
+ * <p>
  * For default {@code GcsFileOptions} use {@link #getDefaultInstance}. Default settings are subject
  * to change release to release. Currently the default values are to not specify any of the options.
  * If you require specific settings, explicitly create an instance of {@code GcsFileOptions} with
  * the required settings.
+ * </p>
  *
  * @see <a href="https://cloud.google.com/storage/docs">Google Storage API</a>
  */
@@ -159,7 +163,8 @@ public final class GcsFileOptions implements Serializable {
     /**
      * Sets the mime type of the object. If not set, default Google Storage mime type is used when
      * served out of Google Storage.
-     * {@link "https://cloud.google.com/storage/docs/reference-headers?csw=1#contenttype"}
+     * @see <a href="https://cloud.google.com/storage/docs/reference-headers?csw=1#contenttype">
+     *     GCS and the Content-Type Header</a>
      *
      * @param mimeType of the Google Storage object.
      * @return this builder for chaining.
@@ -171,7 +176,7 @@ public final class GcsFileOptions implements Serializable {
 
     /**
      * Sets the acl of the object. If not set, defaults to none (i.e., bucket default).
-     * {@link "https://cloud.google.com/storage/docs/accesscontrol"}
+     * @see <a href="https://cloud.google.com/storage/docs/accesscontrol">GCS Access Controls</a>
      *
      * @param acl to use for the Google Storage object.
      * @return this builder for chaining.
@@ -183,7 +188,8 @@ public final class GcsFileOptions implements Serializable {
 
     /**
      * Sets the cache control for the object. If not set, default value is used.
-     * {@link "https://cloud.google.com/storage/docs/reference-headers?csw=1#cachecontrol"}
+     * @see <a href="https://cloud.google.com/storage/docs/reference-headers?csw=1#cachecontrol">
+     *     GCS and the Cache-Control Header<a>
      *
      * @param cacheControl to use for the Google Storage object.
      * @return this builder for chaining.
@@ -195,7 +201,8 @@ public final class GcsFileOptions implements Serializable {
 
     /**
      * Sets the content encoding for the object. If not set, default value is used.
-     * {@link "https://cloud.google.com/storage/docs/reference-headers?csw=1#contentencoding"}
+     * @see <a href="https://cloud.google.com/storage/docs/reference-headers?csw=1#contentencoding">
+     *     GCS and the Content-Encoding Header</a>
      *
      * @param contentEncoding to use for the Google Storage object.
      * @return this builder for chaining.
@@ -207,7 +214,8 @@ public final class GcsFileOptions implements Serializable {
 
     /**
      * Sets the content disposition for the object. If not set, default value is used.
-     * {@link "https://cloud.google.com/storage/docs/reference-headers?csw=1#contentdisposition"}
+     * @see <a href="https://cloud.google.com/storage/docs/reference-headers?csw=1#contentdisposition">
+     *     GCS and the Content-Disposition Header</a>
      *
      * @param contentDisposition to use for the Google Storage object.
      * @return this builder for chaining.
@@ -219,11 +227,16 @@ public final class GcsFileOptions implements Serializable {
 
     /**
      * Adds user specific metadata that will be added to object headers when served through Google
-     * Storage: {@link "https://cloud.google.com/storage/docs/reference-headers?csw=1#xgoogmeta"}
-     * Each entry will be prefixed with x-goog-meta- when serving out. For example, if you add
-     * 'foo'->'bar' entry to userMetadata map, it will be served out as a header: 'x-goog-meta-foo:
-     * bar'.
+     * Storage.
      *
+     * <p>
+     * Each entry will be prefixed with {@code x-goog-meta-} when serving out. For example, if you
+     * add {@code foo->bar} entry to userMetadata map, it will be served out as a header: {@code
+     * x-goog-meta-foo: bar}.
+     * </p>
+     *
+     * @see <a href="https://cloud.google.com/storage/docs/reference-headers?csw=1#xgoogmeta">
+     *     GCS and Custom User Metadata Headers</a>
      * @param key metadata/header name suffix
      * @param value metadata/header value
      * @return this builder for chaining.
