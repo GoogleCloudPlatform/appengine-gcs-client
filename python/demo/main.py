@@ -12,16 +12,19 @@ import webapp2
 from google.appengine.api import app_identity
 #[END imports]
 
+#[START retries]
 my_default_retry_params = gcs.RetryParams(initial_delay=0.2,
                                           max_delay=5.0,
                                           backoff_factor=2,
                                           max_retry_period=15)
 gcs.set_default_retry_params(my_default_retry_params)
+#[END retries]
 
 
 class MainPage(webapp2.RequestHandler):
   """Main page for GCS demo application."""
 
+#[START get_default_bucket]
   def get(self):
     bucket_name = os.environ.get('BUCKET_NAME',
                                  app_identity.get_default_gcs_bucket_name())
@@ -30,6 +33,7 @@ class MainPage(webapp2.RequestHandler):
     self.response.write('Demo GCS Application running from Version: '
                         + os.environ['CURRENT_VERSION_ID'] + '\n')
     self.response.write('Using bucket name: ' + bucket_name + '\n\n')
+#[END get_default_bucket]
 
     bucket = '/' + bucket_name
     filename = bucket + '/demo-testfile'
@@ -113,6 +117,7 @@ class MainPage(webapp2.RequestHandler):
     for f in filenames:
       self.create_file(f)
 
+#[START list_bucket]
   def list_bucket(self, bucket):
     """Create several files and paginate through them.
 
@@ -136,6 +141,7 @@ class MainPage(webapp2.RequestHandler):
         break
       stats = gcs.listbucket(bucket + '/foo', max_keys=page_size,
                              marker=stat.filename)
+#[END list_bucket]
 
   def list_bucket_directory_mode(self, bucket):
     self.response.write('Listbucket directory mode result:\n')
@@ -147,6 +153,7 @@ class MainPage(webapp2.RequestHandler):
           self.response.write('  %r' % subdir_file)
           self.response.write('\n')
 
+#[START delete_files]
   def delete_files(self):
     self.response.write('Deleting files...\n')
     for filename in self.tmp_filenames_to_clean_up:
@@ -155,6 +162,7 @@ class MainPage(webapp2.RequestHandler):
         gcs.delete(filename)
       except gcs.NotFoundError:
         pass
+#[END delete_files]
 
 
 app = webapp2.WSGIApplication([('/', MainPage)],
