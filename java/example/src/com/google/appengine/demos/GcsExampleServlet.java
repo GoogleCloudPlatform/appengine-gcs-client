@@ -18,6 +18,7 @@ package com.google.appengine.demos;
 import com.google.appengine.api.blobstore.BlobKey;
 import com.google.appengine.api.blobstore.BlobstoreService;
 import com.google.appengine.api.blobstore.BlobstoreServiceFactory;
+//[START gcs_imports]
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
 import com.google.appengine.tools.cloudstorage.GcsFilename;
 import com.google.appengine.tools.cloudstorage.GcsInputChannel;
@@ -25,7 +26,7 @@ import com.google.appengine.tools.cloudstorage.GcsOutputChannel;
 import com.google.appengine.tools.cloudstorage.GcsService;
 import com.google.appengine.tools.cloudstorage.GcsServiceFactory;
 import com.google.appengine.tools.cloudstorage.RetryParams;
-
+//[END gcs_imports]
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -62,6 +63,7 @@ public class GcsExampleServlet extends HttpServlet {
    * If the request path is /gcs/Foo/Bar this will be interpreted as
    * a request to read the GCS file named Bar in the bucket Foo.
    */
+//[START doGet]
   @Override
   public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
     GcsFilename fileName = getFileName(req);
@@ -75,18 +77,21 @@ public class GcsExampleServlet extends HttpServlet {
       copy(Channels.newInputStream(readChannel), resp.getOutputStream());
     }
   }
-
+//[END doGet]
+   
   /**
    * Writes the payload of the incoming post as the contents of a file to GCS.
    * If the request path is /gcs/Foo/Bar this will be interpreted as
    * a request to create a GCS file named Bar in bucket Foo.
    */
+//[START doPost]
   @Override
   public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
     GcsOutputChannel outputChannel =
         gcsService.createOrReplace(getFileName(req), GcsFileOptions.getDefaultInstance());
     copy(req.getInputStream(), Channels.newOutputStream(outputChannel));
   }
+//[END doPost]
 
   private GcsFilename getFileName(HttpServletRequest req) {
     String[] splits = req.getRequestURI().split("/", 4);
