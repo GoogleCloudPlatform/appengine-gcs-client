@@ -67,8 +67,8 @@ class MainPage(webapp2.RequestHandler):
     else:
       self.delete_files()
       self.response.write('\n\nThe demo ran successfully!\n')
-  
-#[START write]    
+
+#[START write]
   def create_file(self, filename):
     """Create a file.
 

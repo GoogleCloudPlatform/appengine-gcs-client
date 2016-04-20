@@ -78,7 +78,7 @@ public class GcsExampleServlet extends HttpServlet {
     }
   }
 //[END doGet]
-   
+
   /**
    * Writes the payload of the incoming post as the contents of a file to GCS.
    * If the request path is /gcs/Foo/Bar this will be interpreted as

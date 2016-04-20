@@ -9,5 +9,7 @@ To run this example locally:
 2. cd to this directory: `cd appengine-gcs-client/java/example`
 3. If you don't have Maven 3, please install that.
 4. Use Maven to start this sample:
+
     `mvn appengine:devserver`
+
 5. Try out the app at http://localhost:8080/

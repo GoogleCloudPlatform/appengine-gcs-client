@@ -189,7 +189,7 @@ public final class GcsFileOptions implements Serializable {
     /**
      * Sets the cache control for the object. If not set, default value is used.
      * @see <a href="https://cloud.google.com/storage/docs/reference-headers?csw=1#cachecontrol">
-     *     GCS and the Cache-Control Header<a>
+     *     GCS and the Cache-Control Header</a>
      *
      * @param cacheControl to use for the Google Storage object.
      * @return this builder for chaining.
