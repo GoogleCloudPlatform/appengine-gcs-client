@@ -87,8 +87,10 @@ public class GcsExampleServlet extends HttpServlet {
 //[START doPost]
   @Override
   public void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-    GcsOutputChannel outputChannel =
-        gcsService.createOrReplace(getFileName(req), GcsFileOptions.getDefaultInstance());
+    GcsFileOptions instance = GcsFileOptions.getDefaultInstance();
+    GcsFilename fileName = getFileName(req);
+    GcsOutputChannel outputChannel;
+    outputChannel = gcsService.createOrReplace(fileName, instance);
     copy(req.getInputStream(), Channels.newOutputStream(outputChannel));
   }
 //[END doPost]
