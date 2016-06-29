@@ -24,6 +24,13 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.appengine.api.blobstore.BlobInfo;
+import com.google.appengine.api.blobstore.BlobKey;
+import com.google.appengine.api.blobstore.BlobstoreService;
+import com.google.appengine.api.blobstore.BlobstoreServiceFactory;
+import com.google.appengine.api.blobstore.dev.BlobInfoStorage;
+import com.google.appengine.api.blobstore.dev.BlobStorageFactory;
+import com.google.appengine.tools.cloudstorage.RawGcsService.ListItemBatch;
 import com.google.appengine.tools.cloudstorage.dev.LocalRawGcsServiceFactory;
 import com.google.appengine.tools.development.testing.LocalBlobstoreServiceTestConfig;
 import com.google.appengine.tools.development.testing.LocalDatastoreServiceTestConfig;
@@ -42,6 +49,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -146,5 +156,84 @@ public class LocalRawGcsServiceTest {
   public void testReadObjectAsyncAfterEndOffset() throws InterruptedException, ExecutionException {
     ByteBuffer tmpBuffer = ByteBuffer.allocate(100);
     rawGcsService.readObjectAsync(tmpBuffer, TestFile.SMALL.filename, 200, 1000).get();
+  }
+
+  @Test
+  public void testGetMetadataAfterBlobstoreUpload() throws IOException {
+    Date expectedDate = new Date(12345678L);
+    String expectedFilename = "my-file";
+    long expectedSize = 123456789L;
+    String expectedMd5Hash = "abcdefghijklmnop";
+    BlobstoreService blobstoreService = BlobstoreServiceFactory.getBlobstoreService();
+    GcsFilename expectedGcsFilename = new GcsFilename("my-bucket", expectedFilename);
+    BlobKey expectedKey = blobstoreService.createGsBlobKey(
+        getPathForGcsFilename(expectedGcsFilename));
+    BlobStorageFactory
+        .getBlobInfoStorage()
+        .saveBlobInfo(
+            new BlobInfo(
+                expectedKey,
+                "text",
+                expectedDate,
+                expectedFilename,
+                expectedSize,
+                expectedMd5Hash));
+    GcsFileMetadata metadata = rawGcsService.getObjectMetadata(expectedGcsFilename, 0);
+    assertEquals("", metadata.getEtag());
+    assertEquals(expectedGcsFilename, metadata.getFilename()); // TODO: this should be generated name or file name?
+    assertEquals(expectedDate, metadata.getLastModified());
+    assertEquals(GcsFileOptions.getDefaultInstance(), metadata.getOptions());
+    assertEquals(expectedSize, metadata.getLength());
+    assertEquals(Collections.emptyMap(), metadata.getXGoogHeaders());
+  }
+
+  @Test
+  public void testListAfterBlobstoreUpload() throws IOException {
+    Date expectedDate = new Date(12345678L);
+    String expectedFilename = "my-file";
+    long expectedSize = 123456789L;
+    String expectedMd5Hash = "abcdefghijklmnop";
+    BlobstoreService blobstoreService = BlobstoreServiceFactory.getBlobstoreService();
+    String bucket = "my-bucket";
+    GcsFilename expectedGcsFilename = new GcsFilename(bucket, expectedFilename);
+    BlobKey expectedKey = blobstoreService.createGsBlobKey(
+        getPathForGcsFilename(expectedGcsFilename));
+    BlobInfoStorage storage = BlobStorageFactory
+        .getBlobInfoStorage();
+    storage.saveBlobInfo(
+            new BlobInfo(
+                expectedKey,
+                "text",
+                expectedDate,
+                expectedFilename,
+                expectedSize,
+                expectedMd5Hash));
+    ListItemBatch batch = rawGcsService.list(bucket, "", "/", null, 2, 0);
+    List<ListItem> items = batch.getItems();
+    assertEquals(1, items.size());
+    ListItem metadata = items.get(0);
+    assertEquals(expectedDate, metadata.getLastModified());
+    assertEquals(expectedSize, metadata.getLength());
+    assertEquals(expectedFilename, metadata.getName());
+
+    // Test with prefix
+    batch = rawGcsService.list(bucket, "my-", "/", null, 2, 0);
+    items = batch.getItems();
+    assertEquals(1, items.size());
+    metadata = items.get(0);
+    assertEquals(expectedDate, metadata.getLastModified());
+    assertEquals(expectedSize, metadata.getLength());
+    assertEquals(expectedFilename, metadata.getName());
+    batch = rawGcsService.list(bucket, "nonexistent-prefix", "/", null, 2, 0);
+    assertEquals(0, batch.getItems().size());
+  }
+
+  private String getPathForGcsFilename(GcsFilename filename) {
+    return new StringBuilder()
+        .append("/gs/")
+        .append(filename.getBucketName())
+        .append('/')
+        .append(filename.getObjectName())
+        .toString();
   }
 }
