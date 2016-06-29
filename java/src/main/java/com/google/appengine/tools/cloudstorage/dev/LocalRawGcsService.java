@@ -633,6 +633,9 @@ final class LocalRawGcsService implements RawGcsService {
     boolean fromBlobstore = false;
     if (!dsResults.hasNext()) {
       // If no results, perhaps there's metadata stored by the Blobstore API that we missed.
+      // Note that Blobstore metadata results aren't returned if some blobs are uploaded via
+      // Blobstore and others are uploaded using this client library.  We only check for Blobstore
+      // metadata if no results are found in appengine-gcs-client's metadata store.
       Query blobstoreQuery = makeBlobstoreQuery();
       dsResults = datastore.prepare(blobstoreQuery).asQueryResultIterator(fetchOptions);
       fromBlobstore = true;
