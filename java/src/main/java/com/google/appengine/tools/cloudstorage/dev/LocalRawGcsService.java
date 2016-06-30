@@ -321,7 +321,8 @@ final class LocalRawGcsService implements RawGcsService {
     String origNamespace = NamespaceManager.get();
     try {
       NamespaceManager.set("");
-      return KeyFactory.createKey(null, BLOBSTORE_META_KIND, getBlobKeyForFilename(filename).getKeyString());
+      return KeyFactory.createKey(
+          null, BLOBSTORE_META_KIND, getBlobKeyForFilename(filename).getKeyString());
     } finally {
       NamespaceManager.set(origNamespace);
     }
