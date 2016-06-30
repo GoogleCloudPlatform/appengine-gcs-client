@@ -19,7 +19,6 @@ package com.google.appengine.tools.cloudstorage.dev;
 import static com.google.appengine.api.datastore.Entity.KEY_RESERVED_PROPERTY;
 import static com.google.appengine.api.datastore.Query.FilterOperator.GREATER_THAN_OR_EQUAL;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.io.BaseEncoding.base64Url;
 
 import com.google.appengine.api.NamespaceManager;
 import com.google.appengine.api.ThreadManager;
@@ -105,7 +104,6 @@ final class LocalRawGcsService implements RawGcsService {
   private static final String CREATION_TIME_PROP = "time";
   private static final String FILE_LENGTH_PROP = "length";
   private static final String BLOBSTORE_META_KIND = "__BlobInfo__";
-  private static final String BLOBSTORE_KEY_PREFIX = "encoded_gs_key:";
 
   private static final HashMap<GcsFilename, List<ByteBuffer>> inMemoryData = new HashMap<>();
 
@@ -333,16 +331,6 @@ final class LocalRawGcsService implements RawGcsService {
     try {
       NamespaceManager.set("");
       return new Query(ENTITY_KIND_PREFIX + bucket);
-    } finally {
-      NamespaceManager.set(origNamespace);
-    }
-  }
-
-  private Query makeBlobstoreQuery() {
-    String origNamespace = NamespaceManager.get();
-    try {
-      NamespaceManager.set("");
-      return new Query(BLOBSTORE_META_KIND);
     } finally {
       NamespaceManager.set(origNamespace);
     }
@@ -631,27 +619,9 @@ final class LocalRawGcsService implements RawGcsService {
     Set<String> prefixes = new HashSet<>();
     QueryResultIterator<Entity> dsResults =
         datastore.prepare(query).asQueryResultIterator(fetchOptions);
-    boolean fromBlobstore = false;
-    if (!dsResults.hasNext()) {
-      // If no results, perhaps there's metadata stored by the Blobstore API that we missed.
-      // Note that Blobstore metadata results aren't returned if some blobs are uploaded via
-      // Blobstore and others are uploaded using this client library.  We only check for Blobstore
-      // metadata if no results are found in appengine-gcs-client's metadata store.
-      Query blobstoreQuery = makeBlobstoreQuery();
-      dsResults = datastore.prepare(blobstoreQuery).asQueryResultIterator(fetchOptions);
-      fromBlobstore = true;
-    }
     while (items.size() < maxResults && dsResults.hasNext()) {
       Entity entity = dsResults.next();
-      String name;
-      if (!fromBlobstore) {
-        name = entity.getKey().getName();
-      } else {
-        String encodedName = entity.getKey().getName().substring(BLOBSTORE_KEY_PREFIX.length());
-        String fullName = new String(base64Url().omitPadding().decode(encodedName));
-        String[] nameInfo = fullName.split("/", 4);
-        name = nameInfo[nameInfo.length - 1];
-      }
+      String name = entity.getKey().getName();
       if (prefixLength > 0 && !name.startsWith(prefix)) {
         break;
       }
@@ -666,12 +636,7 @@ final class LocalRawGcsService implements RawGcsService {
         }
       }
       GcsFilename filename = new GcsFilename(bucket, name);
-      GcsFileMetadata metadata;
-      if (!fromBlobstore) {
-        metadata = createGcsFileMetadata(entity, filename);
-      } else {
-        metadata = createGcsFileMetadataFromBlobstore(entity, filename);
-      }
+      GcsFileMetadata metadata = createGcsFileMetadata(entity, filename);
       ListItem listItem = new ListItem.Builder()
           .setName(name)
           .setLength(metadata.getLength())
