@@ -180,7 +180,7 @@ public class LocalRawGcsServiceTest {
                 expectedMd5Hash));
     GcsFileMetadata metadata = rawGcsService.getObjectMetadata(expectedGcsFilename, 0);
     assertEquals("", metadata.getEtag());
-    assertEquals(expectedGcsFilename, metadata.getFilename()); // TODO: this should be generated name or file name?
+    assertEquals(expectedGcsFilename, metadata.getFilename());
     assertEquals(expectedDate, metadata.getLastModified());
     assertEquals(GcsFileOptions.getDefaultInstance(), metadata.getOptions());
     assertEquals(expectedSize, metadata.getLength());
