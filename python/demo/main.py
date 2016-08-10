@@ -4,6 +4,9 @@
 """A sample app that uses GCS client to operate on bucket and file."""
 
 #[START imports]
+from google.appengine.ext import vendor
+vendor.add('lib')
+
 import logging
 import os
 import cloudstorage as gcs
