@@ -558,9 +558,19 @@ class CloudStorageComposeTest(unittest.TestCase):
     self.assertRaises(ValueError, cloudstorage.compose,
                       [TESTFILE] * 33, DESTFILE)
 
-  def testComposeTooFewFilesFailure(self):
-    """Test to ensure ValueError is thrown if less than 2 are sent."""
-    self.assertRaises(ValueError, cloudstorage.compose, [TESTFILE], DESTFILE)
+  def testComposeNoFilesFailure(self):
+    """Test to ensure ValueError is thrown if zero paths are sent."""
+    self.assertRaises(ValueError, cloudstorage.compose, [], DESTFILE)
+
+  def testComposeOne(self):
+    """Test to ensure one file can be composed (the API supports it)."""
+
+    test_file = TESTFILE[len(BUCKET) + 1:]
+    cloudstorage.compose([test_file], DESTFILE)
+    with cloudstorage.open(DESTFILE, 'r') as gcs:
+      results = gcs.read()
+    cloudstorage.delete(DESTFILE)
+    self.assertEqual(DEFAULT_COMPOSE_CONTENT, results)
 
   def testComposeFilesMetadataTooLargeFailure(self):
     """Test to ensure ValueError is thrown if metadata is too long."""
