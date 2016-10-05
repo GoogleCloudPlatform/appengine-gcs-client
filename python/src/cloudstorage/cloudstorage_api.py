@@ -460,9 +460,9 @@ def _validate_compose_list(destination_file, file_list,
     raise ValueError(
           'Compose attempted to create composite with too many'
            '(%i) components; limit is (%i).' % (list_len, number_of_files))
-  if list_len <= 1:
+  if list_len <= 0:
     raise ValueError('Compose operation requires at'
-                     ' least two components; %i provided.' % list_len)
+                     ' least one component; 0 provided.')
 
   if files_metadata is None:
     files_metadata = []
