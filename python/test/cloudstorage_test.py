@@ -558,7 +558,7 @@ class CloudStorageComposeTest(unittest.TestCase):
     self.assertRaises(ValueError, cloudstorage.compose,
                       [TESTFILE] * 33, DESTFILE)
 
-  def testComposeTooFewFilesFailure(self):
+  def testComposeNoFilesFailure(self):
     """Test to ensure ValueError is thrown if zero paths are sent."""
     self.assertRaises(ValueError, cloudstorage.compose, [], DESTFILE)
 
