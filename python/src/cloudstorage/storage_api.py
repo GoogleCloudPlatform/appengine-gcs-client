@@ -64,8 +64,11 @@ def _get_storage_api(retry_params, account_id=None):
                     service_account_id=account_id,
                     retry_params=retry_params)
 
+  # when running local unit tests, the service account is test@localhost
+  # from google.appengine.api.app_identity.app_identity_stub.APP_SERVICE_ACCOUNT_NAME
+  service_account = app_identity.get_service_account_name()
   if (common.local_run() and not common.get_access_token()
-      and not app_identity.get_service_account_name()):
+      and (not service_account or service_account.endswith('@localhost'))):
     api.api_url = common.local_api_url()
   if common.get_access_token():
     api.token = common.get_access_token()
