@@ -16,6 +16,12 @@
       <url>http://www.apache.org/licenses/LICENSE-2.0</url>
     </license>
   </licenses>
+  <scm>
+    <connection>scm:git:git@github.com:GoogleCloudPlatform/appengine-gcs-client.git</connection>
+    <developerConnection>scm:git:git@github.com:GoogleCloudPlatform/appengine-gcs-client.git</developerConnection>
+    <url>https://github.com/GoogleCloudPlatform/appengine-gcs-client</url>
+    <tag>HEAD</tag>
+  </scm>
   <properties>
     <appengine.target.version>[1.8.9,2.0)</appengine.target.version>
   </properties>
