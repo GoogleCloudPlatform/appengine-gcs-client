@@ -22,7 +22,32 @@
   <prerequisites>
       <maven>3.1.0</maven>
   </prerequisites>
-  <build>
+  <repositories>
+    <repository>
+      <id>sonatype-google-releases</id>
+      <name>Sonatype Google Releases</name>
+      <url>https://oss.sonatype.org/service/local/repositories/google-releases/content</url>
+    </repository>
+    <repository>
+      <id>gae-staging</id>
+      <url>https://oss.sonatype.org/content/repositories/comgoogleappengine-1394/</url>
+    </repository>
+  </repositories>
+ 
+  <distributionManagement>
+    <repository>
+      <id>sonatype-nexus-staging</id>
+      <name>Sonatype Nexus Staging</name>
+      <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+    </repository>
+    <snapshotRepository>
+      <id>sonatype-nexus-snapshots</id>
+      <name>Sonatype Nexus Snapshots</name>
+      <url>https://oss.sonatype.org/content/repositories/google-snapshots/</url>
+    </snapshotRepository>
+  </distributionManagement>
+
+    <build>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -33,7 +58,19 @@
           <target>1.7</target>
         </configuration>
       </plugin>
-      <plugin>
+       <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-release-plugin</artifactId>
+        <version>2.5.3</version>
+        <configuration>
+          <mavenExecutorId>forked-path</mavenExecutorId>
+          <useReleaseProfile>false</useReleaseProfile>
+          <arguments>-Psonatype-oss-release</arguments>
+          <pushChanges>false</pushChanges>
+          <localCheckout>true</localCheckout>
+        </configuration>
+       </plugin>
+       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
         <version>2.6</version>
@@ -58,7 +95,7 @@
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
-      <version>19.0-rc1</version>
+      <version>19.0</version>
     </dependency>
     <dependency>
       <groupId>joda-time</groupId>
@@ -68,7 +105,7 @@
     <dependency>
       <groupId>com.google.apis</groupId>
       <artifactId>google-api-services-storage</artifactId>
-      <version>v1-rev68-1.21.0</version>
+      <version>v1-rev108-1.22.0</version>
       <exclusions>
         <exclusion>
           <groupId>com.google.guava</groupId>
@@ -118,4 +155,32 @@
        <scope>test</scope>
     </dependency>
   </dependencies>
+   
+  <profiles>
+    <profile>
+      <id>sonatype-oss-release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>1.6</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
