@@ -43,6 +43,9 @@ class MainPage(webapp2.RequestHandler):
       self.create_file(filename)
       self.response.write('\n\n')
 
+      self.read_partial_file(filename)
+      self.response.write('\n\n')
+      
       self.read_file(filename)
       self.response.write('\n\n')
 
@@ -92,15 +95,23 @@ class MainPage(webapp2.RequestHandler):
     gcs_file.close()
     self.tmp_filenames_to_clean_up.append(filename)
 #[END write]
-
-#[START read]
-  def read_file(self, filename):
+#[START read_partial]
+  def read_partial_file(self, filename):
     self.response.write('Abbreviated file content (first line and last 1K):\n')
 
     gcs_file = gcs.open(filename)
     self.response.write(gcs_file.readline())
     gcs_file.seek(-1024, os.SEEK_END)
     self.response.write(gcs_file.read())
+    gcs_file.close()
+#[END read_partial]
+
+#[START read]
+  def read_file(self, filename):
+    self.response.write('Reading the full file contents:\n')
+    
+    gcs_file = gcs.open(filename)
+    contents = gcs_file.read()
     gcs_file.close()
 #[END read]
 
