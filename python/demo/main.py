@@ -113,6 +113,7 @@ class MainPage(webapp2.RequestHandler):
     gcs_file = gcs.open(filename)
     contents = gcs_file.read()
     gcs_file.close()
+    self.response.write(contents)
 #[END read]
 
   def stat_file(self, filename):
