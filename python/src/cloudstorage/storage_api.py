@@ -41,6 +41,11 @@ except ImportError:
 from google.appengine.api import app_identity
 
 
+def _is_local_service_account():
+  service_account_name = app_identity.get_service_account_name()
+  return service_account_name == '' or service_account_name.endswith('@localhost')
+
+
 def _get_storage_api(retry_params, account_id=None):
   """Returns storage_api instance for API methods.
 
@@ -67,8 +72,7 @@ def _get_storage_api(retry_params, account_id=None):
   # when running local unit tests, the service account is test@localhost
   # from google.appengine.api.app_identity.app_identity_stub.APP_SERVICE_ACCOUNT_NAME
   # call get_service_account_name rarely: it can raise OverQuotaException
-  if (common.local_run() and not common.get_access_token()
-      and app_identity.get_service_account_name().endswith('@localhost')):
+  if (common.local_run() and not common.get_access_token() and _is_local_service_account()):
     api.api_url = common.local_api_url()
   if common.get_access_token():
     api.token = common.get_access_token()
