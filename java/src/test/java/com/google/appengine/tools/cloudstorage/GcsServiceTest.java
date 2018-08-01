@@ -47,6 +47,8 @@ import java.util.List;
 import java.util.NavigableMap;
 import java.util.Random;
 import java.util.TreeMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * End to end test to test the basics of the GcsService. This class uses the in-process
@@ -348,7 +350,7 @@ public class GcsServiceTest {
   }
 
   @Test
-  public void testReadMetadata() throws IOException {
+  public void testReadMetadata() throws IOException, InterruptedException {
     Date start = new Date(System.currentTimeMillis() - 1000);
     int length = 1 * 1024 * 1024 + 1;
     GcsFilename filename = new GcsFilename("testReadMetadataBucket", "testReadMetadataFile");
@@ -359,6 +361,7 @@ public class GcsServiceTest {
     assertEquals(content.length, metadata.getLength());
     assertEquals(options, metadata.getOptions());
     assertNotNull(metadata.getLastModified());
+    Thread.sleep(10); //10 millisecond at least, or Date comparison might break.
     assertTrue(metadata.getLastModified().before(new Date()));
     assertTrue(metadata.getLastModified().after(start));
   }

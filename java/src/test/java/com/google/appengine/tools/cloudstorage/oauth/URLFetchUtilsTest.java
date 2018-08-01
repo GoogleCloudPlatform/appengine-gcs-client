@@ -65,7 +65,7 @@ public class URLFetchUtilsTest {
     NetHttpTransport transport = new NetHttpTransport();
     Storage storage = new Storage.Builder(transport, new JacksonFactory(), initializer)
         .setApplicationName("bla").build();
-    HttpRequest request = storage.objects().delete("b", "o").buildHttpRequest();
+    HttpRequest request = storage.objects().delete("bucket", "object").buildHttpRequest();
     request.getHeaders().clear();
     request.getHeaders().put("k1", "v1");
     request.getHeaders().put("k2", "v2");
@@ -75,8 +75,8 @@ public class URLFetchUtilsTest {
     } catch (HttpResponseException ex) {
       exception = ex;
     }
-    String expected = "Request: DELETE " + Storage.DEFAULT_BASE_URL + "b/b/o/o\n"
-        + "k1: v1\nk2: v2\n\nno content\n\nResponse: 400 with 0 bytes of content\n";
+    String expected = "Request: DELETE " + Storage.DEFAULT_BASE_URL + "b/bucket/o/object\n"
+        + "k1: v1\nk2: v2\n\nno content\n\nResponse: 40";
     String result =
         URLFetchUtils.describeRequestAndResponse(new HTTPRequestInfo(request), exception);
     assertTrue(expected + "\nis not a prefix of:\n" + result, result.startsWith(expected));

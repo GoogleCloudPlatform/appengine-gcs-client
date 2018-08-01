@@ -35,8 +35,6 @@ import com.google.appengine.api.urlfetch.HTTPRequest;
 import com.google.appengine.api.urlfetch.HTTPResponse;
 import com.google.appengine.api.utils.FutureWrapper;
 import com.google.appengine.api.utils.SystemProperty;
-import com.google.appengine.repackaged.com.google.common.escape.Escaper;
-import com.google.appengine.repackaged.com.google.common.xml.XmlEscapers;
 import com.google.appengine.tools.cloudstorage.BadRangeException;
 import com.google.appengine.tools.cloudstorage.GcsFileMetadata;
 import com.google.appengine.tools.cloudstorage.GcsFileOptions;
@@ -53,7 +51,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.escape.Escaper;
 import com.google.common.io.BaseEncoding;
+import com.google.common.xml.XmlEscapers;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
