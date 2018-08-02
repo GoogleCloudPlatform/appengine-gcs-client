@@ -9,24 +9,24 @@
   <dependencies>
     <dependency org="com.google.appengine" name="appengine-api-1.0-sdk" rev="${sdk_version}"
                 conf="${sdk}->default"/>
-    <dependency org="com.google.guava" name="guava" rev="[15.0,20.99]"
+    <dependency org="com.google.guava" name="guava" rev="20.0"
                 conf="${thirdparty}->default"/>
-    <dependency org="joda-time" name="joda-time" rev="2.3" conf="${thirdparty}->default"/>
+    <dependency org="joda-time" name="joda-time" rev="2.10" conf="${thirdparty}->default"/>
     <dependency org="com.google.apis" name="google-api-services-storage"
-                rev="v1-rev15-1.19.0" conf="${thirdparty}->default"/>
-    <dependency org="com.google.api-client" name="google-api-client-appengine" rev="[1.19,2.0)"
+                rev="v1-rev135-1.23.0" conf="${thirdparty}->default"/>
+    <dependency org="com.google.api-client" name="google-api-client-appengine" rev="1.23.0"
                 conf="${thirdparty}->default"/>
-    <dependency org="com.google.http-client" name="google-http-client" rev="1.19.0"
+    <dependency org="com.google.http-client" name="google-http-client" rev="1.23.0"
                 conf="${thirdparty}->default"/>
-    <dependency org="com.google.http-client" name="google-http-client-appengine" rev="1.19.0"
+    <dependency org="com.google.http-client" name="google-http-client-appengine" rev="1.23.0"
                 conf="${thirdparty}->default"/>
-    <dependency org="com.google.http-client" name="google-http-client-jackson2" rev="[1.19,2.0)"
+    <dependency org="com.google.http-client" name="google-http-client-jackson2" rev="1.23.0"
                 conf="${thirdparty}->default"/>
     <dependency org="com.google.appengine" name="appengine-testing" rev="${sdk_version}"
                 conf="${test}->default"/>
     <dependency org="com.google.appengine" name="appengine-api-stubs" rev="${sdk_version}"
                 conf="${test}->default"/>
-    <dependency org="junit" name="junit" rev="4.10" conf="${test}->default"/>
+    <dependency org="junit" name="junit" rev="4.12" conf="${test}->default"/>
     <dependency org="org.hamcrest" name="hamcrest-core" rev="1.1" conf="${test}->default"/>
     <dependency org="javax.servlet" name="servlet-api" rev="2.5" conf="${war}->default"/>
     <dependency org="org.mockito" name="mockito-all" rev="1.8.4" conf="${test}->default"/>
