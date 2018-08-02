@@ -7,7 +7,7 @@
   <organization>
     <name>Google</name>
   </organization>
-  <version>0.8-SNAPSHOT</version>
+  <version>0.8</version>
   <packaging>jar</packaging>
   <licenses>
     <license>
@@ -19,7 +19,7 @@
     <connection>scm:git:git@github.com:GoogleCloudPlatform/appengine-gcs-client.git</connection>
     <developerConnection>scm:git:git@github.com:GoogleCloudPlatform/appengine-gcs-client.git</developerConnection>
     <url>https://github.com/GoogleCloudPlatform/appengine-gcs-client</url>
-    <tag>HEAD</tag>
+    <tag>appengine-gcs-client-0.8</tag>
   </scm>
   <properties>
     <appengine.target.version>1.9.64</appengine.target.version>
