@@ -11,14 +11,14 @@
     <properties>
         <app.id>com.google.appengine.examples.gcs-appengine</app.id>
         <app.version>1</app.version>
-        <appengine.version>1.9.36</appengine.version>
+        <appengine.version>1.9.64</appengine.version>
         <gcloud.plugin.version>2.0.9.101.v20160316</gcloud.plugin.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.showDeprecation>true</maven.compiler.showDeprecation>
     </properties>
 
     <prerequisites>
-        <maven>3.1.0</maven>
+        <maven>3.5.0</maven>
     </prerequisites>
 
     <dependencies>
@@ -31,7 +31,7 @@
         <dependency>
             <groupId>com.google.appengine.tools</groupId>
             <artifactId>appengine-gcs-client</artifactId>
-            <version>0.6</version>
+            <version>0.8</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
