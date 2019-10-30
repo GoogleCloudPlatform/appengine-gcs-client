@@ -1,3 +1,11 @@
+![status: inactive](https://img.shields.io/badge/status-inactive-red.svg)
+
+This project is no longer actively developed or maintained.
+
+For new work on this check out:
+* [Google Cloud Java/Cloud Storage](https://github.com/googleapis/google-cloud-java/tree/master/google-cloud-clients/google-cloud-storage)
+* [PyPi/Google Cloud Storage](https://pypi.org/project/google-cloud-storage/)
+
 [![unstable](http://badges.github.io/stability-badges/dist/unstable.svg)](http://github.com/badges/stability-badges)
 
 # AppEngine Google Cloud Storage clients
