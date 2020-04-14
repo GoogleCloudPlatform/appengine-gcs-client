@@ -22,7 +22,7 @@
     <tag>HEAD</tag>
   </scm>
   <properties>
-    <appengine.target.version>1.9.64</appengine.target.version>
+    <appengine.target.version>1.9.79</appengine.target.version>
   </properties>
   <prerequisites>
       <maven>3.1.0</maven>
