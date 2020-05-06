@@ -759,7 +759,9 @@ class StreamingBuffer(object):
       TypeError: if data is not of type str.
     """
     self._check_open()
-    if not isinstance(data, str):
+    if isinstance(data, unicode):
+      data = data.encode('utf-8')
+    elif not isinstance(data, str):
       raise TypeError('Expected str but got %s.' % type(data))
     if not data:
       return
