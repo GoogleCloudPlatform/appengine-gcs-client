@@ -645,7 +645,14 @@ final class OauthRawGcsService implements RawGcsService {
   public void copyObject(GcsFilename source, GcsFilename dest, GcsFileOptions fileOptions,
       long timeoutMillis) throws IOException {
     HTTPRequest req = makeRequest(dest, null, PUT, timeoutMillis);
-    req.setHeader(new HTTPHeader(X_GOOG_COPY_SOURCE, makePath(source)));
+
+    String sourcePath;
+    try {
+        sourcePath = new URI(null, null, makePath(source), null).toString();
+    } catch (URISyntaxException e) {
+	throw new RuntimeException("Failed to create path URI", e);
+    }
+    req.setHeader(new HTTPHeader(X_GOOG_COPY_SOURCE, sourcePath));
     if (fileOptions != null) {
       req.setHeader(REPLACE_METADATA_HEADER);
       addOptionsHeaders(req, fileOptions);
