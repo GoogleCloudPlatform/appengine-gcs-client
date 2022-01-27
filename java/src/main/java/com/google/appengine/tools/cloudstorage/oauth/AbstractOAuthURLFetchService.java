@@ -79,7 +79,7 @@ abstract class AbstractOAuthURLFetchService implements OAuthURLFetchService {
     try {
       authorizedRequest = createAuthorizeRequest(req);
     } catch (RetryHelperException e) {
-      return Futures.immediateFailedCheckedFuture(e);
+      return Futures.immediateFailedFuture(e);
     }
     return urlFetch.fetchAsync(authorizedRequest);
   }
