@@ -31,7 +31,10 @@ __all__ = ['copy2',
           ]
 
 import logging
-import StringIO
+try:
+    import StringIO
+except:
+    from io import StringIO
 import urllib
 import os
 import itertools

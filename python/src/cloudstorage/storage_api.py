@@ -24,20 +24,18 @@ __all__ = ['ReadBuffer',
 
 import collections
 import os
-import urlparse
+try:
+    import urlparse
+except ImportError:
+    import urllib.parse as urlparse
 
 from . import api_utils
 from . import common
 from . import errors
 from . import rest_api
 
-try:
-  from google.appengine.api import urlfetch
-  from google.appengine.ext import ndb
-except ImportError:
-  from google.appengine.api import urlfetch
-  from google.appengine.ext import ndb
-
+from google.appengine.api import urlfetch
+from google.appengine.ext import ndb
 from google.appengine.api import app_identity
 
 
@@ -135,9 +133,9 @@ class _StorageApi(rest_api._RestApi):
       resp_tuple = yield super(_StorageApi, self).do_request_async(
           url, method=method, headers=headers, payload=payload,
           deadline=deadline, callback=callback)
-    except urlfetch.DownloadError as e:
+    except urlfetch.DownloadError:
       raise errors.TimeoutError(
-          'Request to Google Cloud Storage timed out.', e)
+          'Request to Google Cloud Storage timed out.')
 
     raise ndb.Return(resp_tuple)
 

@@ -21,7 +21,10 @@ __all__ = ['set_default_retry_params',
           ]
 
 import copy
-import httplib
+try:
+    import httplib
+except ImportError:
+    import http.client as httplib
 import logging
 import math
 import os
@@ -170,7 +173,7 @@ class _RetryWrapper(object):
             'Tasklet has exceeded request deadline after %s seconds total',
             time.time() - start_time)
         raise
-      except self.retriable_exceptions as e:
+      except self.retriable_exceptions:
         pass
 
       if n == 1:
